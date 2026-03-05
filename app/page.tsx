@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import TypingHeader from '@/components/TypingHeader';
+//import CardTemplate from '@/components/CardTemplate';
 import Link from 'next/link';
 
 export default function Home() {
@@ -25,11 +27,16 @@ export default function Home() {
     }, []);
     
     return (
-        <main className="p-10">
+        <main className="zzzcode-grid-area">
+            <nav className="">
+                Category
+            </nav>
+            <section className=""></section>
+            {/*<main className="p-10">
             <div className="flex justify-between items-center mb-10">
                 <h1 className="text-4xl font-black italic">MY CODE LIBRARY</h1>
         
-                {/* ถ้าล็อกอินอยู่ ให้โชว์ปุ่มสร้างและปุ่มล็อกเอาต์ */}
+                 ถ้าล็อกอินอยู่ ให้โชว์ปุ่มสร้างและปุ่มล็อกเอาต์ 
                 {user ? (
                     <div className="flex gap-4">
                         <Link href="/create" className="bg-blue-600 text-white px-6 py-2 rounded-full font-bold hover:bg-blue-700 shadow-lg transition-all">
@@ -75,6 +82,7 @@ export default function Home() {
                     </div>
                 ))}
             </div>
+        </main>*/}
         </main>
     )
 }
