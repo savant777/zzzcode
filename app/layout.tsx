@@ -14,14 +14,14 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className="container max-w-full grid zzzcode-grid-layout min-h-screen">
+            <body className="container max-w-full grid zzzcode-grid-layout max-h-screen">
                 <MainHeader />
                 {children}
                 <footer className="flex justify-between bg-(--background) border-t border-(--primary) p-2 text-xs text-(--primary) font-Google-Code">
                     <div className="select-none">© 2026 ZZZCODE</div>
                     <div className="flex items-center">
                         <a 
-                            href="https://github.com/savant777/zzzcode" // เปลี่ยนเป็น URL ของคุณ
+                            href="https://github.com/savant777/zzzcode"
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 hover:text-(--foreground) transition-colors"
