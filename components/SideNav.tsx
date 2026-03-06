@@ -1,14 +1,42 @@
 "use client";
-import { useState } from 'react';
-
-const CATEGORY_ITEMS = ['all', 'roleplay', 'profile', 'sign', 'etc', 'BLANK'];
-const ACTIVITY_ITEMS = ['all', 'activity name 1', 'activity name 2', 'BLANK'];
-const COMMISSION_ITEMS = ['all', 'louisa', 'josephine', 'BLANK'];
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import SkeletonNav from '@/components/SkeletonNav';
 
 export default function SideNav({ isOpen, setIsOpen, activeFilter, setActiveFilter }: any) {
+    const [isLoading, setIsLoading] = useState(true);
+    const [menuData, setMenuData] = useState<any[]>([]);
+    const [expandedGroup, setExpandedGroup] = useState<string | null>('CATEGORY');
+
+    useEffect(() => {
+        const fetchMenu = async () => {
+            setIsLoading(true);
+            const { data, error } = await supabase
+                .from('tag_groups')
+                .select(`
+                    id,
+                    name,
+                    tags (
+                        name,
+                        slug,
+                        is_active
+                    )
+                `)
+                .eq('tags.is_active', true)
+                .order('id', { ascending: true });
+
+            if (data) {
+                const activeGroups = data.filter(group => group.tags.length > 0);
+                setMenuData(activeGroups);
+            }
+            setIsLoading(false);
+        };
+        fetchMenu();
+    }, []);
+
     return (
         <nav className={`
-            zzzcode-grid-area border-r border-(--primary) bg-(--background) transition-all duration-300 font-Google-Code flex flex-col h-full overflow-hidden
+            nav-grid-area border-r border-(--primary) bg-(--background) transition-all duration-300 font-Google-Code flex flex-col h-full overflow-hidden
             ${isOpen ? 'w-64' : 'w-0 border-r-0'}
             max-lg:fixed max-lg:w-full max-lg:border-r-0 max-lg:left-0 max-lg:z-50 max-lg:h-[calc(100vh-var(--header-height)-var(--footer-height))]
             ${!isOpen && 'max-lg:-translate-x-full'}
@@ -20,81 +48,96 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, setActiveFilt
                 <span>close</span>
                 <span>✕</span>
             </button>
-            
+
             <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col">
-                <NavGroup 
-                    title="category" 
-                    items={CATEGORY_ITEMS} 
-                    activeFilter={activeFilter}
-                    setActiveFilter={setActiveFilter}
-                />
-                <NavGroup 
-                    title="activity" 
-                    items={ACTIVITY_ITEMS} 
-                    activeFilter={activeFilter}
-                    setActiveFilter={setActiveFilter}
-                />
-                <NavGroup 
-                    title="commission" 
-                    items={COMMISSION_ITEMS} 
-                    activeFilter={activeFilter}
-                    setActiveFilter={setActiveFilter}
-                />
+                {isLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <SkeletonNav key={i} />
+                    ))
+                ) : (
+                    menuData.map((group) => (
+                        <NavGroup 
+                            key={group.id}
+                            title={group.name} 
+                            tags={group.tags} 
+                            activeFilter={activeFilter}
+                            setActiveFilter={setActiveFilter}
+                            isExpanded={expandedGroup === group.name.toUpperCase()}
+                            onToggle={() => {
+                                setExpandedGroup(expandedGroup === group.name.toUpperCase() ? null : group.name.toUpperCase());
+                            }}
+                            setIsOpen={setIsOpen} // <-- ส่งตัวนี้ลงไปเพิ่ม!
+                        />
+                    ))
+                )}
             </div>
         </nav>
     );
 }
 
-function NavGroup({ title, items, activeFilter, setActiveFilter }: any) {
-    const [expanded, setExpanded] = useState(true);
+function NavGroup({ title, tags, activeFilter, setActiveFilter, isExpanded, onToggle, setIsOpen }: any) {
+    const items = [{ name: 'all', slug: 'all' }, ...tags, { name: '', slug: 'blank' }];
+
+    const handleSelect = (filterValue: string) => {
+        setActiveFilter(filterValue);
+        
+        if (window.innerWidth < 1024) {
+            setIsOpen(false); 
+        }
+    };
     
     return (
         <div className="flex flex-col border-b border-(--primary)/20">
             <button 
-                onClick={() => setExpanded(!expanded)} 
+                onClick={onToggle}
                 className="w-full p-2 px-3 text-(--primary) hover:bg-(--primary)/5 font-black tracking-widest flex justify-between items-center bg-(--background) cursor-pointer uppercase"
             >
                 <span>{title}</span>
-                <span>{expanded ? '-' : '+'}</span>
+                <span>{isExpanded ? '-' : '+'}</span>
             </button>
 
-            {expanded && (
-                <div className="flex flex-col">
-                    {items.map((item: string, index: number) => {
-                        if (item === 'BLANK') {
+            <div className={`
+                grid transition-[grid-template-rows] duration-300 ease-in-out
+                ${isExpanded ? 'grid-template-rows-[1fr]' : 'grid-template-rows-[0fr]'}
+            `}>
+                <div className="overflow-hidden">
+                    <div className="flex flex-col">
+                        {items.map((tag: any) => {
+                            if (tag.slug === 'blank') {
+                                return (
+                                    <div 
+                                        key={tag.slug} 
+                                        className="w-full p-2 text-sm border-t border-(--primary)/20 bg-(--background) select-none"
+                                    >
+                                        &nbsp;
+                                    </div>
+                                );
+                            }
+
+                            const filterKey = `${title.toUpperCase()}-${tag.name.toUpperCase()}`;
+                            const isActive = activeFilter === filterKey;
+
                             return (
-                                <div 
-                                    key={`blank-${index}`} 
-                                    className="w-full p-2 text-sm border-t border-(--primary)/20 bg-(--background) select-none"
+                                <button 
+                                    key={tag.slug}
+                                    onClick={() => handleSelect(filterKey)}
+                                    className={`
+                                        w-full p-2 pl-3 pr-6 text-sm border-t border-(--primary)/20 transition-all flex items-center gap-2 cursor-pointer uppercase
+                                        ${isActive 
+                                            ? 'text-(--primary) bg-(--primary)/10 font-bold' 
+                                            : 'text-(--foreground)/75 hover:text-(--primary) hover:bg-(--primary)/5'}
+                                    `}
                                 >
-                                    &nbsp;
-                                </div>
+                                    <div className="w-2 flex justify-center">
+                                        {isActive ? <span className="text-(--primary)">•</span> : null}
+                                    </div>
+                                    <span>{tag.name}</span>
+                                </button>
                             );
-                        }
-
-                        const filterKey = `${title.toUpperCase()}-${item.toUpperCase()}`;
-                        const isActive = activeFilter === filterKey;
-
-                        return (
-                            <button 
-                                key={item} 
-                                onClick={() => setActiveFilter(filterKey)}
-                                className={`
-                                    w-full p-2 pl-3 pr-6 text-sm border-t border-(--primary)/20 transition-all flex items-center gap-2 cursor-pointer uppercase
-                                    ${isActive 
-                                        ? 'text-(--primary) bg-(--primary)/10 font-bold' 
-                                        : 'text-(--foreground)/75 hover:text-(--primary) hover:bg-(--primary)/5'}
-                                `}
-                            >
-                                <div className="w-2 flex justify-center">
-                                    {isActive ? <span className="text-(--primary)">•</span> : null}
-                                </div>
-                                <span>{item}</span>
-                            </button>
-                        );
-                    })}
+                        })}
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 }

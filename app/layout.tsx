@@ -14,10 +14,10 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className="container max-w-full grid zzzcode-grid-layout max-h-screen">
+            <body className="max-w-full grid body-grid-layout max-h-screen">
                 <MainHeader />
                 {children}
-                <footer className="flex justify-between bg-(--background) border-t border-(--primary) p-2 text-xs text-(--primary) font-Google-Code">
+                <footer className="footer-grid-area flex justify-between bg-(--background) border-t border-(--primary) p-2 text-xs text-(--primary) font-Google-Code">
                     <div className="select-none">© 2026 ZZZCODE</div>
                     <div className="flex items-center">
                         <a 
