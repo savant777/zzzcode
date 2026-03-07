@@ -78,7 +78,6 @@ export default function AddTemplatePage() {
                 selectedTags 
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-            console.log("Draft_Saved:", draft); // ลองเปิด Console เช็คดูได้ว่ามาครบไหม
         }
     }, [formData, fields, selectedTags]);
 
@@ -100,9 +99,7 @@ export default function AddTemplatePage() {
         const varNames = [...new Set(matches.map(m => m[1].trim()))];
 
         setFields(prev => {
-            // กรองเอาเฉพาะตัวแปรที่ยังอยู่ใน HTML
             const existingFields = prev.filter(f => varNames.includes(f.variable_name));
-            // หาตัวแปรใหม่ที่เพิ่งพิมพ์เพิ่มเข้ามา
             const newVarNames = varNames.filter(v => !prev.some(f => f.variable_name === v));
             
             const newFields: TemplateField[] = newVarNames.map((v, index) => ({

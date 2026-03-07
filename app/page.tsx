@@ -1,74 +1,67 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+
+// Components
 import SideNav from '@/components/SideNav';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import Modal from '@/components/Modal';
 
-export default function Home() {
+export default function Dashboard() {
+    const router = useRouter();
+
+    // --- 1. States (Essential & Restored) ---
     const [isLoading, setIsLoading] = useState(true);
     const [user, setUser] = useState<any>(null);
     const [templates, setTemplates] = useState<any[]>([]);
-    const [activeFilter, setActiveFilter] = useState('CATEGORY-ALL');
+    const isAdmin = !!user;
+    
+    // UI Controls
     const [isOpen, setIsOpen] = useState(true);
-
+    const [activeFilter, setActiveFilter] = useState('CATEGORY-ALL');
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'line'>('grid');
     const [sortBy, setSortBy] = useState('none');
-
-    const [modalType, setModalType] = useState<'delete' | 'private' | 'logout' | 'login' | null>(null);
+    
+    // Modal & Security
+    const [modalType, setModalType] = useState<'delete' | 'private' | null>(null);
     const [selectedItem, setSelectedItem] = useState<any>(null);
-
-    const isAdmin = !!user;
-
+    const [password, setPassword] = useState('');
+    
+    // --- 2. Effects ---
     useEffect(() => {
-        supabase.auth.getUser().then(({ data }) => setUser(data.user));
-        
-        const fetchTemplates = async () => {
+        const initDashboard = async () => {
             setIsLoading(true);
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            setUser(authUser);
+
             const { data, error } = await supabase
                 .from('templates')
-                .select(`
-                    *,
-                    template_tags (
-                        tags (
-                            name,
-                            slug,
-                            tag_groups (name)
-                        )
-                    )
-                `)
+                .select(`*, template_tags(tags(*, tag_groups(name)))`)
                 .eq('is_active', true)
                 .order('id', { ascending: false });
 
-            if (error) {
-                console.error("Error fetching templates:", error.message);
-                return;
-            }
             if (data) setTemplates(data);
             setIsLoading(false);
         };
 
-        fetchTemplates();
+        initDashboard();
 
         const handleResize = () => {
-            if (window.innerWidth < 1024) {
-                setIsOpen(false);
-            } else {
-                setIsOpen(true);
-            }
+            setIsOpen(window.innerWidth >= 1024);
         };
 
-        handleResize();
         window.addEventListener('resize', handleResize);
+        handleResize();
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // --- UI ---
     const getPageTitle = () => {
         const parts = activeFilter.split('-');
         if (parts[1] == 'ALL') {
@@ -77,54 +70,84 @@ export default function Home() {
             return `${parts[1]}`;
         }
     };
-    
+
     const filteredTemplates = useMemo(() => {
-        return templates.filter((item) => {
-            const matchesSearch = 
-                item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                item.id.toString().includes(searchQuery);
-
-            const [filterGroup, filterValue] = activeFilter.split('-');
-
-            if (filterValue === 'ALL') return matchesSearch;
+        let result = templates.filter((item) => {
+            const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
+            const [group, value] = activeFilter.split('-');
+            
+            if (value === 'ALL') return matchesSearch;
 
             const matchesFilter = item.template_tags?.some((t: any) => {
                 const tagName = t.tags.name.toUpperCase();
                 const tagGroupName = t.tags.tag_groups.name.toUpperCase();
-
-                if (filterGroup === 'TAG') {
-                    return tagName === filterValue;
-                } else {
-                    return tagGroupName === filterGroup && tagName === filterValue;
-                }
+                return group === 'TAG' 
+                    ? tagName === value 
+                    : (tagGroupName === group && tagName === value);
             });
-
+            
             return matchesSearch && matchesFilter;
         });
-    }, [templates, searchQuery, activeFilter]);
 
-    const router = useRouter();
-    const [password, setPassword] = useState('');
+        const sortedResult = [...result];
+
+        switch (sortBy) {
+            case 'newest':
+                sortedResult.sort((a, b) => b.id - a.id);
+                break;
+            case 'oldest':
+                sortedResult.sort((a, b) => a.id - b.id);
+                break;
+            case 'az':
+                sortedResult.sort((a, b) => a.title.localeCompare(b.title));
+                break;
+            case 'za':
+                sortedResult.sort((a, b) => b.title.localeCompare(a.title));
+                break;
+            default:
+                break;
+        }
+
+        return sortedResult;
+    }, [templates, searchQuery, activeFilter, sortBy]);
+
+    // --- 4. Event Handlers ---
+    const handleTagClick = (tagName: string) => {
+        const foundTemplate = templates.find(item => 
+            item.template_tags?.some((t: any) => t.tags.name.toUpperCase() === tagName.toUpperCase())
+        );
+        
+        const tagEntry = foundTemplate?.template_tags?.find((t: any) => t.tags.name.toUpperCase() === tagName.toUpperCase());
+        const groupName = tagEntry?.tags?.tag_groups?.name.toUpperCase() || 'TAG';
+        
+        setActiveFilter(`${groupName}-${tagName.toUpperCase()}`);
+    };
 
     const closeModal = () => {
         setModalType(null);
         setSelectedItem(null);
+        setPassword('');
     };
 
     const handleUnlockPrivate = (e: React.FormEvent) => {
         e.preventDefault();
+        const toastId = toast.loading("SYSTEM: Verifying_Access_Key...");
         
         if (password === selectedItem?.password) {
+            toast.success(`ACCESS_GRANTED: DECRYPT_SUCCESS`, { id: toastId });
             closeModal();
-            router.push(`/editor/${selectedItem.id}`);
+            setTimeout(() => {
+                router.push(`/editor/${selectedItem.id}`);
+            }, 800);
         } else {
-            alert("ACCESS_DENIED: INVALID_SECRET_KEY");
+            toast.error(`ACCESS_DENIED: INVALID_SECRET_KEY`, { id: toastId });
             setPassword('');
         }
     };
 
     const handleDelete = async () => {
         if (!selectedItem) return;
+        const toastId = toast.loading("SYSTEM: De-activating_Module...");
         
         setIsLoading(true);
         try {
@@ -134,12 +157,13 @@ export default function Home() {
                 .eq('id', selectedItem.id);
 
             if (error) {
-                alert(`DELETE_ERROR: ${error.message}`);
+                toast.error(`DELETE_ERROR: ${error.message}`, { id: toastId });
             } else {
+                toast.success(`MODULE_${selectedItem?.id}_DEACTIVATED`, { id: toastId });
                 setTemplates(prev => prev.filter(t => t.id !== selectedItem.id));
                 closeModal();
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Unexpected error during deletion:", err);
         } finally {
             setIsLoading(false);
@@ -232,7 +256,7 @@ export default function Home() {
                                     item={item}
                                     viewMode={viewMode}
                                     isAdmin={isAdmin}
-                                    setActiveFilter={setActiveFilter}
+                                    onTagClick={handleTagClick} 
                                     onDelete={() => {
                                         setSelectedItem(item);
                                         setModalType('delete');

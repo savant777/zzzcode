@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from 'next/navigation';
 
-export default function TemplateCard({ item, viewMode, isAdmin, setActiveFilter, onDelete, onOpenPrivateModal }: any) {
+export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDelete, onOpenPrivateModal }: any) {
     const router = useRouter();
 
     const handleUseTemplate = (e: React.MouseEvent) => {
@@ -51,7 +51,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, setActiveFilter,
                                 key={t.tags.slug}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    setActiveFilter(`TAG-${t.tags.name.toUpperCase()}`);
+                                    onTagClick(t.tags.name); 
                                 }}
                                 className="border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
                             >
@@ -144,7 +144,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, setActiveFilter,
                         key={t.tags.slug}
                         onClick={(e) => {
                             e.stopPropagation();
-                            setActiveFilter(`TAG-${t.tags.name.toUpperCase()}`);
+                            onTagClick(t.tags.name); 
                         }}
                         className="border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
                     >
@@ -168,7 +168,10 @@ export default function TemplateCard({ item, viewMode, isAdmin, setActiveFilter,
                                 {item.template_tags?.slice(2).map((t: any) => (
                                     <button 
                                         key={t.tags.slug}
-                                        onClick={() => setActiveFilter(`TAG-${t.tags.name.toUpperCase()}`)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onTagClick(t.tags.name); 
+                                        }}
                                         className="cursor-pointer text-(--primary) text-[10px] font-bold"
                                     >
                                         #{t.tags.name}
