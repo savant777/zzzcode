@@ -63,7 +63,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                 
                 {/* Buttons */}
                 <div className="flex flex-wrap gap-1 items-center">
-                    <div className="flex items-center min-w-[24px]">
+                    <div className="flex items-center min-w-[28px]">
                         {item.is_personal && (
                             <div title="Private Code" className="p-1.5 border border-(--primary)/30 text-(--background) bg-(--primary)">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -186,7 +186,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
 
             {/* Buttons */}
             <div className="flex justify-between items-center">
-                <div className="flex items-center min-w-[24px]">
+                <div className="flex items-center min-w-[28px]">
                     {item.is_personal && (
                         <div title="Private Code" className="p-1.5 border border-(--primary)/30 text-(--background) bg-(--primary)">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

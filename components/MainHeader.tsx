@@ -92,10 +92,10 @@ export default function MainHeader() {
             <Modal 
                 isOpen={modalType !== null} 
                 onClose={() => setModalType(null)}
-                title={modalType === 'login' ? 'System_Authentication' : 'Terminal_Logout'}
+                title={modalType === 'login' ? 'System Authentication' : 'Terminal Logout'}
             >
                 {modalType === 'login' && (
-                    <form onSubmit={handleLogin} className="space-y-4">
+                    <form onSubmit={handleLogin} className="space-y-4 text-(--foreground)">
                         <div className="space-y-1">
                             <label className="text-[10px] uppercase opacity-50">Admin_Email</label>
                             <input 
@@ -104,7 +104,7 @@ export default function MainHeader() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="root@zzzcode.dev" 
-                                className="w-full bg-black/40 border border-(--primary)/40 p-2 text-(--primary) outline-none focus:border-(--primary)" 
+                                className="w-full bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75" 
                             />
                         </div>
                         <div className="space-y-1">
@@ -115,7 +115,7 @@ export default function MainHeader() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="⋆⋆⋆⋆⋆⋆" 
-                                className="w-full bg-black/40 border border-(--primary)/40 p-2 text-(--primary) outline-none focus:border-(--primary)" 
+                                className="w-full bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75" 
                             />
                         </div>
                         <button
@@ -130,7 +130,7 @@ export default function MainHeader() {
 
                 {modalType === 'logout' && (
                     <div className="space-y-6">
-                        <p className="text-center opacity-80">Are you sure you want to terminate the current administrative session?</p>
+                        <p className="text-(--foreground) opacity-80">Are you sure you want to terminate the current administrative session?</p>
                         <div className="flex gap-2">
                             <button onClick={() => setModalType(null)} className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors">Abort</button>
                             <button 

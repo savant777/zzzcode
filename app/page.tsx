@@ -304,14 +304,14 @@ export default function Dashboard() {
                         <div className="flex gap-2 pt-2">
                             <button 
                                 onClick={() => setModalType(null)}
-                                className="flex-1 py-2 border border-white/10 text-xs uppercase hover:bg-white/5 transition-colors cursor-pointer"
+                                className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
                             >
                                 Abort
                             </button>
                             <button 
                                 onClick={handleDelete}
                                 disabled={isLoading}
-                                className="flex-1 py-2 bg-red-600 text-white font-black text-xs uppercase hover:bg-red-500 transition-all cursor-pointer shadow-[0_0_20px_rgba(220,38,38,0.2)] disabled:opacity-50"
+                                className="cursor-pointer flex-1 py-2 bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-500 transition-all disabled:opacity-50"
                             >
                                 {isLoading ? 'Processing...' : 'Confirm_Delete'}
                             </button>
@@ -340,7 +340,7 @@ export default function Dashboard() {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="ENTER_SECRET_KEY..."
-                            className="w-full bg-black/40 border border-(--primary)/40 p-2 text-(--primary) outline-none focus:border-(--primary) placeholder:text-(--primary)/20 font-Google-Code"
+                            className="w-full bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75"
                             autoFocus
                         />
 
@@ -348,13 +348,13 @@ export default function Dashboard() {
                             <button 
                                 type="button"
                                 onClick={closeModal} 
-                                className="flex-1 py-2 border border-(--primary)/20 text-xs uppercase hover:bg-(--primary)/5 cursor-pointer"
+                                className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
                             >
                                 Abort
                             </button>
                             <button 
                                 type="submit"
-                                className="flex-2 py-2 bg-(--primary) text-black font-black text-xs uppercase hover:brightness-110 cursor-pointer shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]"
+                                className="cursor-pointer flex-1 py-2 bg-(--primary) text-black font-bold uppercase text-xs hover:brightness-110 disabled:opacity-50"
                             >
                                 Unlock_Access
                             </button>
