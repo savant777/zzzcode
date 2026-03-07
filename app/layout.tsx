@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import MainHeader from "@/components/MainHeader";
+import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
     title: "ZZZCODE EDITOR",
@@ -33,6 +34,7 @@ export default function RootLayout({
                         </a>
                     </div>
                 </footer>
+                <Toaster theme="dark" position="bottom-right" richColors />
             </body>
         </html>
     );
