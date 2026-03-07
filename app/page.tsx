@@ -222,7 +222,7 @@ export default function Home() {
                             : 'grid gap-2 md:gap-4 zzzcode-list-grid grid-cols-1'}
                     `}>
                         {isLoading ? (
-                            Array.from({ length: 8 }).map((_, i) => (
+                            Array.from({ length: 12 }).map((_, i) => (
                                 <SkeletonCard key={i} />
                             ))
                         ) : (

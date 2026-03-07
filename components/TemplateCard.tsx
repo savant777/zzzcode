@@ -33,7 +33,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, setActiveFilter,
                 </div>
 
                 {/* Info */}
-                <div className="flex flex-col gap-2 h-full">
+                <div className="flex flex-col gap-2 h-full md:py-2 md:pt-1">
                     {/* Name */}
                     <h3 className="flex-1 md:flex-none content-center md:content-normal text-(--primary) md:text-2xl leading-none uppercase">
                         {item.title}
