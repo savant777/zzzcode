@@ -33,7 +33,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode }: Breadcrum
                     {isDashboard && (
                         <>
                             <span className="text-(--foreground)/25">/</span>
-                            <span className="text-(--foreground)/75">{group.toUpperCase()}</span>
+                            <span className="text-(--foreground)/75">{group.replace(/-/g, '_').toUpperCase()}</span>
                         </>
                     )}
 
@@ -45,7 +45,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode }: Breadcrum
                             href={`/?group=${group.toLowerCase()}&tag=${value.toLowerCase()}`}
                             className="text-(--foreground)/75 hover:text-(--primary) transition-colors"
                         >
-                            {value.replace(/-/g, ' ').toUpperCase()}
+                            {value.replace(/-/g, '_').toUpperCase()}
                         </Link>
                     ) : (
                         /* ถ้าเป็นหน้า Dashboard ก้อนนี้คือตัวสุดท้าย -> สีส้ม */

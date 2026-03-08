@@ -17,7 +17,15 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
 
     const handleEditClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        router.push(`/edit/${item.id}`);
+        
+        const primaryTagEntry = item.template_tags?.find((t: any) => 
+            ['activity', 'commission'].includes(t.tags.tag_groups.name.toLowerCase())
+        ) || item.template_tags?.[0];
+
+        const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';
+        const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
+
+        router.push(`/edit/${item.id}?group=${group}&tag=${tagSlug}`);
     };
 
     if (viewMode === 'line') {
@@ -51,7 +59,9 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                                 key={t.tags.slug}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onTagClick(t.tags.name); 
+                                    const group = t.tags.tag_groups.name.toLowerCase();
+                                    const tagSlug = t.tags.slug.toLowerCase();
+                                    router.push(`/?group=${group}&tag=${tagSlug}`);
                                 }}
                                 className="border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
                             >
@@ -144,7 +154,9 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                         key={t.tags.slug}
                         onClick={(e) => {
                             e.stopPropagation();
-                            onTagClick(t.tags.name); 
+                            const group = t.tags.tag_groups.name.toLowerCase();
+                            const tagSlug = t.tags.slug.toLowerCase();
+                            router.push(`/?group=${group}&tag=${tagSlug}`);
                         }}
                         className="border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
                     >
@@ -170,7 +182,9 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                                         key={t.tags.slug}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            onTagClick(t.tags.name); 
+                                            const group = t.tags.tag_groups.name.toLowerCase();
+                                            const tagSlug = t.tags.slug.toLowerCase();
+                                            router.push(`/?group=${group}&tag=${tagSlug}`);
                                         }}
                                         className="cursor-pointer text-(--primary) text-[10px] font-bold"
                                     >

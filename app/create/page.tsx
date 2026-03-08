@@ -56,7 +56,7 @@ export default function AddTemplatePage() {
 
     // Load Tags & Draft
     useEffect(() => {
-        const init = async () => {
+        const initAddPage = async () => {
             const { data } = await supabase.from('tags').select('id, name').eq('is_active', true);
             if (data) setAvailableTags(data);
 
@@ -70,7 +70,7 @@ export default function AddTemplatePage() {
                 } catch (e) { console.error("Draft load error", e); }
             }
         };
-        init();
+        initAddPage();
     }, []);
 
     // Smart Sync
@@ -146,9 +146,27 @@ export default function AddTemplatePage() {
                 if (tagError) throw tagError;
             }
 
+            const primaryTag = availableTags
+                .filter(t => selectedTags.includes(t.id))
+                .find(t => ['activity', 'commission'].includes(t.tag_groups.name.toLowerCase()));
+
+            let targetGroup = 'category';
+            let targetTag = 'all';
+
+            if (primaryTag) {
+                targetGroup = primaryTag.tag_groups.name.toLowerCase();
+                targetTag = primaryTag.slug.toLowerCase();
+            } else {
+                const categoryTag = availableTags.find(t => selectedTags.includes(t.id) && t.tag_groups.name.toLowerCase() === 'category');
+                if (categoryTag) {
+                    targetGroup = 'category';
+                    targetTag = categoryTag.slug.toLowerCase();
+                }
+            }
+
             localStorage.removeItem(STORAGE_KEY);
             toast.success("PROTOCOL_SUCCESS", { id: toastId });
-            router.push(`/templates/edit/${templateData.id}`);
+            router.push(`/edit/${templateData.id}?group=${targetGroup}&tag=${targetTag}`);
         } catch (error: any) {
             toast.error(`CRITICAL_FAILURE: ${error.message}`, { id: toastId });
         } finally {

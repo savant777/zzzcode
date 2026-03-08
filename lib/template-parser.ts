@@ -10,7 +10,25 @@ export interface FieldConfig {
     placeholder?: string;
     description?: string;
     options?: string; // for select
-    config?: any;    // for slider (min, max) or checkbox (on, off)
+    config?: {
+        // --- for Slider ---
+        min?: number;
+        max?: number;
+        step?: number;
+        unit?: string;
+
+        // --- for "Select + Slider" ---
+        has_custom_slider?: boolean;
+        custom_trigger?: string; // เช่น 'custom'
+
+        // --- for Checkbox ---
+        // label เอาไว้โชว์ในหน้า UI (เช่น เปิด/ปิด)
+        true_label?: string; 
+        false_label?: string;
+        // value เอาไว้ส่งไปแทนที่ใน {{variable}} (เช่น block / none)
+        true_value?: string;
+        false_value?: string;
+    }
     block_name?: string; // [BLOCK:...]
     is_repeat?: boolean; // has [REPEAT:variable] or not
 }
@@ -172,14 +190,15 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                     default_value: match[2]?.trim() || oldField.default_value,
                     placeholder: match[2]?.trim() || oldField.placeholder,
                     block_name: blockName,
-                    is_repeat: isRepeat
+                    is_repeat: isRepeat,
+                    config: oldField.config || {} 
                 });
             } else {
                 fields.push({
                     id: crypto.randomUUID(),
                     variable_name: variableName,
                     label: variableName,
-                    type: isRepeat ? 'slider' : 'text',
+                    type: isRepeat ? 'slider' : (variableName.startsWith('is_') ? 'checkbox' : 'text'),
                     group_name: currentGroupName,
                     group_order: groupMap[currentGroupName],
                     field_order: currentFieldOrder,
@@ -187,7 +206,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                     placeholder: defaultValue,
                     description: "",
                     options: "",
-                    config: null,
+                    config: isRepeat ? { min: 0, max: 100, step: 1, unit: 'px' } : { true_label: 'ON', false_label: 'OFF' },
                     block_name: blockName,
                     is_repeat: isRepeat
                 });
