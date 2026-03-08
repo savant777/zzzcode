@@ -4,6 +4,13 @@ import { useRouter } from 'next/navigation';
 export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDelete, onOpenPrivateModal }: any) {
     const router = useRouter();
 
+    const primaryTagEntry = item.template_tags?.find((t: any) => 
+        ['activity', 'commission'].includes(t.tags.tag_groups.name.toLowerCase())
+    ) || item.template_tags?.[0];
+
+    const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';
+    const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
+
     const handleUseTemplate = (e: React.MouseEvent) => {
         e.stopPropagation();
         
@@ -12,18 +19,11 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
             return;
         }
 
-        router.push(`/editor/${item.id}`);
+        router.push(`/editor/${item.id}?group=${group}&tag=${tagSlug}`);
     };
 
     const handleEditClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        
-        const primaryTagEntry = item.template_tags?.find((t: any) => 
-            ['activity', 'commission'].includes(t.tags.tag_groups.name.toLowerCase())
-        ) || item.template_tags?.[0];
-
-        const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';
-        const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
 
         router.push(`/edit/${item.id}?group=${group}&tag=${tagSlug}`);
     };

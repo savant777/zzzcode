@@ -22,7 +22,7 @@ export default function TypingHeader({ text, speed = 150 }: TypingHeaderProps) {
     }, [currentIndex, text, speed]);
 
     return (
-        <Link href="/" className="flex justify-center items-center py-2 md:py-0">
+        <Link href="/?group=category&tag=all" className="flex justify-center items-center py-2 md:py-0">
             <h1 className="text-2xl md:text-5xl leading-none uppercase">
                 {displayedText}
                 <span className="animate-cursor-blink">_</span>

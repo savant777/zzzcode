@@ -14,7 +14,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode }: Breadcrum
 
     return (
         <div className="flex flex-wrap items-center gap-2 gap-y-0 font-Google-Code text-[10px] md:text-xs uppercase select-none tracking-wider">
-            <Link href="/" className="text-(--foreground)/75 hover:text-(--primary) transition-colors">
+            <Link href="/?group=category&tag=all" className="text-(--foreground)/75 hover:text-(--primary) transition-colors">
                 ZZZCODE_EDITOR
             </Link>
 
