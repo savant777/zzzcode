@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay, } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 
+import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import TemplateGroupContainer from '@/components/TemplateGroupContainer';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups } from '@/lib/template-parser';
@@ -20,6 +21,7 @@ export default function AddTemplatePage() {
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
     const [fields, setFields] = useState<FieldConfig[]>([]);
+    const [modalType, setModalType] = useState<'clear_draft' | null>(null);
 
     const [formData, setFormData] = useState({
         title: '',
@@ -154,12 +156,19 @@ export default function AddTemplatePage() {
         }
     };
 
+    // onclick clear draft button
+    const handleClearDraft = () => {
+        localStorage.removeItem(STORAGE_KEY);
+        window.location.reload();
+    };
+
     return (
         <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
             <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                <Breadcrumbs path={'CREATE TEMPLATE'} />
+                <Breadcrumbs editorMode="CREATE" />
                 <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
-                    <span>&lt; BACK_TO_DASHBOARD</span>
+                    <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
+                    <span className="lg:hidden">&lt; BACK</span>
                 </button>
             </div>
 
@@ -173,12 +182,7 @@ export default function AddTemplatePage() {
                                 <div className="flex-1 flex justify-end gap-1">
                                     <button 
                                         type="button"
-                                        onClick={() => {
-                                            if(confirm("ยืนยันการล้างข้อมูลที่พิมพ์ค้างไว้ทั้งหมด?")) {
-                                                localStorage.removeItem(STORAGE_KEY);
-                                                window.location.reload();
-                                            }
-                                        }}
+                                        onClick={() => setModalType('clear_draft')}
                                         className="text-[10px] opacity-30 hover:opacity-100 uppercase cursor-pointer flex gap-1"
                                     >
                                         <span className="hidden lg:inline content-center">[Clear_Draft]</span>
@@ -362,6 +366,52 @@ export default function AddTemplatePage() {
                     </div>
                 </form>
             </div>
+            
+            <Modal 
+                isOpen={modalType !== null} 
+                onClose={() => setModalType(null)} 
+                title={modalType === 'clear_draft' ? 'Memory Wipe Confirmation' : ''}
+            >
+                {modalType === 'clear_draft' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-2 text-red-500 mb-2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="16" x2="12" y2="18"></line>
+                            </svg>
+                            <span className="text-xs uppercase font-black tracking-[0.2em]">Destructive_Action</span>
+                        </div>
+
+                        <div className="space-y-2">
+                            <p className="text-white/60 text-xs leading-relaxed">
+                                คุณแน่ใจหรือไม่ที่จะล้าง <span className="text-red-400 font-bold">"ข้อมูลดราฟต์ทั้งหมด"</span>?
+                            </p>
+                            <p className="text-[10px] text-white/40 uppercase leading-tight">
+                                Warning: This will permanently delete all unsaved progress in this session. 
+                                Local cache will be purged and the module will reset.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <button 
+                                type="button"
+                                onClick={() => setModalType(null)}
+                                className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                            >
+                                Abort
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={handleClearDraft}
+                                className="cursor-pointer flex-1 py-2 bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-500 transition-all"
+                            >
+                                Confirm_Wipe
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 }
