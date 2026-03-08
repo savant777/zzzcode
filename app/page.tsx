@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -12,7 +12,16 @@ import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import Modal from '@/components/Modal';
 
-export default function Dashboard() {
+export default function Page() {
+    return (
+        <Suspense fallback={<div>Loading Dashboard...</div>}>
+            <Dashboard />
+        </Suspense>
+    )
+}
+
+function Dashboard() {
+    const searchParams = useSearchParams();
     const router = useRouter();
 
     // --- 1. States (Essential & Restored) ---
@@ -23,9 +32,17 @@ export default function Dashboard() {
     
     // UI Controls
     const [isOpen, setIsOpen] = useState(true);
-    const [activeFilter, setActiveFilter] = useState('CATEGORY-ALL');
+    const activeFilter = useMemo(() => {
+        const group = searchParams.get('group')?.toLowerCase() || 'category';
+        const tag = searchParams.get('tag')?.toLowerCase() || 'all';
+        return `${group}:${tag}`;
+    }, [searchParams]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [viewMode, setViewMode] = useState<'grid' | 'line'>('grid');
+    const [viewMode, setViewMode] = useState('grid');
+    useEffect(() => {
+        const savedView = localStorage.getItem('view');
+        if (savedView) setViewMode(savedView);
+    }, []);
     const [sortBy, setSortBy] = useState('none');
     
     // Modal & Security
@@ -63,27 +80,32 @@ export default function Dashboard() {
 
     // --- UI ---
     const getPageTitle = () => {
-        const parts = activeFilter.split('-');
-        if (parts[1] == 'ALL') {
+        const parts = activeFilter.split(':');
+        if (parts[1] == 'all') {
             return `${parts[1]} ${parts[0]}`;
         } else {
-            return `${parts[1]}`;
+            return `${parts[1].replace(/-/g, ' ').toUpperCase()}`;
         }
     };
 
     const filteredTemplates = useMemo(() => {
         let result = templates.filter((item) => {
             const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
-            const [group, value] = activeFilter.split('-');
+            const [group, tagSlug] = activeFilter.split(':'); 
             
-            if (value === 'ALL') return matchesSearch;
+            if (tagSlug === 'all') {
+                if (['activity', 'commission'].includes(group)) {
+                    return matchesSearch && item.template_tags?.some((t: any) => 
+                        t.tags.tag_groups.name.toLowerCase() === group
+                    );
+                }
+                return matchesSearch;
+            }
 
             const matchesFilter = item.template_tags?.some((t: any) => {
-                const tagName = t.tags.name.toUpperCase();
-                const tagGroupName = t.tags.tag_groups.name.toUpperCase();
-                return group === 'TAG' 
-                    ? tagName === value 
-                    : (tagGroupName === group && tagName === value);
+                const currentTagSlug = t.tags.slug.toLowerCase();
+                const currentGroup = t.tags.tag_groups.name.toLowerCase();
+                return currentGroup === group && currentTagSlug === tagSlug;
             });
             
             return matchesSearch && matchesFilter;
@@ -111,16 +133,12 @@ export default function Dashboard() {
         return sortedResult;
     }, [templates, searchQuery, activeFilter, sortBy]);
 
+    console.log(filteredTemplates)
+
     // --- 4. Event Handlers ---
-    const handleTagClick = (tagName: string) => {
-        const foundTemplate = templates.find(item => 
-            item.template_tags?.some((t: any) => t.tags.name.toUpperCase() === tagName.toUpperCase())
-        );
-        
-        const tagEntry = foundTemplate?.template_tags?.find((t: any) => t.tags.name.toUpperCase() === tagName.toUpperCase());
-        const groupName = tagEntry?.tags?.tag_groups?.name.toUpperCase() || 'TAG';
-        
-        setActiveFilter(`${groupName}-${tagName.toUpperCase()}`);
+
+    const handleTagClick = (groupName: string, tagSlug: string) => {
+        router.push(`/?group=${groupName.toLowerCase()}&tag=${tagSlug.toLowerCase()}`);
     };
 
     const closeModal = () => {
@@ -172,7 +190,7 @@ export default function Dashboard() {
 
     return (
         <main className="grid main-grid-layout main-grid-area relative h-full overflow-hidden">
-            <SideNav isOpen={isOpen} setIsOpen={setIsOpen} activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
+            <SideNav isOpen={isOpen} setIsOpen={setIsOpen} activeFilter={activeFilter} />
             
             <section className="section-grid-area flex flex-col h-full overflow-hidden relative font-Google-Code">
                 <div className="z-10 bg-(--background) p-4 pt-1">
@@ -190,7 +208,7 @@ export default function Dashboard() {
                         {/* Filters & Tools */}
                         <div className="flex flex-wrap items-center gap-3 text-[10px] uppercase">
                             {/* Search */}
-                            <div className="relative flex-1 md:flex-none">
+                            <div className="relative flex-1 md:flex-none" suppressHydrationWarning>
                                 <input 
                                     type="text" 
                                     placeholder="SEARCH..." 
@@ -203,7 +221,7 @@ export default function Dashboard() {
                                 </div>
                             </div>
                             {/* View Mode Icons */}
-                            <div className="flex items-center border border-(--primary)/30 h-[26px]">
+                            <div className="flex items-center border border-(--primary)/30 h-[26px]" suppressHydrationWarning>
                                 <button 
                                     title="Grid View"
                                     onClick={() => setViewMode('grid')}
@@ -220,7 +238,7 @@ export default function Dashboard() {
                                 </button>
                             </div>
                             {/* Sort Filter */}
-                            <div className="relative flex-none">
+                            <div className="relative flex-none" suppressHydrationWarning>
                                 <div className="absolute left-2 top-1/2 -translate-y-1/2 text-(--primary) pointer-events-none">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
                                 </div>
@@ -240,35 +258,48 @@ export default function Dashboard() {
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto px-4 mb-4 scrollbar-hide">
-                    <div className={`
-                        ${viewMode === 'grid' 
-                            ? 'grid gap-2 zzzcode-card-grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))]' 
-                            : 'grid gap-2 md:gap-4 zzzcode-list-grid grid-cols-1'}
-                    `}>
-                        {isLoading ? (
-                            Array.from({ length: 12 }).map((_, i) => (
-                                <SkeletonCard key={i} />
-                            ))
-                        ) : (
-                            filteredTemplates.map(item => (
-                                <TemplateCard 
-                                    key={item.id} 
-                                    item={item}
-                                    viewMode={viewMode}
-                                    isAdmin={isAdmin}
-                                    onTagClick={handleTagClick} 
-                                    onDelete={() => {
-                                        setSelectedItem(item);
-                                        setModalType('delete');
-                                    }}
-                                    onOpenPrivateModal={(selectedItem: any) => {
-                                        setSelectedItem(selectedItem);
-                                        setModalType('private');
-                                    }}
-                                />
-                            ))
-                        )}
-                    </div>
+                    {filteredTemplates.length === 0 ? (
+                        <div className="min-h-full flex items-center justify-center font-Google-Code uppercase select-none">
+                            <div className="flex flex-col items-center gap-4">
+                                <h2 className="text-2xl md:text-5xl text-(--primary)">
+                                    404
+                                </h2>
+                                <p className="text-[10px] md:text-xs tracking-[0.2em] text-(--foreground)/50">
+                                    No_Templates_Located_In_This_Sector
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={`
+                            ${viewMode === 'grid' 
+                                ? 'grid gap-2 zzzcode-card-grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))]' 
+                                : 'grid gap-2 md:gap-4 zzzcode-list-grid grid-cols-1'}
+                        `}>
+                            {isLoading ? (
+                                Array.from({ length: 12 }).map((_, i) => (
+                                    <SkeletonCard key={i} />
+                                ))
+                            ) : (
+                                filteredTemplates.map(item => (
+                                    <TemplateCard 
+                                        key={item.id} 
+                                        item={item}
+                                        viewMode={viewMode}
+                                        isAdmin={isAdmin}
+                                        onTagClick={handleTagClick} 
+                                        onDelete={() => {
+                                            setSelectedItem(item);
+                                            setModalType('delete');
+                                        }}
+                                        onOpenPrivateModal={(selectedItem: any) => {
+                                            setSelectedItem(selectedItem);
+                                            setModalType('private');
+                                        }}
+                                    />
+                                ))
+                            )}
+                        </div>
+                    )}
                 </div>
             </section>
 

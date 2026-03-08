@@ -24,7 +24,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
         return (
             <div className="zzzcode-list-item border border-(--primary) p-2 bg-(--background) transition-all group relative items-center">
                 {/* Preview Image + Orange Filter */}
-                <div className="hidden md:block aspect-square w-full overflow-hidden border border-(--primary)/20 relative after:content-[''] after:absolute after:inset-0 after:mix-blend-overlay after:bg-(--primary) after:opacity-100 after:select-none after:pointer-events-none group-hover:after:opacity-0 after:transition-all after:duration-500">
+                <div className="hidden md:block aspect-square w-full overflow-hidden border border-(--primary)/20 relative after:content-[''] after:absolute after:inset-0 after:mix-blend-color after:bg-(--primary) after:opacity-100 after:select-none after:pointer-events-none group-hover:after:opacity-0 after:transition-all after:duration-500">
                     <img 
                         src={item.preview_url || '/placeholder.png'} 
                         className="w-full h-full object-cover transition-all duration-500 saturate-0 group-hover:filter-none group-hover:scale-105"

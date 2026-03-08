@@ -1,27 +1,22 @@
 "use client";
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase';
 import SkeletonNav from '@/components/SkeletonNav';
 
-export default function SideNav({ isOpen, setIsOpen, activeFilter, setActiveFilter }: any) {
+export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
     const [isLoading, setIsLoading] = useState(true);
     const [menuData, setMenuData] = useState<any[]>([]);
     const [expandedGroup, setExpandedGroup] = useState<string | null>('CATEGORY');
+    
+    const router = useRouter();
 
     useEffect(() => {
         const fetchMenu = async () => {
             setIsLoading(true);
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('tag_groups')
-                .select(`
-                    id,
-                    name,
-                    tags (
-                        name,
-                        slug,
-                        is_active
-                    )
-                `)
+                .select(`id, name, tags (name, slug, is_active)`)
                 .eq('tags.is_active', true)
                 .order('id', { ascending: true });
 
@@ -33,6 +28,14 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, setActiveFilt
         };
         fetchMenu();
     }, []);
+
+    const handleFilterChange = (groupName: string, tagSlug: string) => {
+        router.push(`/?group=${groupName.toLowerCase()}&tag=${tagSlug.toLowerCase()}`);
+        
+        if (window.innerWidth < 1024) {
+            setIsOpen(false);
+        }
+    };
 
     return (
         <nav className={`
@@ -61,12 +64,9 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, setActiveFilt
                             title={group.name} 
                             tags={group.tags} 
                             activeFilter={activeFilter}
-                            setActiveFilter={setActiveFilter}
+                            onSelect={(tagSlug: string) => handleFilterChange(group.name, tagSlug)} 
                             isExpanded={expandedGroup === group.name.toUpperCase()}
-                            onToggle={() => {
-                                setExpandedGroup(expandedGroup === group.name.toUpperCase() ? null : group.name.toUpperCase());
-                            }}
-                            setIsOpen={setIsOpen} // <-- ส่งตัวนี้ลงไปเพิ่ม!
+                            onToggle={() => setExpandedGroup(expandedGroup === group.name.toUpperCase() ? null : group.name.toUpperCase())}
                         />
                     ))
                 )}
@@ -75,16 +75,8 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, setActiveFilt
     );
 }
 
-function NavGroup({ title, tags, activeFilter, setActiveFilter, isExpanded, onToggle, setIsOpen }: any) {
+function NavGroup({ title, tags, activeFilter, onSelect, isExpanded, onToggle }: any) {
     const items = [{ name: 'all', slug: 'all' }, ...tags, { name: '', slug: 'blank' }];
-
-    const handleSelect = (filterValue: string) => {
-        setActiveFilter(filterValue);
-        
-        if (window.innerWidth < 1024) {
-            setIsOpen(false); 
-        }
-    };
     
     return (
         <div className="flex flex-col border-b border-(--primary)/20">
@@ -114,13 +106,13 @@ function NavGroup({ title, tags, activeFilter, setActiveFilter, isExpanded, onTo
                                 );
                             }
 
-                            const filterKey = `${title.toUpperCase()}-${tag.name.toUpperCase()}`;
-                            const isActive = activeFilter === filterKey;
+                            const currentKey = `${title.toLowerCase()}:${tag.slug.toLowerCase()}`;
+                            const isActive = activeFilter === currentKey;
 
                             return (
                                 <button 
                                     key={tag.slug}
-                                    onClick={() => handleSelect(filterKey)}
+                                    onClick={() => onSelect(tag.slug)}
                                     className={`
                                         w-full p-2 pl-3 pr-6 text-sm border-t border-(--primary)/20 transition-all flex items-center gap-2 cursor-pointer uppercase
                                         ${isActive 
