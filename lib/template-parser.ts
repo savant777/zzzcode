@@ -114,7 +114,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
     const fields: FieldConfig[] = [];
     
     // Regex: {{ variable : default [GROUP:name] }}
-    const variableRegex = /\{\{([^}:[\]\s]+)(?::([^|[\]]+))?(?:\[GROUP:([^\]]+)\])?\}\}/g;
+    const variableRegex = /\{\{([^}:[\]]+)(?::([^|[\]]+))?(?:\[GROUP:([^\]]+)\])?\}\}/g;
     const markerGroupRegex = /\[GROUP:([^\]]+)\]/i;
     const blockRegex = /\[BLOCK:([^\]]+)\]/i;
 
@@ -240,14 +240,43 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
     return output;
 };
 
-export const reorderFieldsInGroup = (fields: FieldConfig[], groupName: string, oldIndex: number, newIndex: number): FieldConfig[] => {
+export const reorderFields = (fields: FieldConfig[], groupName: string, activeId: string, overId: string): FieldConfig[] => {
     const inGroup = fields.filter(f => f.group_name === groupName).sort((a, b) => a.field_order - b.field_order);
     const otherGroups = fields.filter(f => f.group_name !== groupName);
 
-    const [movedItem] = inGroup.splice(oldIndex, 1);
-    inGroup.splice(newIndex, 0, movedItem);
+    const oldIndex = inGroup.findIndex(f => f.id === activeId);
+    const newIndex = inGroup.findIndex(f => f.id === overId);
 
-    const updatedInGroup = inGroup.map((f, idx) => ({ ...f, field_order: idx }));
+    if (oldIndex === -1 || newIndex === -1) return fields;
+
+    const reordered = [...inGroup];
+    const [movedItem] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, movedItem);
+
+    const updatedInGroup = reordered.map((f, idx) => ({ ...f, field_order: idx }));
 
     return [...otherGroups, ...updatedInGroup];
+};
+
+export const reorderGroups = (fields: FieldConfig[], activeGroupName: string, overGroupName: string): FieldConfig[] => {
+    const groupNames = Array.from(new Set(fields.map(f => f.group_name)))
+        .sort((a, b) => {
+            const fA = fields.find(f => f.group_name === a);
+            const fB = fields.find(f => f.group_name === b);
+            return (fA?.group_order ?? 0) - (fB?.group_order ?? 0);
+        });
+
+    const oldIndex = groupNames.indexOf(activeGroupName);
+    const newIndex = groupNames.indexOf(overGroupName);
+
+    if (oldIndex === -1 || newIndex === -1) return fields;
+
+    const reorderedGroupNames = [...groupNames];
+    const [movedGroup] = reorderedGroupNames.splice(oldIndex, 1);
+    reorderedGroupNames.splice(newIndex, 0, movedGroup);
+
+    return fields.map(field => ({
+        ...field,
+        group_order: reorderedGroupNames.indexOf(field.group_name)
+    }));
 };

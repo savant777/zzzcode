@@ -86,6 +86,18 @@ h1, h2, h3 {
 
 .scrollbar-hide::-webkit-scrollbar { width: 0; }
 
+.scrollbar-hide-resize-y {
+    &::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
+    }
+
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    
+    resize: vertical;
+}
+
 .grid-template-rows-\[0fr\] {
     grid-template-rows: 0fr;
 }
