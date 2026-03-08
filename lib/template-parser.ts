@@ -15,81 +15,6 @@ export interface FieldConfig {
     is_repeat?: boolean; // has [REPEAT:variable] or not
 }
 
-export const syncFieldsFromHTML = (html: string): FieldConfig[] => {
-    const fields: FieldConfig[] = [];
-  
-    const variableRegex = /\{\{([^}:[\]\s]+)(?::([^|[\]]+))?(?:\[GROUP:([^\]]+)\])?\}\}/g; // find {{variable:default[GROUP:name]}}
-    const markerGroupRegex = /\[GROUP:([^\]]+)\]/i; // find [GROUP:NAME]
-    const blockRegex = /\[BLOCK:([^\]]+)\]/i; // find [BLOCK:NAME]
-
-    let match;
-    let fieldOrder = 0;
-
-    let currentGroupName = "default"; // Default group
-    const groupMap: Record<string, number> = { "default": 0 };
-    let lastGroupOrder = 0;
-    
-    while ((match = variableRegex.exec(html)) !== null) {
-        const variableName = match[1].trim();
-        const defaultValue = match[2]?.trim() || variableName;
-        const inlineGroup = match[3]?.trim();
-        const startIndex = match.index;
-
-        // find [BLOCK]
-        const textBefore = html.substring(0, startIndex);
-        const lastBlockOpen = textBefore.lastIndexOf("[BLOCK:");
-        const lastBlockClose = textBefore.lastIndexOf("[/BLOCK:");
-
-        let blockName = undefined;
-        if (lastBlockOpen > lastBlockClose) {
-            const blockTag = textBefore.substring(lastBlockOpen).match(/\[BLOCK:([^\]]+)\]/);
-            if (blockTag) blockName = blockTag[1].trim();
-        }
-
-        // find [GROUP]
-        if (inlineGroup) {
-            currentGroupName = inlineGroup;
-        } else {
-            const nearbyText = html.substring(Math.max(0, startIndex - 500), startIndex);
-            const gMatch = nearbyText.match(markerGroupRegex);
-            if (gMatch) currentGroupName = gMatch[1].trim();
-        }
-
-        // group order
-        if (groupMap[currentGroupName] === undefined) {
-            lastGroupOrder++;
-            groupMap[currentGroupName] = lastGroupOrder;
-        }
-
-        // find [REPEAT]
-        const isRepeat = html.includes(`[REPEAT:${variableName}]`);
-
-        // check dup
-        const isDuplicate = fields.some(f => f.variable_name === variableName);
-        
-        if (!isDuplicate) {
-            fields.push({
-                id: crypto.randomUUID(),
-                variable_name: variableName,
-                label: variableName,
-                type: isRepeat ? 'slider' : 'text',
-                group_name: currentGroupName,
-                group_order: groupMap[currentGroupName],
-                field_order: fieldOrder++,
-                default_value: defaultValue,
-                placeholder: defaultValue,
-                description: "",
-                options: "",
-                config: null,
-                block_name: blockName,
-                is_repeat: isRepeat
-            });
-        }
-    }
-
-    return fields;
-};
-
 export const parseBBCode = (text: string, convertNewlines: boolean = true): string => {
     if (!text) return "";
 
@@ -185,6 +110,93 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
     return html;
 };
 
+export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] = []): FieldConfig[] => {
+    const fields: FieldConfig[] = [];
+    
+    // Regex: {{ variable : default [GROUP:name] }}
+    const variableRegex = /\{\{([^}:[\]\s]+)(?::([^|[\]]+))?(?:\[GROUP:([^\]]+)\])?\}\}/g;
+    const markerGroupRegex = /\[GROUP:([^\]]+)\]/i;
+    const blockRegex = /\[BLOCK:([^\]]+)\]/i;
+
+    let match;
+    let lastGroupOrder = 0;
+    const groupMap: Record<string, number> = {}; 
+    const groupFieldCounters: Record<string, number> = {}; // re-order by group
+
+    while ((match = variableRegex.exec(html)) !== null) {
+        const variableName = match[1].trim();
+        const defaultValue = match[2]?.trim() || variableName;
+        const inlineGroup = match[3]?.trim();
+        const startIndex = match.index;
+
+        // find [BLOCK] scope
+        const textBefore = html.substring(0, startIndex);
+        const lastBlockOpen = textBefore.lastIndexOf("[BLOCK:");
+        const lastBlockClose = textBefore.lastIndexOf("[/BLOCK:");
+        let blockName = undefined;
+        if (lastBlockOpen > lastBlockClose) {
+            const blockTag = textBefore.substring(lastBlockOpen).match(blockRegex);
+            if (blockTag) blockName = blockTag[1].trim();
+        }
+
+        // find [GROUP]
+        let currentGroupName = "default";
+        if (inlineGroup) {
+            currentGroupName = inlineGroup;
+        } else {
+            const nearbyText = html.substring(Math.max(0, startIndex - 500), startIndex);
+            const gMatch = nearbyText.match(markerGroupRegex);
+            if (gMatch) currentGroupName = gMatch[1].trim();
+        }
+
+        // set group order
+        if (groupMap[currentGroupName] === undefined) {
+            groupMap[currentGroupName] = lastGroupOrder++;
+            groupFieldCounters[currentGroupName] = 0; // set initial field order
+        }
+
+        // check duplicate & [REPEAT]
+        const isDuplicateInNew = fields.some(f => f.variable_name === variableName);
+        const isRepeat = html.includes(`[REPEAT:${variableName}]`);
+
+        if (!isDuplicateInNew) {
+            const oldField = existingFields.find(f => f.variable_name === variableName);
+            const currentFieldOrder = groupFieldCounters[currentGroupName]++;
+
+            if (oldField) {
+                fields.push({
+                    ...oldField,
+                    group_name: currentGroupName,
+                    group_order: groupMap[currentGroupName],
+                    field_order: currentFieldOrder,
+                    default_value: match[2]?.trim() || oldField.default_value,
+                    placeholder: match[2]?.trim() || oldField.placeholder,
+                    block_name: blockName,
+                    is_repeat: isRepeat
+                });
+            } else {
+                fields.push({
+                    id: crypto.randomUUID(),
+                    variable_name: variableName,
+                    label: variableName,
+                    type: isRepeat ? 'slider' : 'text',
+                    group_name: currentGroupName,
+                    group_order: groupMap[currentGroupName],
+                    field_order: currentFieldOrder,
+                    default_value: defaultValue,
+                    placeholder: defaultValue,
+                    description: "",
+                    options: "",
+                    config: null,
+                    block_name: blockName,
+                    is_repeat: isRepeat
+                });
+            }
+        }
+    }
+    return fields;
+};
+
 export const generateFinalHTML = (blueprint: string, values: any, fields: FieldConfig[], isExport: boolean = false) => {
     let output = blueprint;
 
@@ -226,4 +238,16 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
                    .replace(/\[REPEAT:[^\]]+\]|\[\/REPEAT\]/gi, '');
 
     return output;
+};
+
+export const reorderFieldsInGroup = (fields: FieldConfig[], groupName: string, oldIndex: number, newIndex: number): FieldConfig[] => {
+    const inGroup = fields.filter(f => f.group_name === groupName).sort((a, b) => a.field_order - b.field_order);
+    const otherGroups = fields.filter(f => f.group_name !== groupName);
+
+    const [movedItem] = inGroup.splice(oldIndex, 1);
+    inGroup.splice(newIndex, 0, movedItem);
+
+    const updatedInGroup = inGroup.map((f, idx) => ({ ...f, field_order: idx }));
+
+    return [...otherGroups, ...updatedInGroup];
 };
