@@ -214,7 +214,7 @@ export default function EditorPage() {
                         
                         <div className="flex flex-col gap-4 overflow-y-auto scrollbar-hide">
                             {template.fields_config?.map((field: any) => (
-                                <div key={field.id} className="flex flex-col gap-2 font-Google-Sans">
+                                <div key={field.id} className="group/field flex flex-col gap-2 font-Google-Sans">
                                     <div className="flex gap-2 items-center relative">
                                         <label className="text-sm uppercase opacity-70">{field.label}</label>
                                         {field.description && (
@@ -223,9 +223,14 @@ export default function EditorPage() {
                                                     i
                                                 </button>
                                                 
-                                                <div className="invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 mb-1 p-2 bg-black border border-(--primary)/50 z-50 min-w-[180px] max-w-8/10 transition-all duration-200">
+                                                <div className="
+                                                    invisible group-hover/tooltip:visible
+                                                    opacity-0 group-hover/tooltip:opacity-100
+                                                    absolute bottom-full group-first/field:bottom-[unset] group-first/field:top-full group-first/field:mt-1 group-first/field:mb-0
+                                                    left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 
+                                                    mb-1 p-2 bg-black border border-(--primary)/50 z-50 min-w-[180px] w-max max-md:max-w-8/10 transition-all duration-200">
                                                     <div className="text-[10px] uppercase opacity-50 mb-1 border-b border-(--primary)/75 pb-1">คำอธิบาย</div>
-                                                    <div className="text-xs font-bold">
+                                                    <div className="text-xs whitespace-pre-line leading-[1.6]">
                                                         {field.description}
                                                     </div>
                                                 </div>
