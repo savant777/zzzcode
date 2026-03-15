@@ -408,7 +408,7 @@ export default function EditTemplatePage() {
                     {/* Fields */}
                     <div className="flex flex-col h-full overflow-hidden border border-(--primary) bg-(--background) text-(--foreground) p-4">
                         <div className="bg-(--background) pb-4 z-5">
-                            <div className="flex justify-between items-center border-b border-(--primary)/75">
+                            <div className="flex justify-between items-center border-b border-(--primary)/75 pb-2">
                                 <h3 className="text-xl text-(--primary) uppercase">Template_Fields</h3>
                                 <span className="text-sm opacity-40 uppercase tracking-tighter">Detected: {fields.length}</span>
                             </div>
@@ -531,14 +531,14 @@ export default function EditTemplatePage() {
                                 </div>
                             </div>
 
-                            {/* Conditional Field: Color Picker (เฉพาะตอนเลือก Color) */}
+                            {/* Conditional Field: Color Picker */}
                             {editingField.type === 'color' && (
                                 <div className="flex flex-col gap-1 animate-in slide-in-from-bottom-2">
                                     <label className="text-[10px] uppercase text-(--primary) font-bold">
                                         Initial_Color_Value (HEX)
                                     </label>
                                     <div className="flex gap-2">
-                                        {/* กล่องจิ้มสี (Color Picker) */}
+                                        {/* Color Picker */}
                                         <div className="relative w-10 h-10 border border-(--primary)/50 bg-black shrink-0 overflow-hidden">
                                             <input 
                                                 type="color" 
@@ -548,7 +548,7 @@ export default function EditTemplatePage() {
                                             />
                                         </div>
                                         
-                                        {/* ช่องพิมพ์รหัสสี */}
+                                        {/* Color Code */}
                                         <input 
                                             type="text" 
                                             placeholder="#FFFFFF"
@@ -576,7 +576,7 @@ export default function EditTemplatePage() {
                                 </div>
                             )}
 
-                            {/* Conditional Field: Options (เฉพาะตอนเลือก Select) */}
+                            {/* Conditional Field: Options */}
                             {editingField.type === 'select' && (
                                 <div className="flex flex-col gap-1 animate-in slide-in-from-top-2">
                                     <label className="text-[10px] uppercase text-(--primary) font-bold">Select_Options (Separate with /)</label>
@@ -605,67 +605,141 @@ export default function EditTemplatePage() {
 
                             {/* --- Slider & Select Config Panel --- */}
                             {(editingField.type === 'slider' || editingField.type === 'select') && (
-                                <div className="mt-4 p-3 bg-black/40 border border-(--primary)/50 space-y-1 animate-in fade-in duration-300">
-                                    <p className="text-[10px] text-(--primary) font-bold uppercase tracking-wider">Advanced_Settings</p>
-                                    
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-[9px] opacity-50 uppercase">Min</label>
-                                            <input 
-                                                type="number" 
-                                                value={editingField.config?.min ?? 0}
-                                                onChange={(e) => {
-                                                    const newMin = Number(e.target.value);
-                                                    setEditingField({
-                                                        ...editingField, 
-                                                        config: {...editingField.config, min: newMin},
-                                                        default_value: String(newMin), 
-                                                        placeholder: String(newMin)
-                                                    });
-                                                }}
-                                                className="bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)"
-                                            />
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-[9px] opacity-50 uppercase">Max</label>
-                                            <input 
-                                                type="number" 
-                                                value={editingField.config?.max ?? 100}
-                                                onChange={(e) => setEditingField({...editingField, config: {...editingField.config, max: Number(e.target.value)}})}
-                                                className="bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)"
-                                            />
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-[9px] opacity-50 uppercase">Unit</label>
-                                            <input 
-                                                type="text" 
-                                                placeholder="px/%"
-                                                value={editingField.config?.unit ?? ''}
-                                                onChange={(e) => setEditingField({...editingField, config: {...editingField.config, unit: e.target.value}})}
-                                                className="bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)"
-                                            />
-                                        </div>
-                                        <p className="text-[9px] opacity-40 italic">
-                                            * ระบบจะใช้ <span className="text-yellow-500 font-bold underline">{editingField.config?.min ?? 0}</span> เป็นค่าเริ่มต้น
-                                        </p>
+                                <div className="mt-4 p-3 bg-black/40 border border-(--primary)/50 space-y-4 animate-in fade-in duration-300">
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-[10px] text-(--primary) font-bold uppercase tracking-wider">Advanced_Settings</p>
+                                        
+                                        {editingField.type === 'select' && (
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input 
+                                                    type="checkbox"
+                                                    className="accent-(--primary)"
+                                                    checked={editingField.config?.has_custom_slider || false}
+                                                    onChange={(e) => {
+                                                        const isChecked = e.target.checked;
+                                                        const defaultSliders = editingField.config?.sliders || [{ label: 'Size', min: 0, max: 100, step: 1, unit: 'px', default_value: 0 }];
+                                                        setEditingField({
+                                                            ...editingField, 
+                                                            config: {
+                                                                ...editingField.config, 
+                                                                has_custom_slider: isChecked, 
+                                                                custom_trigger: 'custom',
+                                                                sliders: isChecked ? defaultSliders : editingField.config?.sliders
+                                                            }
+                                                        });
+                                                    }}
+                                                />
+                                                <span className="text-[9px] uppercase opacity-60 group-hover:opacity-100 transition-opacity">Enable_Custom_Sliders</span>
+                                            </label>
+                                        )}
                                     </div>
 
-                                    {/* Checkbox สำหรับเปิด Custom Slider ในหน้า Select */}
-                                    {editingField.type === 'select' && (
-                                        <label className="flex items-center gap-2 cursor-pointer group pt-1">
-                                            <input 
-                                                type="checkbox"
-                                                checked={editingField.config?.has_custom_slider || false}
-                                                onChange={(e) => setEditingField({
-                                                    ...editingField, 
-                                                    config: {...editingField.config, has_custom_slider: e.target.checked, custom_trigger: 'custom'}
-                                                })}
-                                                className="accent-(--primary)"
-                                            />
-                                            <span className="mt-[2px] text-[10px] uppercase opacity-60 group-hover:opacity-100 transition-opacity">
-                                                Enable_Custom_Range_Slider
-                                            </span>
-                                        </label>
+                                    {/* Sliders (type slider or custom select) */}
+                                    {(editingField.type === 'slider' || (editingField.type === 'select' && editingField.config?.has_custom_slider)) && (
+                                        <div className="space-y-4 pt-2 border-t border-(--primary)/10">
+                                            
+                                            {/* generate all Sliders */}
+                                            {(editingField.config?.sliders || [{ label: 'Value', min: 0, max: 100, step: 1, unit: 'px', default_value: 0 }]).map((slider, index) => (
+                                                <div key={index} className="space-y-2 bg-white/5 p-2 rounded">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] text-(--primary)/70 font-mono">SLIDER_#{index + 1}</span>
+                                                        {index > 0 && (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    const newSliders = [...(editingField.config?.sliders || [])];
+                                                                    newSliders.splice(index, 1);
+                                                                    setEditingField({...editingField, config: {...editingField.config, sliders: newSliders}});
+                                                                }}
+                                                                className="text-[9px] text-red-400 hover:underline"
+                                                            >[Remove]</button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="flex flex-col gap-1 col-span-2">
+                                                            <label className="text-[8px] opacity-40 uppercase">Slider_Label</label>
+                                                            <input 
+                                                                type="text"
+                                                                value={slider.label}
+                                                                onChange={(e) => {
+                                                                    const newSliders = [...(editingField.config?.sliders || [])];
+                                                                    newSliders[index] = {...slider, label: e.target.value};
+                                                                    setEditingField({...editingField, config: {...editingField.config, sliders: newSliders}});
+                                                                }}
+                                                                className="bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)"
+                                                                placeholder="e.g. Width / Padding"
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <label className="text-[8px] opacity-40 uppercase">Min</label>
+                                                            <input 
+                                                                type="number" 
+                                                                value={slider.min}
+                                                                onChange={(e) => {
+                                                                    const newSliders = [...(editingField.config?.sliders || [])];
+                                                                    newSliders[index] = {...slider, min: Number(e.target.value)};
+                                                                    setEditingField({...editingField, config: {...editingField.config, sliders: newSliders}});
+                                                                }}
+                                                                className="bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)"
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <label className="text-[8px] opacity-40 uppercase">Max</label>
+                                                            <input 
+                                                                type="number" 
+                                                                value={slider.max}
+                                                                onChange={(e) => {
+                                                                    const newSliders = [...(editingField.config?.sliders || [])];
+                                                                    newSliders[index] = {...slider, max: Number(e.target.value)};
+                                                                    setEditingField({...editingField, config: {...editingField.config, sliders: newSliders}});
+                                                                }}
+                                                                className="bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)"
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <label className="text-[8px] opacity-40 uppercase">Default</label>
+                                                            <input 
+                                                                type="number" 
+                                                                value={slider.default_value}
+                                                                onChange={(e) => {
+                                                                    const newSliders = [...(editingField.config?.sliders || [])];
+                                                                    newSliders[index] = {...slider, default_value: Number(e.target.value)};
+                                                                    setEditingField({...editingField, config: {...editingField.config, sliders: newSliders}});
+                                                                }}
+                                                                className="bg-black/40 border border-(--primary)/30 p-1 text-xs text-yellow-500 outline-none focus:border-(--primary)"
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <label className="text-[8px] opacity-40 uppercase">Unit</label>
+                                                            <input 
+                                                                type="text" 
+                                                                value={slider.unit}
+                                                                onChange={(e) => {
+                                                                    const newSliders = [...(editingField.config?.sliders || [])];
+                                                                    newSliders[index] = {...slider, unit: e.target.value};
+                                                                    setEditingField({...editingField, config: {...editingField.config, sliders: newSliders}});
+                                                                }}
+                                                                className="bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)"
+                                                                placeholder="px / %"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {/* Add Slider Button (only when dustom slider in Select is enable or Slider) */}
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    const currentSliders = editingField.config?.sliders || [];
+                                                    const newSliders = [...currentSliders, { label: 'New Slider', min: 0, max: 100, step: 1, unit: 'px', default_value: 0 }];
+                                                    setEditingField({...editingField, config: {...editingField.config, sliders: newSliders}});
+                                                }}
+                                                className="w-full py-1 border border-dashed border-(--primary)/30 text-[9px] uppercase opacity-50 hover:opacity-100 hover:bg-(--primary)/5 transition-all"
+                                            >
+                                                + Add_Another_Slider
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -702,7 +776,7 @@ export default function EditTemplatePage() {
                                 </div>
                             )}
 
-                            {/* Default Value & Placeholder - โชว์เฉพาะ Text และ BBCode */}
+                            {/* Default Value & Placeholder - Show only Text & BBCode */}
                             {editingField.type !== 'color' && 
                             editingField.type !== 'select' && 
                             editingField.type !== 'slider' && 
@@ -735,7 +809,7 @@ export default function EditTemplatePage() {
                             </div>
                         </div>
 
-                        {/* --- Action Buttons --- */}
+                        {/* Action Buttons */}
                         <div className="mt-8 flex gap-3">
                             <button 
                                 type="button"

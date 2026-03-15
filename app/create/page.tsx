@@ -346,7 +346,7 @@ export default function AddTemplatePage() {
                     {/* Fields */}
                     <div className="flex flex-col h-full overflow-hidden border border-(--primary) bg-(--background) text-(--foreground) p-4">
                         <div className="bg-(--background) pb-4 z-5">
-                            <div className="flex justify-between items-center border-b border-(--primary)/75">
+                            <div className="flex justify-between items-center border-b border-(--primary)/75 pb-2">
                                 <h3 className="text-xl text-(--primary) uppercase">Template_Fields</h3>
                                 <span className="text-sm opacity-40 uppercase tracking-tighter">Detected: {fields.length}</span>
                             </div>

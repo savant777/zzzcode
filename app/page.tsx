@@ -133,8 +133,6 @@ function Dashboard() {
         return sortedResult;
     }, [templates, searchQuery, activeFilter, sortBy]);
 
-    console.log(filteredTemplates)
-
     // --- 4. Event Handlers ---
 
     const handleTagClick = (groupName: string, tagSlug: string) => {

@@ -12,10 +12,14 @@ export interface FieldConfig {
     options?: string; // for select
     config?: {
         // --- for Slider ---
-        min?: number;
-        max?: number;
-        step?: number;
-        unit?: string;
+        sliders?: {
+            label: string;
+            min: number;
+            max: number;
+            step: number;
+            unit: string;
+            default_value: number;
+        }[];
 
         // --- for "Select + Slider" ---
         has_custom_slider?: boolean;
@@ -176,6 +180,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
         // check duplicate & [REPEAT]
         const isDuplicateInNew = fields.some(f => f.variable_name === variableName);
         const isRepeat = html.includes(`[REPEAT:${variableName}]`);
+        const isCheckbox = variableName.startsWith('is_');
 
         if (!isDuplicateInNew) {
             const oldField = existingFields.find(f => f.variable_name === variableName);
@@ -185,8 +190,8 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 fields.push({
                     ...oldField,
                     group_name: currentGroupName,
-                    group_order: groupMap[currentGroupName],
-                    field_order: currentFieldOrder,
+                    group_order: oldField.group_order !== undefined ? oldField.group_order : groupMap[currentGroupName],
+                    field_order: oldField.field_order !== undefined ? oldField.field_order : currentFieldOrder,
                     default_value: match[2]?.trim() || oldField.default_value,
                     placeholder: match[2]?.trim() || oldField.placeholder,
                     block_name: blockName,
@@ -198,7 +203,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                     id: crypto.randomUUID(),
                     variable_name: variableName,
                     label: variableName,
-                    type: isRepeat ? 'slider' : (variableName.startsWith('is_') ? 'checkbox' : 'text'),
+                    type: isRepeat ? 'slider' : (isCheckbox ? 'checkbox' : 'text'),
                     group_name: currentGroupName,
                     group_order: groupMap[currentGroupName],
                     field_order: currentFieldOrder,
@@ -206,7 +211,21 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                     placeholder: defaultValue,
                     description: "",
                     options: "",
-                    config: isRepeat ? { min: 0, max: 100, step: 1, unit: 'px' } : { true_label: 'ON', false_label: 'OFF' },
+                    config: isRepeat? { 
+                        sliders: [{ 
+                            label: 'Value', 
+                            min: -100, 
+                            max: 100, 
+                            step: 1, 
+                            unit: 'px', 
+                            default_value: Number(defaultValue) || 0 
+                        }] 
+                    } : isCheckbox? {
+                        true_label: 'ON', 
+                        false_label: 'OFF', 
+                        true_value: 'true', 
+                        false_value: 'false'
+                    } : {},
                     block_name: blockName,
                     is_repeat: isRepeat
                 });
@@ -244,6 +263,15 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
     // {{variable}} logic => replace value
     fields.filter(f => !f.block_name).forEach(field => {
         let val = values[field.variable_name] ?? field.default_value;
+
+        if (field.type === 'slider' || (field.type === 'select' && field.config?.has_custom_slider)) {
+            if (Array.isArray(val)) {
+                val = val.map((v, idx) => {
+                    const unit = field.config?.sliders?.[idx]?.unit || "";
+                    return `${v}${unit}`;
+                }).join(' ');
+            }
+        }
 
         if (field.type === 'bbcode') val = parseBBCode(val, !isExport);
 
