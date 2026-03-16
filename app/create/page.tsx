@@ -57,7 +57,18 @@ export default function AddTemplatePage() {
     // Load Tags & Draft
     useEffect(() => {
         const initAddPage = async () => {
-            const { data } = await supabase.from('tags').select('id, name').eq('is_active', true);
+            const { data } = await supabase
+                .from('tags')
+                .select(`
+                    id, 
+                    name, 
+                    slug,
+                    tag_groups (
+                        name
+                    )
+                `)
+                .eq('is_active', true);
+
             if (data) setAvailableTags(data);
 
             const savedDraft = localStorage.getItem(STORAGE_KEY);
@@ -122,7 +133,7 @@ export default function AddTemplatePage() {
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
-
+            
             const { data: templateData, error: templateError } = await supabase
                 .from('templates')
                 .insert([{
@@ -148,7 +159,7 @@ export default function AddTemplatePage() {
 
             const primaryTag = availableTags
                 .filter(t => selectedTags.includes(t.id))
-                .find(t => ['activity', 'commission'].includes(t.tag_groups.name.toLowerCase()));
+                .find(t => ['activity', 'commission'].includes(t.tag_groups?.name?.toLowerCase() || ''));
 
             let targetGroup = 'category';
             let targetTag = 'all';
