@@ -132,3 +132,58 @@ h1, h2, h3 {
     }
 }
 
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+    cursor: pointer;
+    border-radius: 0px;
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+    cursor: pointer;
+    border-radius: 0px;
+    border: none;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+    outline: 1px solid var(--primary);
+    outline-offset: 1px;
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+    outline: 1px solid var(--primary);
+    outline-offset: 1px;
+}
+
+#preview-container hr {
+    color: #fff;
+    background: #303030;
+    height: 1px;
+    border: 0px;
+}
+
+#preview-container a {
+    color: rgb(43, 120, 255);
+    transition: .3s;
+}
+
+#preview-container a:link {
+    text-decoration: none;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    appearance: none;
+    -moz-appearance: textfield;
+}

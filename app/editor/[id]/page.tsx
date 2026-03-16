@@ -1,198 +1,174 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useParams, useRouter } from 'next/navigation';
-import BBCodeEditor from '@/components/BBCodeEditor';
-import Breadcrumbs from '@/components/Breadcrumbs';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { FieldConfig, syncFieldsFromHTML, generateFinalHTML } from '@/lib/template-parser';
+
+import Modal from '@/components/Modal';
+import Breadcrumbs from '@/components/Breadcrumbs';
+import FieldRenderer from '@/components/FieldRenderer';
 
 export default function EditorPage() {
-    const STORAGE_KEY = 'zzzcode_draft_editor_${templateId}';
-
-    const { id } = useParams();
     const router = useRouter();
-    const [template, setTemplate] = useState<any>(null);
-    const [values, setValues] = useState<Record<string, string>>({});
-    const [isLoading, setIsLoading] = useState(true);
+    const params = useParams();
+    const searchParams = useSearchParams();
+    const templateId = params.id;
+    
+    const STORAGE_KEY = `zzzcode_draft_editor_${templateId}`;
+    const fromGroup = searchParams.get('group') || 'category';
+    const fromTag = searchParams.get('tag') || 'all';
+    const breadcrumbPath = `${fromGroup}:${fromTag}`;
 
-    // 1. Fetch Data
+    // --- 1. States ---
+    const [modalType, setModalType] = useState<'clear_draft' | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    const [formData, setFormData] = useState({
+        title: '',
+        description: '',
+        html_blueprint: '',
+    });
+
+    const [fields, setFields] = useState<FieldConfig[]>([]);
+    const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
+
+    // --- 2. Computed Preview ---
+    const liveHTML = useMemo(() => {
+        if (!formData.html_blueprint) return "";
+        return generateFinalHTML(formData.html_blueprint, fieldValues, fields, true);
+    }, [formData.html_blueprint, fieldValues, fields]);
+
+    // Grouping Field
+    const groupedFields = useMemo(() => {
+        const groups: Record<string, FieldConfig[]> = {};
+        
+        fields.forEach(f => {
+            if (!groups[f.group_name]) groups[f.group_name] = [];
+            groups[f.group_name].push(f);
+        });
+
+        return Object.entries(groups)
+            .sort(([, a], [, b]) => {
+                const orderA = a[0]?.group_order ?? 0;
+                const orderB = b[0]?.group_order ?? 0;
+                return orderA - orderB;
+            })
+            .reduce((acc, [key, val]) => {
+                acc[key] = [...val].sort((a, b) => (a.field_order ?? 0) - (b.field_order ?? 0));
+                return acc;
+            }, {} as Record<string, FieldConfig[]>);
+    }, [fields]);
+
+    // --- 3. Effects ---
+
     useEffect(() => {
-        const fetchTemplate = async () => {
-            setIsLoading(true);
-            const { data, error } = await supabase
-                .from('templates')
-                .select('*')
-                .eq('id', id)
-                .single();
+        const initEditorPage = async () => {
+            setLoading(true);
+            if (templateId) {
+                const { data: template } = await supabase.from('templates').select('*').eq('id', templateId).single();
 
-            if (error || !data) {
-                toast.error("ERROR: MODULE_NOT_FOUND");
-                router.push('/');
-                return;
-            }
+                if (template) {
+                    const initialData = {
+                        title: template.title,
+                        description: template.description,
+                        html_blueprint: template.html_blueprint,
+                    };
+                    
+                    setFormData(initialData);
+                    const initialFields = (template.fields_config || []).sort((a: any, b: any) => {
+                        if (a.group_order !== b.group_order) {
+                            return (a.group_order ?? 0) - (b.group_order ?? 0);
+                        }
+                        return (a.field_order ?? 0) - (b.field_order ?? 0);
+                    });
+                    setFields(initialFields);
+                    
+                    const defaults: any = {};
+                    initialFields.forEach((f: FieldConfig) => {
+                        defaults[f.variable_name] = f.default_value;
+                    });
+                    setFieldValues(defaults);
 
-            setTemplate(data);
-
-            const initialValues: Record<string, string> = {};
-
-            data.fields_config?.forEach((f: any) => {
-                const key = f.variable_name; 
-                initialValues[key] = f.default_value || "";
-                
-                console.log("SYNC_VARIABLE:", key, "VALUE:", initialValues[key]);
-            });
-
-            setValues(initialValues);
-            setIsLoading(false);
-        };
-
-        if (id) fetchTemplate();
-    }, [id, router]);
-
-    // 2. BBCode Parser (Logic เดิมของคุณ Zoe ที่แม่นยำอยู่แล้ว)
-    const parseBBCode = (text: string) => {
-        if (!text) return "";
-
-        const parseList = (input: string): string => {
-            const findMatchingClose = (str: string, startIdx: number): number => {
-                let depth = 1;
-                let i = startIdx;
-                while (i < str.length && depth > 0) {
-                    if (str.startsWith('[list', i) && (str[i + 5] === ']' || str[i + 5] === '=')) {
-                        depth++;
-                        i += 6;
-                    } else if (str.startsWith('[/list]', i)) {
-                        depth--;
-                        if (depth === 0) return i;
-                        i += 7;
-                    } else {
-                        i++;
+                    // Check Local Draft
+                    const savedDraft = localStorage.getItem(STORAGE_KEY);
+                    if (savedDraft) {
+                        try {
+                            const parsed = JSON.parse(savedDraft);
+                            if (parsed.templateId === templateId) {
+                                setFormData(parsed.formData);
+                                setFields(parsed.fields);
+                                setFieldValues(parsed.fieldValues || defaults);
+                            }
+                        } catch (e) { console.error(e); }
                     }
                 }
-                return -1;
-            };
-
-            let result = '';
-            let i = 0;
-
-            while (i < input.length) {
-                const listMatch = input.slice(i).match(/^\[list(=1)?\]/);
-                if (listMatch) {
-                    const openTag = listMatch[0];
-                    const isOrdered = listMatch[1] === '=1';
-                    const contentStart = i + openTag.length;
-                    const closeIdx = findMatchingClose(input, contentStart);
-
-                    if (closeIdx !== -1) {
-                        const content = input.slice(contentStart, closeIdx);
-                        const parsedContent = parseList(content);
-
-                        const items = parsedContent.split('[*]')
-                            .slice(1)
-                            .map((item: string) => item.trim())
-                            .filter((item: string) => item !== '')
-                            .map((item: string) => `<li>${item}</li>`)
-                            .join('');
-
-                        const tag = isOrdered ? 'ol type="1"' : 'ul';
-                        result += `<${tag} class="mycode_list">${items}</${isOrdered ? 'ol' : 'ul'}>`;
-                        i = closeIdx + '[/list]'.length;
-                    } else {
-                        result += input[i];
-                        i++;
-                    }
-                } else {
-                    result += input[i];
-                    i++;
-                }
             }
-
-            return result;
+            setLoading(false);
         };
+        initEditorPage();
+    }, [templateId]);
 
-        let html = text
-            .replace(/\[b\]([\s\S]*?)\[\/b\]/g, '<span style="font-weight: bold;" class="mycode_b">$1</span>')
-            .replace(/\[i\]([\s\S]*?)\[\/i\]/g, '<span style="font-style: italic;" class="mycode_i">$1</span>')
-            .replace(/\[u\]([\s\S]*?)\[\/u\]/g, '<span style="text-decoration: underline;" class="mycode_u">$1</span>')
-            .replace(/\[s\]([\s\S]*?)\[\/s\]/g, '<span style="text-decoration: line-through;" class="mycode_s">$1</span>')
-            .replace(/\[align=(left|center|right|justify)\]([\s\S]*?)\[\/align\]/g, '<div style="text-align: $1;" class="mycode_align">$2</div>')
-            .replace(/\[color=(#?[a-fA-F0-9]{3,6})\]([\s\S]*?)\[\/color\]/g, '<span style="color: $1;" class="mycode_color">$2</span>');
+    // Auto-Save Draft
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (formData.title || formData.html_blueprint) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
+                    templateId, formData, fields, fieldValues 
+                }));
+            }
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, [formData, fields, fieldValues]);
 
-        html = parseList(html);
-
-        html = html.replace(/\n/g, '<br>');
-        html = html
-            .replace(/<\/div><br>/g, '</div>')
-            .replace(/<\/ul><br>/g, '</ul>')
-            .replace(/<\/ol><br>/g, '</ol>')
-            .replace(/<li><br>/g, '<li>')
-            .replace(/<br><\/li>/g, '</li>');
-
-        return html;
+    // --- 4. Handlers ---
+    const handleValueChange = (varName: string, value: any) => {
+        setFieldValues(prev => ({ ...prev, [varName]: value }));
     };
 
-    // 3. Live Preview Generator
-    const previewHTML = useMemo(() => {
-        if (!template) return "";
-        let html = template.html_blueprint;
-        
-        Object.keys(values).forEach(key => {
-            const field = template.fields_config?.find((f: any) => f.variable_name === key);
-            let content = values[key];
-            
-            if (field?.type === 'bbcode') {
-                content = parseBBCode(content);
-            }
-            
-            html = html.replaceAll(`{{${key}}}`, content);
-        });
-        
-        return html;
-    }, [template, values]);
+    const handleClearDraft = () => {
+        localStorage.removeItem(STORAGE_KEY);
+        window.location.reload();
+    };
 
-    // 4. Copy Logic
-    const handleCopyCode = () => {
-        const toastId = toast.loading("SYSTEM: Generating_Code...");
+    const handleCopy = async () => {
+        if (!liveHTML) return;
+
         try {
-            let finalOutput = template.html_blueprint;
-            Object.keys(values).forEach(key => {
-                finalOutput = finalOutput.replaceAll(`{{${key}}}`, values[key]);
-            });
-            navigator.clipboard.writeText(finalOutput);
-            toast.success("PROTOCOL_SUCCESS: CODE_COPIED", { id: toastId });
+            const copyHTML = generateFinalHTML(formData.html_blueprint, fieldValues, fields, false);
+            
+            await navigator.clipboard.writeText(copyHTML);
+            
+            toast.success("SYSTEM: HTML_COPIED_TO_CLIPBOARD");
         } catch (err) {
-            toast.error("FATAL_ERROR: COPY_FAILED", { id: toastId });
+            toast.error("CRITICAL_ERROR: Failed to copy");
         }
     };
 
-    if (isLoading) return <div className="p-10 text-center font-Google-Code animate-pulse text-(--primary)">LOADING_CORE_MODULE...</div>;
+    if (loading) return <div className="p-10 font-Google-Code text-xs animate-pulse">SYSTEM: LOADING_CORE...</div>;
 
     return (
         <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
             <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                <Breadcrumbs path={template.title || 'LOADING...'} currentFile="EDITOR" />
+                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" />
                 <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
-                    <span>&lt; BACK_TO_DASHBOARD</span>
+                    <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
+                    <span className="lg:hidden">&lt; BACK</span>
                 </button>
             </div>
 
             <div className="flex-1 lg:flex overflow-y-auto lg:overflow-hidden px-4 mb-4 scrollbar-hide">
-                <div className="flex-none lg:flex-1 grid gap-4 grid-cols-none lg:grid-cols-2">
-                    {/* Input Side */}
-                    <div className="flex flex-col h-full overflow-hidden border border-(--primary) bg-(--background) text-(--foreground) p-4">
+                <div className="lg:flex-1 grid gap-4 grid-cols-none lg:grid-cols-2">
+                    {/* Input */}
+                    <div className="max-lg:row-[2/3] flex flex-col h-full overflow-hidden border border-(--primary) bg-(--background) text-(--foreground) p-4">
                         <div className="bg-(--background) pb-4 z-5">
                             <div className="flex justify-between items-center border-b border-(--primary)/75 pb-2">
-                                <h3 className="text-xl text-(--primary) uppercase">{template.title}'s Editor</h3>
+                                <h3 className="text-xl text-(--primary) uppercase">Input_Fields</h3>
                                 <div className="flex-1 flex justify-end gap-1">
                                     <button 
                                         type="button"
-                                        onClick={() => {
-                                            if(confirm("ยืนยันการล้างข้อมูลที่พิมพ์ค้างไว้ทั้งหมด?")) {
-                                                localStorage.removeItem(STORAGE_KEY);
-                                                window.location.reload();
-                                            }
-                                        }}
+                                        onClick={() => setModalType('clear_draft')}
                                         className="text-[10px] opacity-30 hover:opacity-100 uppercase cursor-pointer flex gap-1"
                                     >
                                         <span className="hidden lg:inline content-center">[Clear_Draft]</span>
@@ -202,146 +178,115 @@ export default function EditorPage() {
                                             </svg>
                                         </span>
                                     </button>
-                                    <button 
-                                        onClick={handleCopyCode}
-                                        className="bg-(--primary) text-(--background) px-4 py-1 text-xs font-black uppercase hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
-                                    >
-                                        Copy
-                                    </button>
                                 </div>
                             </div>
                         </div>
                         
-                        <div className="flex flex-col gap-4 overflow-y-auto scrollbar-hide">
-                            {template.fields_config?.map((field: any) => (
-                                <div key={field.id} className="group/field flex flex-col gap-2 font-Google-Sans">
-                                    <div className="flex gap-2 items-center relative">
-                                        <label className="text-sm uppercase opacity-70">{field.label}</label>
-                                        {field.description && (
-                                            <div className="group/tooltip flex md:relative">
-                                                <button className="font-Google-Code border border-(--foreground)/50 bg-(--background) text-(--foreground) w-[12px] h-[12px] text-[8px] font-bold transition-all cursor-help opacity-50">
-                                                    i
-                                                </button>
-                                                
-                                                <div className="
-                                                    invisible group-hover/tooltip:visible
-                                                    opacity-0 group-hover/tooltip:opacity-100
-                                                    absolute bottom-full group-first/field:bottom-[unset] group-first/field:top-full group-first/field:mt-1 group-first/field:mb-0
-                                                    left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 
-                                                    mb-1 p-2 bg-black border border-(--primary)/50 z-50 min-w-[180px] w-max max-md:max-w-8/10 transition-all duration-200">
-                                                    <div className="text-[10px] uppercase opacity-50 mb-1 border-b border-(--primary)/75 pb-1">คำอธิบาย</div>
-                                                    <div className="text-xs whitespace-pre-line leading-[1.6]">
-                                                        {field.description}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                        <div className="flex flex-col gap-6 overflow-y-auto scrollbar-hide">
+                            {Object.entries(groupedFields).map(([groupName, groupFields]) => {
+                                const totalFields = groupFields.length;
+                                
+                                return (
+                                    <div key={groupName}>
+                                        <div className="flex items-center gap-2 px-2 py-1 bg-(--primary)/5 border-l-2 border-(--primary) mb-2 select-none">
+                                            <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-(--primary)">
+                                                {groupName}
+                                            </h4>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                            {groupFields.map((field, index) => {
+                                                const isWide = field.type === "bbcode" ||  totalFields === 1 ||  (totalFields > 2 && index === 0);
+
+                                                return (
+                                                    <FieldRenderer 
+                                                        key={field.id}
+                                                        field={field}
+                                                        value={fieldValues[field.variable_name]}
+                                                        onChange={handleValueChange}
+                                                        className={isWide ? "lg:col-span-2" : "col-span-1"}
+                                                    />
+                                                )
+                                            })}
+                                        </div>
                                     </div>
-                                    
-                                    {field.type === 'color' ? (
-                                        /* --- TYPE: COLOR --- */
-                                        <div className="flex gap-2">
-                                            <div className="relative w-10 h-10 border border-(--primary)/50 bg-black shrink-0 overflow-hidden">
-                                                <input 
-                                                    type="color" 
-                                                    value={values[field.variable_name]?.startsWith('#') ? values[field.variable_name] : '#FFFFFF'}
-                                                    onChange={(e) => setValues({...values, [field.variable_name]: e.target.value.toUpperCase()})}
-                                                    className="absolute inset-[-5px] w-[200%] h-[200%] cursor-pointer bg-transparent"
-                                                />
-                                            </div>
-                                            <input 
-                                                type="text" 
-                                                placeholder="#FFFFFF"
-                                                value={values[field.variable_name] || ""}
-                                                onChange={(e) => {
-                                                    let val = e.target.value.toUpperCase();
-                                                    if (val && !val.startsWith('#')) val = '#' + val;
-                                                    setValues({...values, [field.variable_name]: val});
-                                                }}
-                                                className="flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300 font-Google-Code" 
-                                            />
-                                        </div>
-
-                                    ) : field.type === 'select' ? (
-                                        /* --- TYPE: SELECT --- */
-                                        <div className="relative">
-                                            <select 
-                                                value={values[field.variable_name] || ""}
-                                                onChange={(e) => setValues({...values, [field.variable_name]: e.target.value})}
-                                                className="w-full bg-black/20 border border-(--primary)/50 p-2 text-sm outline-none appearance-none cursor-pointer focus:border-(--primary)/75 transition-all duration-300"
-                                            >
-                                                {field.options?.split('/').map((opt: string) => {
-                                                    const [optLabel, optVal] = opt.split(':');
-                                                    return (
-                                                        <option key={optVal} value={optVal?.trim()} className="bg-black text-white">
-                                                            {optLabel?.trim()}
-                                                        </option>
-                                                    );
-                                                })}
-                                            </select>
-                                            {/* ไอคอนลูกศรสำหรับ Select */}
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
-                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
-                                            </div>
-                                        </div>
-
-                                    ) : field.type === 'bbcode' ? (
-                                        /* --- TYPE: BBCODE --- */
-                                        <div>
-                                            <BBCodeEditor 
-                                                value={values[field.variable_name] || ""} 
-                                                onChange={(val) => setValues({...values, [field.variable_name]: val})}
-                                            />
-                                        </div>
-
-                                    ) : (
-                                        /* --- TYPE: TEXT (Default) --- */
-                                        <input 
-                                            type="text" 
-                                            placeholder={field.placeholder || `ENTER_${(field.variable_name || 'VALUE').toUpperCase()}...`}
-                                            value={values[field.variable_name] || ""}
-                                            onChange={(e) => setValues({...values, [field.variable_name]: e.target.value})}
-                                            className="w-full bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300 placeholder:opacity-20 font-Google-Code"
-                                        />
-                                    )}
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
 
-                    {/* Live Preview Side */}
-                    <div className="flex flex-col h-full overflow-hidden border border-(--primary) bg-(--background) text-(--foreground) p-4">
-                        <div className="hidden lg:flex flex-1 flex-col bg-[#1a1a1a]">
-                            <div className="p-2 border-b border-white/5 bg-black/40 flex items-center gap-2">
-                                <div className="flex gap-1.5 ml-2">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/20" />
-                                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20" />
-                                    <div className="w-2.5 h-2.5 rounded-full bg-green-500/20" />
-                                </div>
-                                <span className="text-[9px] uppercase tracking-widest text-white/30 font-bold ml-2">Live_Transmission_Preview</span>
+                    {/* Live Previews */}
+                    <div className="max-lg:row-[1/2] max-lg:sticky max-lg:top-0 max-lg:z-10 max-lg:max-h-[40vh] flex flex-col h-full overflow-hidden border border-(--primary) bg-(--background) text-(--foreground) p-4">
+                        <div className="bg-(--background) pb-4 z-5">
+                            <div className="flex justify-between items-center border-b border-(--primary)/75 pb-2">
+                                <h3 className="text-xl text-(--primary) uppercase">Live_Preview</h3>
+                                <button 
+                                    type="button" 
+                                    disabled={loading || !liveHTML}
+                                    onClick={handleCopy}
+                                    className="bg-(--primary) text-(--background) px-4 py-1 text-xs font-black uppercase hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
+                                >
+                                    Copy
+                                </button>
                             </div>
-                            <div className="flex-1 relative">
-                                <iframe 
-                                    srcDoc={`
-                                        <html>
-                                            <head>
-                                                <style>
-                                                    body { margin: 0; padding: 20px; display: flex; justify-content: center; background: transparent; }
-                                                    ::-webkit-scrollbar { width: 5px; }
-                                                    ::-webkit-scrollbar-thumb { background: #333; }
-                                                </style>
-                                            </head>
-                                            <body>${previewHTML}</body>
-                                        </html>
-                                    `}
-                                    className="w-full h-full border-none"
-                                    sandbox="allow-popups allow-scripts"
-                                />
-                            </div>
+                        </div>
+                        
+                        <div className="flex-1 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
+                            {/* generate Live Preview */}
+                            <div id="preview-container"
+                                className="preview-content prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: liveHTML || '<p style="color: #ccc">Blueprint is empty...</p>' }}
+                            />
                         </div>
                     </div>
                 </div>
             </div>
+
+            <Modal 
+                isOpen={modalType !== null} 
+                onClose={() => setModalType(null)} 
+                title={modalType === 'clear_draft' ? 'Memory Wipe Confirmation' : ''}
+            >
+                {modalType === 'clear_draft' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-2 text-red-500 mb-2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="16" x2="12" y2="18"></line>
+                            </svg>
+                            <span className="text-xs uppercase font-black tracking-[0.2em]">Destructive_Action</span>
+                        </div>
+
+                        <div className="space-y-2">
+                            <p className="text-white/60 text-xs leading-relaxed">
+                                คุณแน่ใจหรือไม่ที่จะล้าง <span className="text-red-400 font-bold">"ข้อมูลดราฟต์ทั้งหมด"</span>?
+                            </p>
+                            <p className="text-[10px] text-white/40 uppercase leading-tight">
+                                Warning: This will permanently delete all unsaved progress in this session. 
+                                Local cache will be purged and the module will reset.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <button 
+                                type="button"
+                                onClick={() => setModalType(null)}
+                                className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                            >
+                                Abort
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={handleClearDraft}
+                                className="cursor-pointer flex-1 py-2 bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-500 transition-all"
+                            >
+                                Confirm_Wipe
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 }

@@ -743,7 +743,7 @@ export default function EditTemplatePage() {
                                     )}
                                 </div>
                             )}
-
+                            
                             {/* --- Checkbox Configuration --- */}
                             {editingField.type === 'checkbox' && (
                                 <div className="mt-4 p-3 bg-black/40 border border-(--primary)/50 space-y-1 animate-in fade-in duration-300">
@@ -769,7 +769,28 @@ export default function EditTemplatePage() {
                                                 className="bg-black/40 border border-(--primary)/30 p-2 text-xs outline-none focus:border-(--primary)"
                                             />
                                         </div>
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-[9px] opacity-50 uppercase font-black text-emerald-500">Label_When_Checked</label>
+                                            <input 
+                                                type="text"
+                                                placeholder="เช่น SHOW / ON"
+                                                value={editingField.config?.true_label ?? 'ON'}
+                                                onChange={(e) => setEditingField({...editingField, config: {...editingField.config, true_label: e.target.value}})}
+                                                className="bg-black/40 border border-emerald-500/30 p-2 text-xs outline-none focus:border-emerald-500"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-[9px] opacity-50 uppercase font-black text-rose-500">Label_When_Unchecked</label>
+                                            <input 
+                                                type="text"
+                                                placeholder="เช่น HIDE / OFF"
+                                                value={editingField.config?.false_label ?? 'OFF'}
+                                                onChange={(e) => setEditingField({...editingField, config: {...editingField.config, false_label: e.target.value}})}
+                                                className="bg-black/40 border border-rose-500/30 p-2 text-xs outline-none focus:border-rose-500"
+                                            />
+                                        </div>
                                     </div>
+
                                     <p className="font-Google-Sans text-[9px] opacity-40 mt-1">
                                         * ระบบจะใช้ <span className="text-yellow-500 font-bold underline">{editingField.config?.false_value || '...'}</span> เป็นค่าเริ่มต้น
                                     </p>

@@ -246,7 +246,7 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
             let content = blockContent;
             fields.filter(f => f.block_name === blockName).forEach(field => {
                 let val = itemValues[field.variable_name] ?? field.default_value;
-                if (field.type === 'bbcode') val = parseBBCode(val, !isExport);
+                if (field.type === 'bbcode' && isExport) val = parseBBCode(val);
                 content = content.replaceAll(`{{${field.variable_name}}}`, val);
             });
             return content;
@@ -273,10 +273,20 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
             }
         }
 
-        if (field.type === 'bbcode') val = parseBBCode(val, !isExport);
+        if (field.type === 'bbcode' && isExport) val = parseBBCode(val);
 
         const variablePattern = new RegExp(`\\{\\{${field.variable_name}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}`, 'g');
-        output = output.replace(variablePattern, val);
+        if (!val || val.trim() === "") {
+            const emptyLinePattern = new RegExp(`^\\s*\\{\\{${field.variable_name}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}\\s*\\n?`, 'gm');
+            
+            if (emptyLinePattern.test(output)) {
+                output = output.replace(emptyLinePattern, "");
+            } else {
+                output = output.replace(variablePattern, "");
+            }
+        } else {
+            output = output.replace(variablePattern, val);
+        }
     });
 
     // Clean up
