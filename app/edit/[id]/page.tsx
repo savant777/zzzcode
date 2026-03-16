@@ -571,7 +571,7 @@ export default function EditTemplatePage() {
                                         />
                                     </div>
                                     <p className="font-Google-Sans text-[9px] opacity-40 mt-1">
-                                        * ระบบจะใช้ <span className="text-yellow-500 font-bold underline">{editingField.default_value.startsWith('#') || '...'}</span> เป็นค่าเริ่มต้น
+                                        * ระบบจะใช้ <span className="text-yellow-500 font-bold underline">{editingField.default_value && editingField.default_value !== '#' ? editingField.default_value : '...'}</span> เป็นค่าเริ่มต้น
                                     </p>
                                 </div>
                             )}
