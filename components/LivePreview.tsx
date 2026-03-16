@@ -43,19 +43,34 @@ export default function LivePreview({ html }: { html: string }) {
 
         const handleIframeLoad = () => {
             const doc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (doc) {
+            
+            if (doc && doc.body) {
                 const observer = new MutationObserver(() => {
-                    setIframeHeight(doc.body.scrollHeight);
+                    if (doc.body) {
+                        setIframeHeight(doc.body.scrollHeight);
+                    }
                 });
-                observer.observe(doc.body, { childList: true, subtree: true, attributes: true });
+
+                observer.observe(doc.body, { 
+                    childList: true, 
+                    subtree: true, 
+                    attributes: true 
+                });
+
                 setIframeHeight(doc.body.scrollHeight);
+
+                return () => observer.disconnect();
             }
         };
 
         iframe.addEventListener('load', handleIframeLoad);
-        handleIframeLoad();
         
-        return () => iframe.removeEventListener('load', handleIframeLoad);
+        const cleanup = handleIframeLoad();
+        
+        return () => {
+            iframe.removeEventListener('load', handleIframeLoad);
+            if (cleanup) cleanup();
+        };
     }, [html]);
 
     const styles = `

@@ -147,7 +147,25 @@ export default function EditorPage() {
         }
     };
 
-    if (loading) return <div className="p-10 font-Google-Code text-xs animate-pulse">SYSTEM: LOADING_CORE...</div>;
+    if (loading) {
+        return (
+            <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
+                <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
+                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" />
+                    <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
+                        <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
+                        <span className="lg:hidden">&lt; BACK</span>
+                    </button>
+                </div>
+
+                <div className="flex-1 lg:flex overflow-y-auto lg:overflow-hidden px-4 mb-4 scrollbar-hide">
+                    <div className="min-h-full flex-1 flex items-center justify-center border border-dashed border-(--primary)/10 text-[10px] opacity-20 uppercase tracking-widest select-none">
+                        Fetching_Stored_Data...
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
