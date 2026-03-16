@@ -64,7 +64,7 @@ export default function LivePreview({ html }: { html: string }) {
         };
 
         iframe.addEventListener('load', handleIframeLoad);
-        
+
         const cleanup = handleIframeLoad();
         
         return () => {
@@ -93,6 +93,7 @@ export default function LivePreview({ html }: { html: string }) {
                 font-size: 17px; 
                 word-break: break-word;
                 margin: 0 auto;
+                white-space: pre-wrap;
             }
 
             .scaleimages img { max-width: 100%; }
