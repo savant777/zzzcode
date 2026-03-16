@@ -4,11 +4,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { FieldConfig, syncFieldsFromHTML, generateFinalHTML } from '@/lib/template-parser';
+import { FieldConfig, generateFinalHTML } from '@/lib/template-parser';
 
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FieldRenderer from '@/components/FieldRenderer';
+import LivePreview from '@/components/LivePreview';
 
 export default function EditorPage() {
     const router = useRouter();
@@ -233,10 +234,7 @@ export default function EditorPage() {
                         
                         <div className="flex-1 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
                             {/* generate Live Preview */}
-                            <div id="preview-container"
-                                className="preview-content prose prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{ __html: liveHTML || '<p style="color: #ccc">Blueprint is empty...</p>' }}
-                            />
+                            <LivePreview html={liveHTML} />
                         </div>
                     </div>
                 </div>
