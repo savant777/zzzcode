@@ -206,3 +206,12 @@ input[type=number] {
     appearance: none;
     -moz-appearance: textfield;
 }
+
+.custom-color-picker .react-colorful {
+    width: 100%;
+    height: 140px;
+}
+.custom-color-picker .react-colorful__pointer {
+    width: 16px;
+    height: 16px;
+}

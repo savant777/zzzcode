@@ -9,6 +9,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import ColorPicker from '@/components/ColorPicker';
 import TemplateGroupContainer from '@/components/TemplateGroupContainer';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups } from '@/lib/template-parser';
 
@@ -539,14 +540,17 @@ export default function EditTemplatePage() {
                                     </label>
                                     <div className="flex gap-2">
                                         {/* Color Picker */}
-                                        <div className="relative w-10 h-10 border border-(--primary)/50 bg-black shrink-0 overflow-hidden">
-                                            <input 
-                                                type="color" 
-                                                value={editingField.default_value.startsWith('#') ? editingField.default_value : '#FFFFFF'}
-                                                onChange={(e) => setEditingField({...editingField, default_value: e.target.value.toUpperCase(), placeholder: e.target.value.toUpperCase()})}
-                                                className="absolute inset-[-5px] w-[200%] h-[200%] cursor-pointer bg-transparent"
-                                            />
-                                        </div>
+                                        <ColorPicker 
+                                            color={editingField.default_value.startsWith('#') ? editingField.default_value : '#FFFFFF'} 
+                                            onChange={(newColor) => {
+                                                const upperColor = newColor.toUpperCase();
+                                                setEditingField({
+                                                    ...editingField, 
+                                                    default_value: upperColor, 
+                                                    placeholder: upperColor
+                                                });
+                                            }} 
+                                        />
                                         
                                         {/* Color Code */}
                                         <input 

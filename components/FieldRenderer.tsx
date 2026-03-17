@@ -2,6 +2,7 @@
 
 import { FieldConfig } from '@/lib/template-parser';
 import BBCodeEditor from './BBCodeEditor';
+import ColorPicker from './ColorPicker';
 
 interface FieldRendererProps {
     field: FieldConfig;
@@ -48,14 +49,12 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
             {/* --- TYPE: COLOR --- */}
             {field.type === 'color' && (
                 <div className="flex gap-2">
-                    <div className="relative w-10 h-10 border border-(--primary)/40 bg-black shrink-0 overflow-hidden">
-                        <input
-                            type="color"
-                            value={value?.startsWith('#') ? value : '#FFFFFF'}
-                            onChange={(e) => onChange(field.variable_name, e.target.value.toUpperCase())}
-                            className="absolute inset-[-5px] w-[200%] h-[200%] cursor-pointer bg-transparent"
-                        />
-                    </div>
+                    <ColorPicker 
+                        color={value?.startsWith('#') ? value : '#FFFFFF'} 
+                        onChange={(newColor) => {
+                            onChange(field.variable_name, newColor.toUpperCase());
+                        }} 
+                    />
                     <input
                         type="text"
                         value={value || ''}

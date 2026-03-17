@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState, useEffect } from 'react';
+import { HexColorPicker } from "react-colorful";
 
 interface Props {
     value: string;
@@ -178,12 +179,12 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                         {showColorPicker && (
                             <div className="absolute top-full translate-y-[2px] -left-[3px] z-10 border border-(--primary)/25 bg-black p-3 flex flex-col gap-2 w-48">
                                 <div className="text-xs text-(--foreground)/50 uppercase">เลือกสี (HEX/RGB)</div>
-                                <input 
-                                    type="color" 
-                                    value={currentColor}
-                                    onChange={(e) => setCurrentColor(e.target.value)}
-                                    className="w-full h-24 cursor-pointer"
-                                />
+                                <div className="custom-color-picker">
+                                    <HexColorPicker 
+                                        color={currentColor.startsWith('#') ? currentColor : '#FFFFFF'} 
+                                        onChange={(newColor) => setCurrentColor(newColor.toUpperCase())} 
+                                    />
+                                </div>
                                 <input 
                                     type="text" 
                                     value={currentColor}
