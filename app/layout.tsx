@@ -2,6 +2,25 @@ import type { Metadata } from "next";
 import "./globals.css";
 import MainHeader from "@/components/MainHeader";
 import { Toaster } from 'sonner';
+import { Monomaniac_One, Google_Sans, Google_Sans_Code } from 'next/font/google';
+
+const monomaniac = Monomaniac_One({
+    weight: '400',
+    subsets: ['latin'],
+    variable: '--font-Monomaniac-One',
+});
+
+const googlesans = Google_Sans({
+    weight: '400',
+    subsets: ['latin', 'thai'],
+    variable: '--font-Google-Sans',
+});
+
+const googlecode = Google_Sans_Code({
+    weight: '400',
+    subsets: ['latin'],
+    variable: '--font-Google-Code',
+});
 
 export const metadata: Metadata = {
     title: "ZZZCODE EDITOR",
@@ -14,7 +33,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en">
+        <html lang="th" className={`${monomaniac.variable} ${googlecode.variable} ${googlesans.variable}`}>
             <body className="max-w-full grid body-grid-layout max-h-screen">
                 <MainHeader />
                 {children}
