@@ -32,10 +32,10 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
         return (
             <div className="zzzcode-list-item border border-(--primary) p-2 bg-(--background) transition-all group relative items-center">
                 {/* Preview Image + Orange Filter */}
-                <div className="hidden md:block aspect-square w-full overflow-hidden border border-(--primary)/20 relative after:content-[''] after:absolute after:inset-0 after:mix-blend-color after:bg-(--primary) after:opacity-100 after:select-none after:pointer-events-none group-hover:after:opacity-0 group-focus:after:opacity-0 after:transition-all after:duration-500">
+                <div className="zzzcode-list-image hidden md:block aspect-square w-full overflow-hidden border border-(--primary)/20 relative">
                     <img 
                         src={item.preview_url || '/placeholder.png'} 
-                        className="w-full h-full object-cover transition-all duration-500 saturate-0 group-hover:filter-none group-hover:scale-105 group-focus:filter-none group-focus:scale-105"
+                        className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
                         alt={item.title}
                     />
                 </div>
@@ -63,7 +63,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                                     const tagSlug = t.tags.slug.toLowerCase();
                                     router.push(`/?group=${group}&tag=${tagSlug}`);
                                 }}
-                                className="border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) focus:bg-(--background) focus:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
+                                className="zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
                             >
                                 {t.tags.name}
                             </button>
@@ -130,10 +130,10 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
     return (
         <div className="zzzcode-card-item border border-(--primary) p-2 bg-(--background) transition-all group relative">
             {/* Preview Image + Orange Filter */}
-            <div className="aspect-square w-full overflow-hidden border border-(--primary)/20 relative after:content-[''] after:absolute after:inset-0 after:mix-blend-overlay after:bg-(--primary) after:opacity-100 after:select-none after:pointer-events-none group-hover:after:opacity-0 group-focus:after:opacity-0 after:transition-all after:duration-500">
+            <div className="zzzcode-card-image aspect-square w-full overflow-hidden border border-(--primary)/20 relative">
                 <img 
                     src={item.preview_url || '/placeholder.png'} 
-                    className="w-full h-full object-cover transition-all duration-500 saturate-0 group-hover:filter-none group-hover:scale-105 group-focus:filter-none group-focus:scale-105"
+                    className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
                     alt={item.title}
                 />
             </div>
@@ -158,15 +158,15 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                             const tagSlug = t.tags.slug.toLowerCase();
                             router.push(`/?group=${group}&tag=${tagSlug}`);
                         }}
-                        className="border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) focus:bg-(--background) focus:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
+                        className="zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
                     >
                         {t.tags.name}
                     </button>
                 ))}
 
                 {item.template_tags?.length > 2 && (
-                    <div className="group/tooltip flex relative">
-                        <button className="border border-(--foreground) bg-(--background) text-(--foreground) px-1.5 py-0.5 text-xs font-bold hover:bg-(--foreground) hover:text-(--background) focus:bg-(--foreground) focus:text-(--background) transition-all cursor-help">
+                    <div className="zzzcode-tooltip group/tooltip flex relative">
+                        <button className="zzzcode-tooltip-btn border border-(--foreground) bg-(--background) text-(--foreground) px-1.5 py-0.5 text-xs font-bold hover:bg-(--foreground) hover:text-(--background) transition-all duration-300 ease-in-out cursor-help">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="1"></circle>
                                 <circle cx="19" cy="12" r="1"></circle>
@@ -174,8 +174,8 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                             </svg>
                         </button>
                         
-                        <div className="invisible group-hover/tooltip:visible group-focus/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 group-focus/tooltip:opacity-100 absolute bottom-full left-0 mb-2 p-2 bg-(--background) border border-(--primary) z-50 min-w-[120px] transition-all duration-200">
-                            <div className="text-xs uppercase opacity-50 mb-1 border-b border-(--primary)/20 pb-1">Additional Tags</div>
+                        <div className="zzzcode-tooltip-window invisible group-hover/tooltip:visible group-focus/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 group-focus/tooltip:opacity-100 absolute bottom-full left-0 mb-2 p-2 bg-(--background) border border-(--primary) z-50 min-w-[120px] transition-all duration-200">
+                            <div className="text-[10px] uppercase opacity-50 mb-1 border-b border-(--primary)/20 pb-1">Additional Tags</div>
                             <div className="flex flex-wrap gap-1">
                                 {item.template_tags?.slice(2).map((t: any) => (
                                     <button 
@@ -215,7 +215,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                     <button 
                         onClick={handleUseTemplate}
                         title="Use Template"
-                        className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black focus:bg-(--primary) focus:text-black transition-colors duration-300 ease cursor-pointer leading-[0] flex gap-2 items-center"
+                        className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black transition-colors duration-300 ease cursor-pointer leading-[0] flex gap-2 items-center"
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="16 18 22 12 16 6"></polyline>
@@ -229,7 +229,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                             <button
                                 onClick={handleEditClick}
                                 title="Edit Template"
-                                className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black focus:bg-(--primary) focus:text-black transition-colors duration-300 ease  cursor-pointer"
+                                className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black transition-colors duration-300 ease  cursor-pointer"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -243,7 +243,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                                     onDelete();
                                 }}
                                 title="Delete / Deactivate"
-                                className="p-1.5 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white focus:bg-red-500 focuss:text-white transition-colors duration-300 ease cursor-pointer"
+                                className="p-1.5 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-colors duration-300 ease cursor-pointer"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="18" y1="6" x2="6" y2="18"></line>

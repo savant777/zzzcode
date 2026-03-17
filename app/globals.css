@@ -83,6 +83,26 @@ h1, h2, h3 {
     }
 }
 
+.zzzcode-card-item:hover .zzzcode-card-image img,
+.zzzcode-list-item:hover .zzzcode-list-image img { 
+    scale: 1.05;
+}
+
+.zzzcode-tag-btn:hover {
+    background: var(--background);
+    color: var(--foreground);
+}
+
+.zzzcode-tooltip-btn:hover {
+    background: var(--foreground);
+    color: var(--background);
+}
+
+.zzzcode-tooltip:hover .zzzcode-tooltip-window {
+    visibility: visible;
+    opacity: 1;
+}
+
 .scrollbar-hide::-webkit-scrollbar { width: 0; }
 
 .scrollbar-hide-resize-y {
