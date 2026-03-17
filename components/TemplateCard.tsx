@@ -215,12 +215,13 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                     <button 
                         onClick={handleUseTemplate}
                         title="Use Template"
-                        className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black focus:bg-(--primary) focus:text-black transition-colors duration-300 ease cursor-pointer"
+                        className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black focus:bg-(--primary) focus:text-black transition-colors duration-300 ease cursor-pointer leading-[0] flex gap-2 items-center"
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="16 18 22 12 16 6"></polyline>
                             <polyline points="8 6 2 12 8 18"></polyline>
                         </svg>
+                        <span className="text-xs -mt-px">use_this</span>
                     </button>
 
                     {isAdmin && (
