@@ -148,12 +148,21 @@ function Dashboard() {
     const handleUnlockPrivate = (e: React.FormEvent) => {
         e.preventDefault();
         const toastId = toast.loading("SYSTEM: Verifying_Access_Key...");
+
+        const primaryTagEntry = selectedItem.template_tags?.find((t: any) => 
+            ['activity', 'commission'].includes(t.tags.tag_groups.name.toLowerCase())
+        ) || selectedItem.template_tags?.[0];
+
+        const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';
+        const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
         
         if (password === selectedItem?.password) {
+            sessionStorage.setItem(`unlocked_${selectedItem.id}`, 'true');
+
             toast.success(`ACCESS_GRANTED: DECRYPT_SUCCESS`, { id: toastId });
             closeModal();
             setTimeout(() => {
-                router.push(`/editor/${selectedItem.id}`);
+                router.push(`/editor/${selectedItem.id}?group=${group}&tag=${tagSlug}`);
             }, 800);
         } else {
             toast.error(`ACCESS_DENIED: INVALID_SECRET_KEY`, { id: toastId });

@@ -71,6 +71,31 @@ export default function EditorPage() {
                 const { data: template } = await supabase.from('templates').select('*').eq('id', templateId).single();
 
                 if (template) {
+                    if (template.is_personal) {
+                        const isUnlocked = sessionStorage.getItem(`unlocked_${templateId}`);
+                        if (!isUnlocked) {
+                            toast.error("ERROR_ACCESS_DENIED: AUTHENTICATION_REQUIRED", {
+                                duration: 4000,
+                                style: {
+                                    position: 'fixed',
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    margin: 0,
+                                    zIndex: 9999,
+                                    width: 'max-content',
+                                    minWidth: '320px',
+                                    height: 'fit-content'
+                                },
+                            });
+
+                            setTimeout(() => {
+                                router.replace('/?group=category&tag=all');
+                            }, 3000);
+                            return;
+                        }
+                    }
+
                     const initialData = {
                         title: template.title,
                         description: template.description,
@@ -109,7 +134,13 @@ export default function EditorPage() {
             setLoading(false);
         };
         initEditorPage();
-    }, [templateId]);
+
+        return () => {
+            if (templateId) {
+                sessionStorage.removeItem(`unlocked_${templateId}`);
+            }
+        };
+    }, [templateId, router]);
 
     // Auto-Save Draft
     useEffect(() => {
