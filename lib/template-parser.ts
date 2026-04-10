@@ -21,9 +21,12 @@ export interface FieldConfig {
             label: string;
             min: number;
             max: number;
+            step: number;
             unit: string;
             default_value: number;
         }[];
+        has_custom_slider?: boolean;
+        custom_trigger?: string;
         gradient?: {
             colors: string[];
             direction: string;
