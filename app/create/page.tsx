@@ -3,13 +3,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay, } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, } from '@dnd-kit/sortable';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
-import TemplateGroupContainer from '@/components/TemplateGroupContainer';
-import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups } from '@/lib/template-parser';
+import TemplateBlockContainer from '@/components/TemplateBlockContainer';
+import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks } from '@/lib/template-parser';
 
 export default function AddTemplatePage() {
     const router = useRouter();
@@ -37,19 +37,32 @@ export default function AddTemplatePage() {
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
 
-    // --- Computed State : group field ---
-    const groupedFields = useMemo(() => {
-        const groups: Record<string, FieldConfig[]> = {};
+    const nestedData = useMemo(() => {
+        const blocks: Record<string, Record<string, FieldConfig[]>> = {};
+
         fields.forEach(f => {
-            if (!groups[f.group_name]) groups[f.group_name] = [];
-            groups[f.group_name].push(f);
+            const bName = f.block_name || "GLOBAL";
+            const gName = f.group_name || "General";
+            if (!blocks[bName]) blocks[bName] = {};
+            if (!blocks[bName][gName]) blocks[bName][gName] = [];
+            blocks[bName][gName].push(f);
         });
-        return Object.entries(groups)
-            .sort(([, a], [, b]) => a[0].group_order - b[0].group_order)
-            .reduce((acc, [key, val]) => {
-                acc[key] = val.sort((a, b) => a.field_order - b.field_order);
+
+        return Object.entries(blocks)
+            .sort(([nameA, groupsA], [nameB, groupsB]) => {
+                const orderA = Object.values(groupsA)[0][0].block_order || 0;
+                const orderB = Object.values(groupsB)[0][0].block_order || 0;
+                return orderA - orderB;
+            })
+            .reduce((acc, [bName, groups]) => {
+                acc[bName] = Object.entries(groups)
+                    .sort(([, a], [, b]) => (a[0].group_order || 0) - (b[0].group_order || 0))
+                    .reduce((gAcc, [gName, fList]) => {
+                        gAcc[gName] = fList.sort((a, b) => (a.field_order || 0) - (b.field_order || 0));
+                        return gAcc;
+                    }, {} as Record<string, FieldConfig[]>);
                 return acc;
-            }, {} as Record<string, FieldConfig[]>);
+            }, {} as Record<string, Record<string, FieldConfig[]>>);
     }, [fields]);
 
     // --- 3. Effects ---
@@ -57,18 +70,7 @@ export default function AddTemplatePage() {
     // Load Tags & Draft
     useEffect(() => {
         const initAddPage = async () => {
-            const { data } = await supabase
-                .from('tags')
-                .select(`
-                    id, 
-                    name, 
-                    slug,
-                    tag_groups (
-                        name
-                    )
-                `)
-                .eq('is_active', true);
-
+            const { data } = await supabase.from('tags').select('id, name, slug, tag_groups(name)').eq('is_active', true);
             if (data) setAvailableTags(data);
 
             const savedDraft = localStorage.getItem(STORAGE_KEY);
@@ -107,6 +109,24 @@ export default function AddTemplatePage() {
 
     // --- 4. Handlers ---
 
+    // drag and drop to re-order block
+    const handleBlockDragEnd = (event: any) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            const updated = reorderBlocks(fields, active.id, over.id);
+            setFields(updated);
+        }
+    };
+
+    // drag and drop to re-order group
+    const handleGroupDragEnd = (event: any, blockName: string) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            const updated = reorderGroups(fields, blockName, active.id, over.id);
+            setFields(updated);
+        }
+    };
+
     // drag and drop to re-order field
     const handleFieldDragEnd = (event: any, groupName: string) => {
         const { active, over } = event;
@@ -115,16 +135,7 @@ export default function AddTemplatePage() {
             setFields(updated);
         }
     };
-
-    // drag and drop to re-order group
-    const handleGroupDragEnd = (event: any) => {
-        const { active, over } = event;
-        if (over && active.id !== over.id) {
-            const updated = reorderGroups(fields, active.id, over.id);
-            setFields(updated);
-        }
-    };
-
+    
     // submit: INSERT to template and template_tags
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -369,24 +380,19 @@ export default function AddTemplatePage() {
                                     Awaiting_Blueprint_Input...
                                 </div>
                             ) : (
-                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}
-                                    >
-                                    <SortableContext 
-                                        items={Object.keys(groupedFields)} 
-                                        strategy={verticalListSortingStrategy}
-                                    >
-                                        <div className="flex flex-col gap-4">
-                                        {Object.entries(groupedFields).map(([groupName, groupFields], gIdx) => (
-                                            <TemplateGroupContainer 
-                                                key={groupName}
-                                                id={groupName}
-                                                groupName={groupName}
-                                                gIdx={gIdx}
-                                                groupFields={groupFields}
-                                                sensors={sensors}
-                                                onFieldDragEnd={handleFieldDragEnd}
-                                            />
-                                        ))}
+                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
+                                    <SortableContext items={Object.keys(nestedData)} strategy={verticalListSortingStrategy}>
+                                        <div className="flex flex-col">
+                                            {Object.entries(nestedData).map(([blockName, groups]) => (
+                                                <TemplateBlockContainer 
+                                                    key={blockName}
+                                                    blockName={blockName}
+                                                    groups={groups}
+                                                    sensors={sensors}
+                                                    onFieldDragEnd={handleFieldDragEnd}
+                                                    onGroupDragEnd={handleGroupDragEnd}
+                                                />
+                                            ))}
                                         </div>
                                     </SortableContext>
                                 </DndContext>

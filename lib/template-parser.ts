@@ -3,15 +3,19 @@ export interface FieldConfig {
     variable_name: string;
     label: string;
     type: 'text' | 'bbcode' | 'color' | 'select' | 'slider' | 'checkbox';
-    group_name: string; // [GROUP:...]
+    
+    block_name?: string;
+    block_order: number;
+
+    group_name: string;
     group_order: number;
+
     field_order: number;
     default_value: string;
     placeholder?: string;
     description?: string;
-    options?: string; // for select
+    options?: string;
     config?: {
-        // --- for Slider ---
         sliders?: {
             label: string;
             min: number;
@@ -20,21 +24,14 @@ export interface FieldConfig {
             unit: string;
             default_value: number;
         }[];
-
-        // --- for "Select + Slider" ---
         has_custom_slider?: boolean;
-        custom_trigger?: string; // เช่น 'custom'
-
-        // --- for Checkbox ---
-        // label เอาไว้โชว์ในหน้า UI (เช่น เปิด/ปิด)
+        custom_trigger?: string;
         true_label?: string; 
         false_label?: string;
-        // value เอาไว้ส่งไปแทนที่ใน {{variable}} (เช่น block / none)
         true_value?: string;
         false_value?: string;
-    }
-    block_name?: string; // [BLOCK:...]
-    is_repeat?: boolean; // has [REPEAT:variable] or not
+    };
+    is_repeat?: boolean;
 }
 
 export const parseBBCode = (text: string, convertNewlines: boolean = true): string => {
@@ -61,7 +58,6 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
 
         let result = '';
         let i = 0;
-
         while (i < input.length) {
             const listMatch = input.slice(i).match(/^\[list(=1)?\]/);
             if (listMatch) {
@@ -73,7 +69,6 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
                 if (closeIdx !== -1) {
                     const content = input.slice(contentStart, closeIdx);
                     const parsedContent = parseList(content);
-
                     const items = parsedContent.split('[*]')
                         .slice(1)
                         .map((item: string) => item.trim())
@@ -120,9 +115,8 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
     html = parseList(html);
 
     if (convertNewlines) {
-        html = html.replace(/\n/g, '<br>');
-        
-        html = html.replace(/<\/div><br>/g, '</div>')
+        html = html.replace(/\n/g, '<br>')
+                   .replace(/<\/div><br>/g, '</div>')
                    .replace(/<\/ul><br>/g, '</ul>')
                    .replace(/<\/ol><br>/g, '</ol>')
                    .replace(/<li><br>/g, '<li>')
@@ -135,159 +129,163 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
 export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] = []): FieldConfig[] => {
     const fields: FieldConfig[] = [];
     
-    // Regex: {{ variable : default [GROUP:name] }}
+    // find BLOCK scope
+    const blockTags: { type: 'open' | 'close', name: string, pos: number }[] = [];
+    const bOpenRegex = /\[BLOCK:([^\]]+)\]/g;
+    const bCloseRegex = /\[\/BLOCK:([^\]]+)\]/g;
+    
+    let bMatch;
+    while ((bMatch = bOpenRegex.exec(html)) !== null) blockTags.push({ type: 'open', name: bMatch[1], pos: bMatch.index });
+    while ((bMatch = bCloseRegex.exec(html)) !== null) blockTags.push({ type: 'close', name: bMatch[1], pos: bMatch.index });
+    blockTags.sort((a, b) => a.pos - b.pos);
+
+    const getBlockAtPos = (pos: number) => {
+        const stack: string[] = [];
+        for (const tag of blockTags) {
+            if (tag.pos > pos) break;
+            if (tag.type === 'open') stack.push(tag.name);
+            else stack.pop();
+        }
+        return stack[stack.length - 1];
+    };
+
+    // 2. find REPEAT varName
+    const repeatRegex = /\[REPEAT:([^\]]+)\]/g;
+    let rMatch;
+    while ((rMatch = repeatRegex.exec(html)) !== null) {
+        const varName = rMatch[1].trim();
+        const blockName = getBlockAtPos(rMatch.index);
+        
+        if (!fields.some(f => f.variable_name === varName && f.block_name === blockName)) {
+            const oldField = existingFields.find(f => f.variable_name === varName && f.block_name === blockName);
+
+            let initialVal = oldField?.default_value || "5";
+            if (oldField?.config?.sliders?.[0]?.default_value !== undefined) {
+                initialVal = String(oldField.config.sliders[0].default_value);
+            }
+
+            fields.push({
+                ...(oldField || {}),
+                id: oldField?.id || crypto.randomUUID(),
+                variable_name: varName,
+                label: oldField?.label || varName,
+                type: oldField?.type || 'slider',
+                block_name: blockName,
+                block_order: oldField?.block_order ?? 0,
+                group_name: oldField?.group_name || "Repeat_Element",
+                group_order: oldField?.group_order ?? 90,
+                field_order: oldField?.field_order ?? 0,
+                default_value: initialVal,
+                is_repeat: true,
+                config: oldField?.config || { 
+                    sliders: [{ label: 'Amount', min: 0, max: 10, step: 1, unit: '', default_value: parseInt(initialVal) }] 
+                }
+            } as FieldConfig);
+        }
+    }
+
+    // 3. find {{variable}}
     const variableRegex = /\{\{([^}:[\]]+)(?::([^|[\]]+))?(?:\[GROUP:([^\]]+)\])?\}\}/g;
     const markerGroupRegex = /\[GROUP:([^\]]+)\]/i;
-    const blockRegex = /\[BLOCK:([^\]]+)\]/i;
-
     let match;
+    let lastBlockOrder = 0;
     let lastGroupOrder = 0;
+    const blockMap: Record<string, number> = { "GLOBAL": 0 };
     const groupMap: Record<string, number> = {}; 
-    const groupFieldCounters: Record<string, number> = {}; // re-order by group
 
     while ((match = variableRegex.exec(html)) !== null) {
-        const variableName = match[1].trim();
-        const defaultValue = match[2]?.trim() || variableName;
+        const varName = match[1].trim();
+        const defaultValue = match[2]?.trim() || varName;
         const inlineGroup = match[3]?.trim();
-        const startIndex = match.index;
+        const blockName = getBlockAtPos(match.index);
+        const blockId = blockName || "GLOBAL";
 
-        // find [BLOCK] scope
-        const textBefore = html.substring(0, startIndex);
-        const lastBlockOpen = textBefore.lastIndexOf("[BLOCK:");
-        const lastBlockClose = textBefore.lastIndexOf("[/BLOCK:");
-        let blockName = undefined;
-        if (lastBlockOpen > lastBlockClose) {
-            const blockTag = textBefore.substring(lastBlockOpen).match(blockRegex);
-            if (blockTag) blockName = blockTag[1].trim();
-        }
+        if (blockMap[blockId] === undefined) blockMap[blockId] = ++lastBlockOrder;
 
-        // find [GROUP]
-        let currentGroupName = "default";
+        // find GROUP name
+        let currentGroupName = "General";
         if (inlineGroup) {
             currentGroupName = inlineGroup;
         } else {
-            const nearbyText = html.substring(Math.max(0, startIndex - 500), startIndex);
+            const nearbyText = html.substring(Math.max(0, match.index - 500), match.index);
             const gMatch = nearbyText.match(markerGroupRegex);
             if (gMatch) currentGroupName = gMatch[1].trim();
         }
 
-        // set group order
-        if (groupMap[currentGroupName] === undefined) {
-            groupMap[currentGroupName] = lastGroupOrder++;
-            groupFieldCounters[currentGroupName] = 0; // set initial field order
-        }
+        const groupKey = `${blockId}-${currentGroupName}`;
+        if (groupMap[groupKey] === undefined) groupMap[groupKey] = lastGroupOrder++;
 
-        // check duplicate & [REPEAT]
-        const isDuplicateInNew = fields.some(f => f.variable_name === variableName);
-        const isRepeat = html.includes(`[REPEAT:${variableName}]`);
-        const isCheckbox = variableName.startsWith('is_');
-
-        if (!isDuplicateInNew) {
-            const oldField = existingFields.find(f => f.variable_name === variableName);
-            const currentFieldOrder = groupFieldCounters[currentGroupName]++;
-
-            if (oldField) {
-                fields.push({
-                    ...oldField,
-                    group_name: currentGroupName,
-                    group_order: oldField.group_order !== undefined ? oldField.group_order : groupMap[currentGroupName],
-                    field_order: oldField.field_order !== undefined ? oldField.field_order : currentFieldOrder,
-                    default_value: match[2]?.trim() || oldField.default_value,
-                    placeholder: match[2]?.trim() || oldField.placeholder,
-                    block_name: blockName,
-                    is_repeat: isRepeat,
-                    config: oldField.config || {} 
-                });
-            } else {
-                fields.push({
-                    id: crypto.randomUUID(),
-                    variable_name: variableName,
-                    label: variableName,
-                    type: isRepeat ? 'slider' : (isCheckbox ? 'checkbox' : 'text'),
-                    group_name: currentGroupName,
-                    group_order: groupMap[currentGroupName],
-                    field_order: currentFieldOrder,
-                    default_value: defaultValue,
-                    placeholder: defaultValue,
-                    description: "",
-                    options: "",
-                    config: isRepeat? { 
-                        sliders: [{ 
-                            label: 'Value', 
-                            min: -100, 
-                            max: 100, 
-                            step: 1, 
-                            unit: 'px', 
-                            default_value: Number(defaultValue) || 0 
-                        }] 
-                    } : isCheckbox? {
-                        true_label: 'ON', 
-                        false_label: 'OFF', 
-                        true_value: 'true', 
-                        false_value: 'false'
-                    } : {},
-                    block_name: blockName,
-                    is_repeat: isRepeat
-                });
-            }
+        if (!fields.some(f => f.variable_name === varName && f.block_name === blockName)) {
+            const oldField = existingFields.find(f => f.variable_name === varName && f.block_name === blockName);
+            fields.push({
+                ...(oldField || {}),
+                id: oldField?.id || crypto.randomUUID(),
+                variable_name: varName,
+                label: oldField?.label || varName,
+                type: oldField?.type || (varName.startsWith('is_') ? 'checkbox' : 'text'),
+                block_name: blockName,
+                block_order: oldField?.block_order ?? blockMap[blockId],
+                group_name: currentGroupName,
+                group_order: oldField?.group_order ?? groupMap[groupKey],
+                field_order: oldField?.field_order ?? 0,
+                default_value: match[2]?.trim() || oldField?.default_value || defaultValue,
+                is_repeat: false
+            } as FieldConfig);
         }
     }
+
     return fields;
 };
 
-export const generateFinalHTML = (blueprint: string, values: any, fields: FieldConfig[], isExport: boolean = false) => {
-    let output = blueprint;
+export const generateFinalHTML = (blueprint: string, values: any, fields: FieldConfig[], isExport: boolean = false): string => {
+    const processTemplate = (content: string, currentValues: any): string => {
+        let result = content;
 
-    // [BLOCK] logic => duplicate element has {{variable}} inside [BLOCK][/BLOCK]
-    const blockRegex = /\[BLOCK:([^\]]+)\]([\s\S]*?)\[\/BLOCK:\1\]/g;
-    output = output.replace(blockRegex, (match, blockName, blockContent) => {
-        const blockData = values[blockName] || [];
-        return blockData.map((itemValues: any) => {
-            let content = blockContent;
-            fields.filter(f => f.block_name === blockName).forEach(field => {
-                let val = itemValues[field.variable_name] ?? field.default_value;
-                if (field.type === 'bbcode' && isExport) val = parseBBCode(val);
-                content = content.replaceAll(`{{${field.variable_name}}}`, val);
-            });
-            return content;
-        }).join('');
-    });
+        // 1. [BLOCK:name]...[/BLOCK:name]
+        const blockRegex = /\[BLOCK:([^\]]+)\]([\s\S]*?)\[\/BLOCK:\1\]/g;
+        result = result.replace(blockRegex, (_, blockName, blockContent) => {
+            const blockEntries = values[blockName] || [];
+            if (!Array.isArray(blockEntries)) return "";
 
-    // [REPEAT] logic => duplicate element no {{variable}} inside [REPEAT][/REPEAT]
-    const repeatRegex = /\[REPEAT:([^\]]+)\]([\s\S]*?)\[\/REPEAT\]/g;
-    output = output.replace(repeatRegex, (match, varName, repeatContent) => {
-        const count = parseInt(values[varName]) || 0;
-        return Array(count).fill(repeatContent).join('');
-    });
+            return blockEntries.map((entryValues: any) => {
+                return processTemplate(blockContent, { ...currentValues, ...entryValues });
+            }).join('');
+        });
 
-    // {{variable}} logic => replace value
-    fields.filter(f => !f.block_name).forEach(field => {
-        let val = values[field.variable_name] ?? field.default_value;
+        // 2. [REPEAT:varName]...[/REPEAT]
+        const repeatRegex = /\[REPEAT:([^\]]+)\]([\s\S]*?)\[\/REPEAT\]/g;
+        result = result.replace(repeatRegex, (_, varName, repeatContent) => {
+            const count = parseInt(currentValues[varName] ?? values[varName]) || 0;
+            return Array(count).fill(repeatContent).join('');
+        });
 
-        if (field.type === 'slider' || (field.type === 'select' && field.config?.has_custom_slider)) {
-            if (Array.isArray(val)) {
-                val = val.map((v, idx) => {
-                    const unit = field.config?.sliders?.[idx]?.unit || "";
-                    return `${v}${unit}`;
-                }).join(' ');
+        // 3. replace {{variable}}
+        fields.forEach(field => {
+            const varName = field.variable_name;
+            let val = currentValues[varName] ?? values[varName] ?? field.default_value;
+
+            if ((field.type === 'slider' || (field.type === 'select' && field.config?.has_custom_slider)) && Array.isArray(val)) {
+                val = val.map((v, idx) => `${v}${field.config?.sliders?.[idx]?.unit || ""}`).join(' ');
             }
-        }
 
-        if (field.type === 'bbcode' && isExport) val = parseBBCode(val);
+            if (field.type === 'bbcode' && isExport) {
+                val = parseBBCode(val);
+            }
 
-        const variablePattern = new RegExp(`\\{\\{${field.variable_name}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}`, 'g');
-        if (!val || val.trim() === "") {
-            const emptyLinePattern = new RegExp(`^\\s*\\{\\{${field.variable_name}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}\\s*\\n?`, 'gm');
+            const variablePattern = new RegExp(`\\{\\{${varName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}`, 'g');
             
-            if (emptyLinePattern.test(output)) {
-                output = output.replace(emptyLinePattern, "");
+            if (!val || String(val).trim() === "") {
+                const emptyLinePattern = new RegExp(`^\\s*\\{\\{${varName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}\\s*\\n?`, 'gm');
+                result = result.replace(emptyLinePattern, "").replace(variablePattern, "");
             } else {
-                output = output.replace(variablePattern, "");
+                result = result.replace(variablePattern, String(val));
             }
-        } else {
-            output = output.replace(variablePattern, val);
-        }
-    });
+        });
+
+        return result;
+    };
+
+    let output = processTemplate(blueprint, {});
 
     // Clean up
     output = output.replace(/\[GROUP:[^\]]+\]/gi, '')
@@ -297,29 +295,38 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
     return output;
 };
 
+export const getBlocksConfig = (fields: FieldConfig[]) => {
+    const blocks: Record<string, FieldConfig[]> = {};
+    fields.forEach(f => {
+        if (f.block_name) {
+            if (!blocks[f.block_name]) blocks[f.block_name] = [];
+            blocks[f.block_name].push(f);
+        }
+    });
+    return blocks;
+};
+
 export const reorderFields = (fields: FieldConfig[], groupName: string, activeId: string, overId: string): FieldConfig[] => {
     const inGroup = fields.filter(f => f.group_name === groupName).sort((a, b) => a.field_order - b.field_order);
     const otherGroups = fields.filter(f => f.group_name !== groupName);
-
     const oldIndex = inGroup.findIndex(f => f.id === activeId);
     const newIndex = inGroup.findIndex(f => f.id === overId);
-
     if (oldIndex === -1 || newIndex === -1) return fields;
-
     const reordered = [...inGroup];
     const [movedItem] = reordered.splice(oldIndex, 1);
     reordered.splice(newIndex, 0, movedItem);
-
     const updatedInGroup = reordered.map((f, idx) => ({ ...f, field_order: idx }));
-
     return [...otherGroups, ...updatedInGroup];
 };
 
-export const reorderGroups = (fields: FieldConfig[], activeGroupName: string, overGroupName: string): FieldConfig[] => {
-    const groupNames = Array.from(new Set(fields.map(f => f.group_name)))
+export const reorderGroups = (fields: FieldConfig[], blockName: string, activeGroupName: string, overGroupName: string): FieldConfig[] => {
+    const fieldsInBlock = fields.filter(f => (f.block_name || "GLOBAL") === blockName);
+    const otherFields = fields.filter(f => (f.block_name || "GLOBAL") !== blockName);
+
+    const groupNames = Array.from(new Set(fieldsInBlock.map(f => f.group_name)))
         .sort((a, b) => {
-            const fA = fields.find(f => f.group_name === a);
-            const fB = fields.find(f => f.group_name === b);
+            const fA = fieldsInBlock.find(f => f.group_name === a);
+            const fB = fieldsInBlock.find(f => f.group_name === b);
             return (fA?.group_order ?? 0) - (fB?.group_order ?? 0);
         });
 
@@ -332,8 +339,33 @@ export const reorderGroups = (fields: FieldConfig[], activeGroupName: string, ov
     const [movedGroup] = reorderedGroupNames.splice(oldIndex, 1);
     reorderedGroupNames.splice(newIndex, 0, movedGroup);
 
-    return fields.map(field => ({
+    const updatedInBlock = fieldsInBlock.map(field => ({
         ...field,
         group_order: reorderedGroupNames.indexOf(field.group_name)
+    }));
+
+    return [...otherFields, ...updatedInBlock];
+};
+
+export const reorderBlocks = (fields: FieldConfig[], activeBlockId: string, overBlockId: string): FieldConfig[] => {
+    const blockNames = Array.from(new Set(fields.map(f => f.block_name || "GLOBAL")))
+        .sort((a, b) => {
+            const fA = fields.find(f => (f.block_name || "GLOBAL") === a);
+            const fB = fields.find(f => (f.block_name || "GLOBAL") === b);
+            return (fA?.block_order ?? 0) - (fB?.block_order ?? 0);
+        });
+
+    const oldIndex = blockNames.indexOf(activeBlockId);
+    const newIndex = blockNames.indexOf(overBlockId);
+
+    if (oldIndex === -1 || newIndex === -1) return fields;
+
+    const reorderedBlockNames = [...blockNames];
+    const [movedBlock] = reorderedBlockNames.splice(oldIndex, 1);
+    reorderedBlockNames.splice(newIndex, 0, movedBlock);
+
+    return fields.map(field => ({
+        ...field,
+        block_order: reorderedBlockNames.indexOf(field.block_name || "GLOBAL")
     }));
 };
