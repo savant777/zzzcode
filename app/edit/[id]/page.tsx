@@ -26,7 +26,7 @@ export default function EditTemplatePage() {
     const breadcrumbPath = `${fromGroup.toUpperCase()}:${fromTag.toUpperCase()}`;
 
     // --- 1. States ---
-    
+
     const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
     const [editingField, setEditingField] = useState<FieldConfig | null>(null);
 
@@ -80,7 +80,7 @@ export default function EditTemplatePage() {
     }, [fields]);
 
     // --- 2. Effects ---
-    
+
     // Load Tags & Draft on Mount
     useEffect(() => {
         const initEditPage = async () => {
@@ -147,8 +147,14 @@ export default function EditTemplatePage() {
         return () => clearTimeout(timer);
     }, [formData, fields, selectedTags]);
 
+    const getFirstValue = (optionsString: string) => {
+        const firstOption = optionsString.split('/')[0]?.trim();
+        if (!firstOption) return '';
+        return firstOption.includes(':') ? firstOption.split(':')[1].trim() : firstOption;
+    };
+
     // --- 4. Handlers ---
-    
+
     // drag and drop to re-order block
     const handleBlockDragEnd = (event: any) => {
         const { active, over } = event;
