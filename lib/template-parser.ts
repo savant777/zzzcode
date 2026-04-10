@@ -2,7 +2,8 @@ export interface FieldConfig {
     id: string;
     variable_name: string;
     label: string;
-    type: 'text' | 'bbcode' | 'color' | 'select' | 'slider' | 'checkbox';
+
+    type: 'text' | 'bbcode' | 'color' | 'select' | 'slider' | 'checkbox' | 'gradient';
     
     block_name?: string;
     block_order: number;
@@ -20,16 +21,18 @@ export interface FieldConfig {
             label: string;
             min: number;
             max: number;
-            step: number;
             unit: string;
             default_value: number;
         }[];
-        has_custom_slider?: boolean;
-        custom_trigger?: string;
+        gradient?: {
+            colors: string[];
+            direction: string;
+        };
         true_label?: string; 
         false_label?: string;
         true_value?: string;
         false_value?: string;
+        [key: string]: any;
     };
     is_repeat?: boolean;
 }
