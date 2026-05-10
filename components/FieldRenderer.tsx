@@ -164,37 +164,6 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                 </div>
             )}
 
-            {/* --- TYPE: SLIDER (MULTIPLE) --- */}
-            {field.type === 'slider' && (
-                <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
-                    {(field.config?.sliders || []).map((s, i) => (
-                        <div key={i} className="flex flex-col gap-1">
-                            <div className="flex justify-between text-[9px] uppercase opacity-50">
-                                <span>{s.label}</span>
-                                <span>{value[i] || 0}{s.unit}</span>
-                            </div>
-                            <input
-                                type="range"
-                                min={s.min}
-                                max={s.max}
-                                step={s.step}
-                                value={value[i] || 0}
-                                onChange={(e) => handleSliderChange(i, Number(e.target.value))}
-                                className="w-full h-[4px] border border-(--primary)/50 appearance-none outline-none"
-                                style={{
-                                    height: '4px',
-                                    background: `linear-gradient(to right, rgba(from var(--primary) r g b/0.75) 0 ${
-                                    ((Number(Array.isArray(value) ? value[i] : value) - s.min) / (s.max - s.min)) * 100
-                                    }%, var(--background) ${
-                                    ((Number(Array.isArray(value) ? value[i] : value) - s.min) / (s.max - s.min)) * 100
-                                    }% 100%)`
-                                }}
-                            />
-                        </div>
-                    ))}
-                </div>
-            )}
-
             {/* --- TYPE: CHECKBOX --- */}
             {field.type === 'checkbox' && (
                 <label className="flex items-center gap-2 cursor-pointer w-fit">

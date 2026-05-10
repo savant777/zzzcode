@@ -246,7 +246,7 @@ export default function EditorPage() {
                                         
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                             {groupFields.map((field, index) => {
-                                                const isWide = field.type === "bbcode" ||  totalFields === 1 ||  (totalFields > 2 && index === 0);
+                                                const isWide = field.type === "bbcode" || totalFields === 1 || (totalFields % 2 !== 0 && index === 0);
 
                                                 return (
                                                     <FieldRenderer 
