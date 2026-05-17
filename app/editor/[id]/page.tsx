@@ -4,12 +4,130 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { FieldConfig, generateFinalHTML } from '@/lib/template-parser';
+import { FieldConfig, defaultGradientValue, generateFinalHTML, getSelectDefaultValue, getSelectOptions, normalizeFieldConfig } from '@/lib/template-parser';
 
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FieldRenderer from '@/components/FieldRenderer';
 import LivePreview from '@/components/LivePreview';
+
+type GroupedFields = Record<string, FieldConfig[]>;
+
+const groupFieldList = (fieldList: FieldConfig[]): GroupedFields => {
+    const groups: GroupedFields = {};
+
+    fieldList.forEach(f => {
+        if (!groups[f.group_name]) groups[f.group_name] = [];
+        groups[f.group_name].push(f);
+    });
+
+    return Object.entries(groups)
+        .sort(([, a], [, b]) => {
+            const orderA = a[0]?.group_order ?? 0;
+            const orderB = b[0]?.group_order ?? 0;
+            return orderA - orderB;
+        })
+        .reduce((acc, [key, val]) => {
+            acc[key] = [...val].sort((a, b) => (a.field_order ?? 0) - (b.field_order ?? 0));
+            return acc;
+        }, {} as GroupedFields);
+};
+
+const getDefaultValue = (field: FieldConfig) => {
+    if (field.type === 'slider') {
+        return field.config?.sliders?.map(s => s.default_value) || field.default_value;
+    }
+
+    if (field.type === 'gradient') {
+        return field.config?.gradient || defaultGradientValue;
+    }
+
+    if (field.type === 'select') {
+        const defaultValue = getSelectDefaultValue(field);
+        const defaultOption = getSelectOptions(field).find(opt => opt.value === defaultValue);
+        const defaultEntry = (entry: Record<string, any>) => field.config?.select_multiple
+            ? { multiple: true, selected: [entry] }
+            : entry;
+
+        if (defaultOption?.type === 'slider') {
+            return defaultEntry({
+                option_index: 0,
+                value: defaultValue,
+                custom_value: field.config?.sliders?.map(s => s.default_value) || [0],
+            });
+        }
+
+        if (defaultOption?.type === 'gradient') {
+            return defaultEntry({
+                option_index: 0,
+                value: defaultValue,
+                custom_value: field.config?.gradient || defaultGradientValue,
+            });
+        }
+
+        if (defaultOption?.type === 'color') {
+            return defaultEntry({
+                option_index: 0,
+                value: defaultValue,
+                custom_value: defaultOption.default_value || '#FFFFFF',
+            });
+        }
+
+        if (defaultOption?.type === 'text' || defaultOption?.type === 'bbcode') {
+            return defaultEntry({
+                option_index: 0,
+                value: defaultValue,
+                custom_value: defaultOption.default_value || '',
+            });
+        }
+
+        if (field.config?.select_multiple) {
+            return { multiple: true, selected: [{ option_index: 0, value: defaultValue }] };
+        }
+
+        return defaultValue;
+    }
+
+    return field.default_value;
+};
+
+const createBlockEntry = (blockFields: FieldConfig[], source?: Record<string, any>) => {
+    const entry: Record<string, any> = {};
+
+    blockFields.forEach(field => {
+        entry[field.variable_name] = source?.[field.variable_name] ?? getDefaultValue(field);
+    });
+
+    return entry;
+};
+
+const buildInitialValues = (fieldList: FieldConfig[], savedValues?: Record<string, any>) => {
+    const values: Record<string, any> = {};
+    const blockBuckets: Record<string, FieldConfig[]> = {};
+
+    fieldList.forEach(field => {
+        if (field.block_name) {
+            if (!blockBuckets[field.block_name]) blockBuckets[field.block_name] = [];
+            blockBuckets[field.block_name].push(field);
+        } else {
+            values[field.variable_name] = savedValues?.[field.variable_name] ?? getDefaultValue(field);
+        }
+    });
+
+    Object.entries(blockBuckets).forEach(([blockName, blockFields]) => {
+        const savedBlock = savedValues?.[blockName];
+
+        if (Array.isArray(savedBlock)) {
+            values[blockName] = savedBlock.length > 0
+                ? savedBlock.map(entry => createBlockEntry(blockFields, entry))
+                : [createBlockEntry(blockFields)];
+        } else {
+            values[blockName] = [createBlockEntry(blockFields, savedValues)];
+        }
+    });
+
+    return values;
+};
 
 export default function EditorPage() {
     const router = useRouter();
@@ -42,24 +160,28 @@ export default function EditorPage() {
     }, [formData.html_blueprint, fieldValues, fields]);
 
     // Grouping Field
-    const groupedFields = useMemo(() => {
-        const groups: Record<string, FieldConfig[]> = {};
-        
-        fields.forEach(f => {
-            if (!groups[f.group_name]) groups[f.group_name] = [];
-            groups[f.group_name].push(f);
+    const fieldLayout = useMemo(() => {
+        const globalFields = fields.filter(field => !field.block_name);
+        const blockBuckets: Record<string, FieldConfig[]> = {};
+
+        fields.forEach(field => {
+            if (!field.block_name) return;
+            if (!blockBuckets[field.block_name]) blockBuckets[field.block_name] = [];
+            blockBuckets[field.block_name].push(field);
         });
 
-        return Object.entries(groups)
-            .sort(([, a], [, b]) => {
-                const orderA = a[0]?.group_order ?? 0;
-                const orderB = b[0]?.group_order ?? 0;
-                return orderA - orderB;
-            })
-            .reduce((acc, [key, val]) => {
-                acc[key] = [...val].sort((a, b) => (a.field_order ?? 0) - (b.field_order ?? 0));
-                return acc;
-            }, {} as Record<string, FieldConfig[]>);
+        const blocks = Object.entries(blockBuckets)
+            .sort(([, a], [, b]) => (a[0]?.block_order ?? 0) - (b[0]?.block_order ?? 0))
+            .map(([blockName, blockFields]) => ({
+                blockName,
+                fields: blockFields,
+                groups: groupFieldList(blockFields),
+            }));
+
+        return {
+            globalGroups: groupFieldList(globalFields),
+            blocks,
+        };
     }, [fields]);
 
     // --- 3. Effects ---
@@ -103,7 +225,7 @@ export default function EditorPage() {
                     };
                     
                     setFormData(initialData);
-                    const initialFields = (template.fields_config || []).sort((a: any, b: any) => {
+                    const initialFields = (template.fields_config || []).map(normalizeFieldConfig).sort((a: any, b: any) => {
                         if (a.group_order !== b.group_order) {
                             return (a.group_order ?? 0) - (b.group_order ?? 0);
                         }
@@ -111,10 +233,7 @@ export default function EditorPage() {
                     });
                     setFields(initialFields);
                     
-                    const defaults: any = {};
-                    initialFields.forEach((f: FieldConfig) => {
-                        defaults[f.variable_name] = f.default_value;
-                    });
+                    const defaults = buildInitialValues(initialFields);
                     setFieldValues(defaults);
 
                     // Check Local Draft
@@ -124,8 +243,9 @@ export default function EditorPage() {
                             const parsed = JSON.parse(savedDraft);
                             if (parsed.templateId === templateId) {
                                 setFormData(parsed.formData);
-                                setFields(parsed.fields);
-                                setFieldValues(parsed.fieldValues || defaults);
+                                const draftFields = (parsed.fields || initialFields).map(normalizeFieldConfig);
+                                setFields(draftFields);
+                                setFieldValues(buildInitialValues(draftFields, parsed.fieldValues || defaults));
                             }
                         } catch (e) { console.error(e); }
                     }
@@ -157,6 +277,51 @@ export default function EditorPage() {
     // --- 4. Handlers ---
     const handleValueChange = (varName: string, value: any) => {
         setFieldValues(prev => ({ ...prev, [varName]: value }));
+    };
+
+    const getBlockFields = (blockName: string) => fields.filter(field => field.block_name === blockName);
+
+    const handleBlockValueChange = (blockName: string, entryIndex: number, varName: string, value: any) => {
+        setFieldValues(prev => {
+            const blockFields = getBlockFields(blockName);
+            const entries = Array.isArray(prev[blockName]) && prev[blockName].length > 0
+                ? [...prev[blockName]]
+                : [createBlockEntry(blockFields)];
+
+            entries[entryIndex] = {
+                ...createBlockEntry(blockFields, entries[entryIndex]),
+                [varName]: value,
+            };
+
+            return { ...prev, [blockName]: entries };
+        });
+    };
+
+    const handleAddBlockEntry = (blockName: string) => {
+        setFieldValues(prev => {
+            const blockFields = getBlockFields(blockName);
+            const entries = Array.isArray(prev[blockName]) ? prev[blockName] : [];
+
+            return {
+                ...prev,
+                [blockName]: [...entries, createBlockEntry(blockFields)],
+            };
+        });
+    };
+
+    const handleRemoveBlockEntry = (blockName: string, entryIndex: number) => {
+        setFieldValues(prev => {
+            const blockFields = getBlockFields(blockName);
+            const entries = Array.isArray(prev[blockName]) && prev[blockName].length > 0
+                ? [...prev[blockName]]
+                : [createBlockEntry(blockFields)];
+
+            if (entries.length <= 1) return prev;
+
+            entries.splice(entryIndex, 1);
+
+            return { ...prev, [blockName]: entries };
+        });
     };
 
     const handleClearDraft = () => {
@@ -233,7 +398,7 @@ export default function EditorPage() {
                         </div>
                         
                         <div className="flex flex-col gap-6 overflow-y-auto scrollbar-hide">
-                            {Object.entries(groupedFields).map(([groupName, groupFields]) => {
+                            {Object.entries(fieldLayout.globalGroups).map(([groupName, groupFields]) => {
                                 const totalFields = groupFields.length;
                                 
                                 return (
@@ -258,6 +423,88 @@ export default function EditorPage() {
                                                     />
                                                 )
                                             })}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+
+                            {fieldLayout.blocks.map(({ blockName, groups, fields: blockFields }) => {
+                                const entries = Array.isArray(fieldValues[blockName]) && fieldValues[blockName].length > 0
+                                    ? fieldValues[blockName]
+                                    : [createBlockEntry(blockFields)];
+
+                                return (
+                                    <div key={blockName} className="border border-dashed border-(--primary)/40 p-3">
+                                        <div className="flex items-center gap-2 border-b border-(--primary)/30 pb-2 mb-3">
+                                            <div className="min-w-0">
+                                                <h4 className="text-xs font-black uppercase tracking-[0.2em] text-(--primary) truncate">
+                                                    BLOCK_SCOPE: {blockName}
+                                                </h4>
+                                                <p className="text-[10px] uppercase text-(--foreground)/35">
+                                                    {entries.length} item{entries.length === 1 ? '' : 's'}
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAddBlockEntry(blockName)}
+                                                className="ml-auto cursor-pointer bg-(--primary) text-(--background) px-3 py-1 text-[10px] font-black uppercase hover:brightness-110 transition-all"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
+
+                                        <div className="flex flex-col gap-4">
+                                            {entries.map((entryValues: Record<string, any>, entryIndex: number) => (
+                                                <div key={`${blockName}-${entryIndex}`} className="border border-(--primary)/20 bg-black/20 p-3">
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-(--foreground)/50">
+                                                            #{entryIndex + 1}
+                                                        </span>
+                                                        <div className="ml-auto flex gap-1">
+                                                            <button
+                                                                type="button"
+                                                                disabled={entries.length <= 1}
+                                                                onClick={() => handleRemoveBlockEntry(blockName, entryIndex)}
+                                                                className="cursor-pointer border border-red-500/30 px-2 py-1 text-[10px] uppercase text-red-300 hover:border-red-500 disabled:cursor-not-allowed disabled:opacity-30 transition-colors"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-col gap-5">
+                                                        {Object.entries(groups).map(([groupName, groupFields]) => {
+                                                            const totalFields = groupFields.length;
+
+                                                            return (
+                                                                <div key={`${blockName}-${entryIndex}-${groupName}`}>
+                                                                    <div className="flex items-center gap-2 px-2 py-1 bg-(--primary)/5 border-l-2 border-(--primary) mb-2 select-none">
+                                                                        <h5 className="text-xs font-bold uppercase tracking-[0.2em] text-(--primary)">
+                                                                            {groupName}
+                                                                        </h5>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                                        {groupFields.map((field, index) => {
+                                                                            const isWide = field.type === "bbcode" || (totalFields % 2 !== 0 && index === 0);
+
+                                                                            return (
+                                                                                <FieldRenderer
+                                                                                    key={`${field.id}-${entryIndex}`}
+                                                                                    field={field}
+                                                                                    value={entryValues[field.variable_name]}
+                                                                                    onChange={(varName, value) => handleBlockValueChange(blockName, entryIndex, varName, value)}
+                                                                                    className={isWide ? "lg:col-span-2" : "col-span-1"}
+                                                                                />
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )

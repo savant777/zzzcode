@@ -8,8 +8,9 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import AutoResizeTextarea from '@/components/AutoResizeTextarea';
 import TemplateBlockContainer from '@/components/TemplateBlockContainer';
-import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks } from '@/lib/template-parser';
+import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
 
 export default function AddTemplatePage() {
     const router = useRouter();
@@ -79,7 +80,7 @@ export default function AddTemplatePage() {
                     const parsed = JSON.parse(savedDraft);
                     if (parsed.formData) setFormData(parsed.formData);
                     if (parsed.selectedTags) setSelectedTags(parsed.selectedTags);
-                    if (parsed.fields) setFields(parsed.fields);
+                    if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
                 } catch (e) { console.error("Draft load error", e); }
             }
         };
@@ -150,7 +151,7 @@ export default function AddTemplatePage() {
                 .insert([{
                     ...formData,
                     password: formData.is_personal ? formData.password : null,
-                    fields_config: fields,
+                    fields_config: fields.map(normalizeFieldConfig),
                     is_active: true,
                     user_id: user?.id
                 }])
@@ -350,7 +351,7 @@ export default function AddTemplatePage() {
 
                             <div className="flex flex-col gap-1">
                                 <label className="text-sm uppercase opacity-70">HTML_Blueprint</label>
-                                <textarea 
+                                <AutoResizeTextarea
                                     rows={6}
                                     placeholder='<div class="card">{{content}}</div>'
                                     className="font-Google-Code bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75 transition-all duration-300 scrollbar-hide-resize-y"

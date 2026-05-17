@@ -17,6 +17,17 @@ export interface FieldConfig {
     description?: string;
     options?: string;
     config?: {
+        select_options?: {
+            option: string;
+            value: string;
+            type?: '' | 'text' | 'bbcode' | 'color' | 'slider' | 'gradient';
+            default_value?: string;
+            has_format?: boolean;
+            format?: string;
+        }[];
+        select_multiple?: boolean;
+        select_multiple_separator?: string;
+        select_multiple_format?: string;
         sliders?: {
             label: string;
             min: number;
@@ -25,8 +36,6 @@ export interface FieldConfig {
             unit: string;
             default_value: number;
         }[];
-        has_custom_slider?: boolean;
-        custom_trigger?: string;
         gradient?: {
             colors: string[];
             direction: string;
@@ -39,6 +48,110 @@ export interface FieldConfig {
     };
     is_repeat?: boolean;
 }
+
+export type SelectOptionConfig = {
+    option: string;
+    value: string;
+    type?: '' | 'text' | 'bbcode' | 'color' | 'slider' | 'gradient';
+    default_value?: string;
+    has_format?: boolean;
+    format?: string;
+};
+
+export type GradientValue = {
+    direction: string;
+    colors: string[];
+};
+
+export const defaultGradientValue: GradientValue = {
+    direction: 'to right',
+    colors: ['#FFFFFF', '#000000'],
+};
+
+export const formatGradientValue = (gradient?: Partial<GradientValue> | string) => {
+    if (typeof gradient === 'string') return gradient;
+
+    const direction = gradient?.direction || defaultGradientValue.direction;
+    const colors = gradient?.colors?.length ? gradient.colors : defaultGradientValue.colors;
+
+    return `linear-gradient(${direction}, ${colors.join(', ')})`;
+};
+
+export const getSelectOptions = (field: FieldConfig): SelectOptionConfig[] => {
+    if (field.config?.select_options?.length) {
+        return field.config.select_options.map(opt => ({
+            option: opt.option || opt.value || '',
+            value: opt.value || '',
+            type: opt.type || '',
+            default_value: opt.default_value || '',
+            has_format: opt.has_format || false,
+            format: opt.format || ''
+        }));
+    }
+
+    const separator = field.options?.includes('|') ? '|' : '/';
+
+    return (field.options || '').split(separator)
+        .map(opt => {
+            const parts = opt.split(':').map(p => p.trim());
+            return {
+                option: parts[0] || '',
+                value: parts[1] || parts[0] || '',
+                type: (parts[2] || '') as SelectOptionConfig['type'],
+                default_value: '',
+                has_format: false,
+                format: ''
+            };
+        })
+        .filter(opt => opt.option || opt.value);
+};
+
+export const getSelectDefaultValue = (field: FieldConfig) => {
+    return getSelectOptions(field)[0]?.value || '';
+};
+
+const resolveSelectValue = (field: FieldConfig, val: any): string => {
+    const selectOptions = getSelectOptions(field);
+    const selectedOption = typeof val?.option_index === 'number'
+        ? selectOptions[val.option_index]
+        : selectOptions.find(opt => opt.value === val?.value);
+    const customValue = selectedOption?.type === 'gradient'
+        ? formatGradientValue(val?.custom_value)
+        : Array.isArray(val?.custom_value)
+        ? val.custom_value.map((v: string | number, idx: number) => `${v}${field.config?.sliders?.[idx]?.unit || ""}`).join(' ')
+        : val?.custom_value;
+
+    if (selectedOption?.type) {
+        return selectedOption.has_format && selectedOption.format
+            ? selectedOption.format.replace(/\{\{value\}\}/g, customValue ?? '')
+            : String(customValue ?? '');
+    }
+
+    return selectedOption?.value ?? val?.value ?? '';
+};
+
+export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
+    if (!field.config) return field;
+
+    const nextConfig = { ...field.config };
+    delete nextConfig[`has_${'custom_slider'}`];
+    delete nextConfig[`custom_${'trigger'}`];
+
+    return { ...field, config: nextConfig };
+};
+
+const preserveTextNewlines = (html: string): string => {
+    return html.split(/(<[^>]+>)/g).map(part => {
+        if (part.startsWith('<') && part.endsWith('>')) return part;
+        if (!part.trim()) return part;
+
+        return part.replace(/\r?\n/g, '<br>');
+    }).join('');
+};
+
+const escapeRegExp = (value: string): string => {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
 
 export const parseBBCode = (text: string, convertNewlines: boolean = true): string => {
     if (!text) return "";
@@ -268,20 +381,44 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
         // 3. replace {{variable}}
         fields.forEach(field => {
             const varName = field.variable_name;
+            const safeVarName = escapeRegExp(varName);
             let val = currentValues[varName] ?? values[varName] ?? field.default_value;
 
-            if ((field.type === 'slider' || (field.type === 'select' && field.config?.has_custom_slider)) && Array.isArray(val)) {
+            if (field.type === 'select' && val && typeof val === 'object' && !Array.isArray(val)) {
+                if (val.multiple && Array.isArray(val.selected)) {
+                    const separator = field.config?.select_multiple_separator ?? ' ';
+                    const joinedValue = val.selected.map((entry: any) => resolveSelectValue(field, entry)).filter(Boolean).join(separator);
+                    val = field.config?.select_multiple_format
+                        ? field.config.select_multiple_format.replace(/\{\{value\}\}/g, joinedValue)
+                        : joinedValue;
+                } else {
+                    val = resolveSelectValue(field, val);
+                }
+            }
+
+            if (field.type === 'select' && Array.isArray(val)) {
+                const sliderOption = getSelectOptions(field).find(opt => opt.type === 'slider');
+                if (sliderOption) {
+                    val = val.map((v, idx) => `${v}${field.config?.sliders?.[idx]?.unit || ""}`).join(' ');
+                }
+            }
+
+            if (field.type === 'slider' && Array.isArray(val)) {
                 val = val.map((v, idx) => `${v}${field.config?.sliders?.[idx]?.unit || ""}`).join(' ');
+            }
+
+            if (field.type === 'gradient') {
+                val = formatGradientValue(val || field.config?.gradient);
             }
 
             if (field.type === 'bbcode' && isExport) {
                 val = parseBBCode(val);
             }
 
-            const variablePattern = new RegExp(`\\{\\{${varName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}`, 'g');
+            const variablePattern = new RegExp(`\\{\\{${safeVarName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}`, 'g');
             
             if (!val || String(val).trim() === "") {
-                const emptyLinePattern = new RegExp(`^\\s*\\{\\{${varName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}\\s*\\n?`, 'gm');
+                const emptyLinePattern = new RegExp(`^\\s*\\{\\{${safeVarName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}\\s*\\n?`, 'gm');
                 result = result.replace(emptyLinePattern, "").replace(variablePattern, "");
             } else {
                 result = result.replace(variablePattern, String(val));
@@ -297,6 +434,11 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
     output = output.replace(/\[GROUP:[^\]]+\]/gi, '')
                    .replace(/\[BLOCK:[^\]]+\]|\[\/BLOCK:[^\]]+\]/gi, '')
                    .replace(/\[REPEAT:[^\]]+\]|\[\/REPEAT\]/gi, '');
+
+    if (isExport) {
+        output = parseBBCode(output, false);
+        output = preserveTextNewlines(output);
+    }
 
     return output;
 };

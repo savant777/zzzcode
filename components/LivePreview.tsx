@@ -11,11 +11,13 @@ export default function LivePreview({ html }: { html: string }) {
     const [scale, setScale] = useState(1);
     const [iframeHeight, setIframeHeight] = useState(500);
     const [currentTargetWidth, setCurrentTargetWidth] = useState(961);
+    const [containerWidth, setContainerWidth] = useState(0);
 
     useEffect(() => {
         const updateScale = () => {
             if (containerRef.current) {
                 const availableWidth = containerRef.current.offsetWidth;
+                setContainerWidth(availableWidth);
 
                 const target = window.innerWidth < 990 ? 605 : 961;
                 setCurrentTargetWidth(target);
@@ -84,7 +86,6 @@ export default function LivePreview({ html }: { html: string }) {
                 padding: 20px; 
                 font-family: 'Inter', 'Noto Sans Thai', sans-serif;
                 line-height: 1.4;
-                min-height: 100vh;
             }
 
             .post_body { 
@@ -115,7 +116,7 @@ export default function LivePreview({ html }: { html: string }) {
                 style={{
                     width: `${currentTargetWidth}px`,
                     height: `${iframeHeight}px`,
-                    transform: `scale(${scale}) translateX(${( (containerRef.current?.offsetWidth || 0) / scale - currentTargetWidth ) / 2}px)`,
+                    transform: `scale(${scale}) translateX(${(containerWidth / scale - currentTargetWidth) / 2}px)`,
                     transformOrigin: 'top left',
                     transition: 'transform 0.2s ease-out',
                 }}
@@ -130,7 +131,7 @@ export default function LivePreview({ html }: { html: string }) {
                     }}
                 />
             </div>
-            <div style={{ height: `${(iframeHeight * scale) - iframeHeight}px` }} />
+            <div style={{ height: `${Math.max(0, (iframeHeight * scale) - iframeHeight)}px` }} />
         </div>
     );
 }

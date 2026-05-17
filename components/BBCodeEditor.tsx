@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState, useEffect } from 'react';
 import { HexColorPicker } from "react-colorful";
+import Modal from './Modal';
 
 interface Props {
     value: string;
@@ -116,7 +117,40 @@ export default function BBCodeEditor({ value, onChange }: Props) {
         setUrlData({ url: '', text: '' });
     };
 
+    // Insert Details/Summary
+    const [showDetailsOption, setShowDetailsOption] = useState(false);
+    const [detailsData, setDetailsData] = useState({ summary: '', details: '' });
+
+    const insertRaw = (content: string) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const beforeText = value.substring(0, start);
+        const afterText = value.substring(end);
+        const newValue = beforeText + content + afterText;
+
+        onChange(newValue);
+
+        setTimeout(() => {
+            textarea.focus();
+            const newCursorPos = start + content.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }, 10);
+    };
+
+    const applyDetails = () => {
+        const summary = detailsData.summary.trim() || 'หัวข้อ';
+        const details = detailsData.details.trim() || 'เนื้อหา';
+
+        insertRaw(`<details><summary>${summary}</summary>${details}</details>`);
+        setShowDetailsOption(false);
+        setDetailsData({ summary: '', details: '' });
+    };
+
     return (
+        <>
         <div className="font-Google-Sans bg-black/40 border border-(--primary)/40 text-sm outline-none focus:border-(--primary) transition-all overflow-hidden">
             {/* Toolbar */}
             <div className="flex flex-wrap border-b border-(--primary)/40 p-2 gap-2">
@@ -210,70 +244,28 @@ export default function BBCodeEditor({ value, onChange }: Props) {
 
                 {/* กลุ่มแทรกวัตถุ */}
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
-                    <button title="แทรกบรรทัดแนวนอน" onClick={() => insertTag('[hr]','')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="แทรกบรรทัดแนวนอน" onClick={() => insertTag('[hr]','')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M192-444v-72h576v72H192Z"/>
                         </svg>
                     </button>
-                    <div className="relative">
-                        <button title="แทรกรูปภาพ" onClick={() => setShowImgOption(!showImgOption)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
-                                <path d="M216-144q-29.7 0-50.85-21.5Q144-187 144-216v-528q0-29 21.15-50.5T216-816h528q29.7 0 50.85 21.5Q816-773 816-744v528q0 29-21.15 50.5T744-144H216Zm0-72h528v-528H216v528Zm48-72h432L552-480 444-336l-72-96-108 144Zm-48 72v-528 528Z"/>
-                            </svg>
-                        </button>
-                        {showImgOption && (
-                            <div className="absolute top-full translate-y-[2px] -left-[3px] z-10 border border-(--primary)/25 bg-black p-3 flex flex-col gap-2 w-48">
-                                <div className="flex flex-col gap-0.5 min-w-0">
-                                    <label className="text-xs text-(--foreground)/50 uppercase">แทรกรูปภาพ</label>
-                                    <input type="text" placeholder="URL รูปภาพ" value={imgData.url} onChange={e => setImgData({...imgData, url: e.target.value})} className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"/>
-                                </div>
-                                <div className="flex gap-2">
-                                    <div className="flex flex-col gap-0.5 min-w-0">
-                                        <label className="text-xs text-(--foreground)/50 uppercase">W <span className="text-[9px] normal-case">(Optional)</span></label>
-                                        <input type="text" placeholder="Width" value={imgData.w} onChange={e => setImgData({...imgData, w: e.target.value})} className="flex-1 min-w-0 font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"/>
-                                    </div>
-                                    <div className="flex flex-col gap-0.5 min-w-0">
-                                        <label className="text-xs text-(--foreground)/50 uppercase">H <span className="text-[9px] normal-case">(Optional)</span></label>
-                                        <input type="text" placeholder="Height" value={imgData.h} onChange={e => setImgData({...imgData, h: e.target.value})} className="flex-1 min-w-0 font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"/>
-                                    </div>
-                                </div>
-                                <button 
-                                    onClick={applyImage}
-                                    className="bg-(--primary) text-(--background) px-4 py-1 text-xs font-black uppercase hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
-                                >
-                                    Insert
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    <div className="relative">
-                        <button title="แทรกลิงก์" onClick={() => setShowUrlOption(!showUrlOption)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
-                                <path d="M432-288H288q-79.68 0-135.84-56.23Q96-400.45 96-480.23 96-560 152.16-616q56.16-56 135.84-56h144v72H288q-50 0-85 35t-35 85q0 50 35 85t85 35h144v72Zm-96-156v-72h288v72H336Zm192 156v-72h144q50 0 85-35t35-85q0-50-35-85t-85-35H528v-72h144q79.68 0 135.84 56.23 56.16 56.22 56.16 136Q864-400 807.84-344 751.68-288 672-288H528Z"/>
-                            </svg>
-                        </button>
-                        {showUrlOption && (
-                            <div className="absolute top-full translate-y-[2px] -left-[3px] z-10 border border-(--primary)/25 bg-black p-3 flex flex-col gap-2 w-48">
-                                <div className="flex flex-col gap-0.5 min-w-0">
-                                    <label className="text-xs text-(--foreground)/50 uppercase">แทรกลิงก์</label>
-                                    <input type="text" placeholder="ลิงก์ URL" value={urlData.url} onChange={e => setUrlData({...urlData, url: e.target.value})} className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"/>
-                                </div>
-                                <div className="flex flex-col gap-0.5 min-w-0">
-                                    <label className="text-xs text-(--foreground)/50 uppercase">ข้อความ <span className="text-[9px] normal-case">(Optional)</span></label>
-                                    <input type="text" placeholder="ข้อความแสดง" value={urlData.text} onChange={e => setUrlData({...urlData, text: e.target.value})} className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"/>
-                                </div>
-                                <button 
-                                    onClick={applyUrl}
-                                    className="bg-(--primary) text-(--background) px-4 py-1 text-xs font-black uppercase hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
-                                >
-                                    Insert
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                    <button type="button" title="แทรกรูปภาพ" onClick={() => setShowImgOption(true)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
+                            <path d="M216-144q-29.7 0-50.85-21.5Q144-187 144-216v-528q0-29 21.15-50.5T216-816h528q29.7 0 50.85 21.5Q816-773 816-744v528q0 29-21.15 50.5T744-144H216Zm0-72h528v-528H216v528Zm48-72h432L552-480 444-336l-72-96-108 144Zm-48 72v-528 528Z"/>
+                        </svg>
+                    </button>
+                    <button type="button" title="แทรกลิงก์" onClick={() => setShowUrlOption(true)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
+                            <path d="M432-288H288q-79.68 0-135.84-56.23Q96-400.45 96-480.23 96-560 152.16-616q56.16-56 135.84-56h144v72H288q-50 0-85 35t-35 85q0 50 35 85t85 35h144v72Zm-96-156v-72h288v72H336Zm192 156v-72h144q50 0 85-35t35-85q0-50-35-85t-85-35H528v-72h144q79.68 0 135.84 56.23 56.16 56.22 56.16 136Q864-400 807.84-344 751.68-288 672-288H528Z"/>
+                        </svg>
+                    </button>
+                    <button type="button" title="แทรก details summary" onClick={() => setShowDetailsOption(true)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor" className="-scale-x-100">
+                            <path d="M120-240v-80h520v80H120Zm664-40L584-480l200-200 56 56-144 144 144 144-56 56ZM120-440v-80h400v80H120Zm0-200v-80h520v80H120Z"/>
+                        </svg>
+                    </button>
                 </div>
 
-                {/* กลุ่มรายการ */}
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
                     <button title="รายการจุด" onClick={() => insertTag('[list]', '[/list]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
@@ -288,6 +280,7 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                 </div>
             </div>
             
+
             <textarea
                 ref={textareaRef}
                 className="w-full p-3 h-64 focus:outline-none font-sans text-sm leading-relaxed"
@@ -296,5 +289,150 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                 placeholder="พิมพ์ข้อความที่นี่..."
             />
         </div>
+        <Modal
+            isOpen={showImgOption}
+            onClose={() => setShowImgOption(false)}
+            title="INSERT_IMAGE"
+        >
+            <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase opacity-60">Image_URL</label>
+                    <input
+                        type="text"
+                        value={imgData.url}
+                        onChange={(e) => setImgData(prev => ({ ...prev, url: e.target.value }))}
+                        className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                        placeholder="https://..."
+                    />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] uppercase opacity-60">Width</label>
+                        <input
+                            type="text"
+                            value={imgData.w}
+                            onChange={(e) => setImgData(prev => ({ ...prev, w: e.target.value }))}
+                            className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                            placeholder="Optional"
+                        />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] uppercase opacity-60">Height</label>
+                        <input
+                            type="text"
+                            value={imgData.h}
+                            onChange={(e) => setImgData(prev => ({ ...prev, h: e.target.value }))}
+                            className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                            placeholder="Optional"
+                        />
+                    </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowImgOption(false)}
+                        className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={applyImage}
+                        className="cursor-pointer flex-1 py-2 bg-(--primary) text-(--background) font-bold uppercase text-xs hover:brightness-110 transition-all"
+                    >
+                        Insert
+                    </button>
+                </div>
+            </div>
+        </Modal>
+        <Modal
+            isOpen={showUrlOption}
+            onClose={() => setShowUrlOption(false)}
+            title="INSERT_LINK"
+        >
+            <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase opacity-60">URL</label>
+                    <input
+                        type="text"
+                        value={urlData.url}
+                        onChange={(e) => setUrlData(prev => ({ ...prev, url: e.target.value }))}
+                        className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                        placeholder="https://..."
+                    />
+                </div>
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase opacity-60">Display_Text</label>
+                    <input
+                        type="text"
+                        value={urlData.text}
+                        onChange={(e) => setUrlData(prev => ({ ...prev, text: e.target.value }))}
+                        className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                        placeholder="Optional"
+                    />
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowUrlOption(false)}
+                        className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={applyUrl}
+                        className="cursor-pointer flex-1 py-2 bg-(--primary) text-(--background) font-bold uppercase text-xs hover:brightness-110 transition-all"
+                    >
+                        Insert
+                    </button>
+                </div>
+            </div>
+        </Modal>
+        <Modal
+            isOpen={showDetailsOption}
+            onClose={() => setShowDetailsOption(false)}
+            title="INSERT_DETAILS"
+        >
+            <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase opacity-60">Summary</label>
+                    <input
+                        type="text"
+                        value={detailsData.summary}
+                        onChange={(e) => setDetailsData(prev => ({ ...prev, summary: e.target.value }))}
+                        className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                        placeholder="หัวข้อ"
+                    />
+                </div>
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase opacity-60">Details</label>
+                    <textarea
+                        rows={5}
+                        value={detailsData.details}
+                        onChange={(e) => setDetailsData(prev => ({ ...prev, details: e.target.value }))}
+                        className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300 resize-y"
+                        placeholder="เนื้อหา"
+                    />
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowDetailsOption(false)}
+                        className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={applyDetails}
+                        className="cursor-pointer flex-1 py-2 bg-(--primary) text-(--background) font-bold uppercase text-xs hover:brightness-110 transition-all"
+                    >
+                        Insert
+                    </button>
+                </div>
+            </div>
+        </Modal>
+        </>
     );
 }

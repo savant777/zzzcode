@@ -17,7 +17,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
                 onClick={onClose}
             />
             
-            <div className="relative w-full max-w-md border border-(--primary) bg-(--background) p-6 font-Google-Code animate-in fade-in zoom-in duration-200">
+            <div className="relative flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col border border-(--primary) bg-(--background) p-6 font-Google-Code animate-in fade-in zoom-in duration-200">
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between border-b border-(--primary)/20 pb-3">
                     <h3 className="text-base md:text-lg mt-[-4px] uppercase tracking-widest text-(--primary)">
@@ -29,7 +29,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
                 </div>
 
                 {/* Content */}
-                <div className="text-sm">
+                <div className="min-h-0 overflow-y-auto pr-1 text-sm scrollbar-hide">
                     {children}
                 </div>
             </div>
