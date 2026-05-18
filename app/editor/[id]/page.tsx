@@ -255,11 +255,7 @@ export default function EditorPage() {
         };
         initEditorPage();
 
-        return () => {
-            if (templateId) {
-                sessionStorage.removeItem(`unlocked_${templateId}`);
-            }
-        };
+        return undefined;
     }, [templateId, router]);
 
     // Auto-Save Draft

@@ -1,28 +1,28 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
 
-interface Props {
-    html: string;
-}
-
 export default function LivePreview({ html }: { html: string }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [scale, setScale] = useState(1);
     const [iframeHeight, setIframeHeight] = useState(500);
-    const [currentTargetWidth, setCurrentTargetWidth] = useState(961);
+    const [viewportWidth, setViewportWidth] = useState(1440);
+    const [postBodyWidth, setPostBodyWidth] = useState(961);
     const [containerWidth, setContainerWidth] = useState(0);
 
     useEffect(() => {
         const updateScale = () => {
             if (containerRef.current) {
                 const availableWidth = containerRef.current.offsetWidth;
+                const realViewportWidth = Math.max(window.innerWidth, 1);
+                const nextPostBodyWidth = realViewportWidth < 990 ? 605 : 961;
+                const nextViewportWidth = Math.max(realViewportWidth, nextPostBodyWidth);
+
                 setContainerWidth(availableWidth);
+                setViewportWidth(nextViewportWidth);
+                setPostBodyWidth(nextPostBodyWidth);
 
-                const target = window.innerWidth < 990 ? 605 : 961;
-                setCurrentTargetWidth(target);
-
-                const newScale = Math.min(availableWidth / target, 1);
+                const newScale = Math.min(availableWidth / nextPostBodyWidth, 1);
                 setScale(newScale);
             }
         };
@@ -79,16 +79,24 @@ export default function LivePreview({ html }: { html: string }) {
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Noto+Sans+Thai:wght@100..900&display=swap');
             
+            html,
+            body {
+                width: ${viewportWidth}px;
+                min-width: ${viewportWidth}px;
+                margin: 0;
+            }
+
             body { 
                 background: #131313;
                 color: #fff; 
-                margin: 0; 
-                padding: 20px; 
+                padding: 20px 0; 
                 font-family: 'Inter', 'Noto Sans Thai', sans-serif;
                 line-height: 1.4;
+                box-sizing: border-box;
             }
 
             .post_body { 
+                width: ${postBodyWidth}px;
                 padding: 12px 0; 
                 line-height: 1.8; 
                 font-size: 17px; 
@@ -110,13 +118,17 @@ export default function LivePreview({ html }: { html: string }) {
         </style>
     `;
 
+    const cropOffset = Math.max(0, (viewportWidth - postBodyWidth) / 2);
+    const centeredOffset = Math.max(0, (containerWidth / scale - postBodyWidth) / 2);
+
     return (
         <div ref={containerRef} className="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hide">
             <div 
                 style={{
-                    width: `${currentTargetWidth}px`,
+                    width: `${postBodyWidth}px`,
                     height: `${iframeHeight}px`,
-                    transform: `scale(${scale}) translateX(${(containerWidth / scale - currentTargetWidth) / 2}px)`,
+                    overflow: 'hidden',
+                    transform: `scale(${scale}) translateX(${centeredOffset}px)`,
                     transformOrigin: 'top left',
                     transition: 'transform 0.2s ease-out',
                 }}
@@ -125,9 +137,10 @@ export default function LivePreview({ html }: { html: string }) {
                     ref={iframeRef}
                     srcDoc={`<!DOCTYPE html><html><head>${styles}</head><body><div class="post_body scaleimages">${html}</div></body></html>`}
                     style={{
-                        width: `${currentTargetWidth}px`,
+                        width: `${viewportWidth}px`,
                         height: `${iframeHeight}px`,
                         border: 'none',
+                        marginLeft: `-${cropOffset}px`,
                     }}
                 />
             </div>

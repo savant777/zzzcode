@@ -148,13 +148,22 @@ function Dashboard() {
     const handleUnlockPrivate = (e: React.FormEvent) => {
         e.preventDefault();
         const toastId = toast.loading("SYSTEM: Verifying_Access_Key...");
+        const [activeGroup, activeTagSlug] = activeFilter.split(':');
 
-        const primaryTagEntry = selectedItem.template_tags?.find((t: any) => 
+        const primaryTagEntry = selectedItem.template_tags?.find((t: any) => {
+            const groupName = t.tags.tag_groups.name.toLowerCase();
+            const tagSlug = t.tags.slug.toLowerCase();
+            return activeTagSlug !== 'all' && groupName === activeGroup && tagSlug === activeTagSlug;
+        }) || selectedItem.template_tags?.find((t: any) => {
+            const groupName = t.tags.tag_groups.name.toLowerCase();
+            return activeTagSlug === 'all' && groupName === activeGroup;
+        }) || selectedItem.template_tags?.find((t: any) => 
             ['activity', 'commission'].includes(t.tags.tag_groups.name.toLowerCase())
         ) || selectedItem.template_tags?.[0];
 
         const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';
         const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
+        const routeQuery = new URLSearchParams({ group, tag: tagSlug }).toString();
         
         if (password === selectedItem?.password) {
             sessionStorage.setItem(`unlocked_${selectedItem.id}`, 'true');
@@ -162,7 +171,7 @@ function Dashboard() {
             toast.success(`ACCESS_GRANTED: DECRYPT_SUCCESS`, { id: toastId });
             closeModal();
             setTimeout(() => {
-                router.push(`/editor/${selectedItem.id}?group=${group}&tag=${tagSlug}`);
+                router.push(`/editor/${selectedItem.id}?${routeQuery}`);
             }, 800);
         } else {
             toast.error(`ACCESS_DENIED: INVALID_SECRET_KEY`, { id: toastId });
@@ -293,6 +302,7 @@ function Dashboard() {
                                         item={item}
                                         viewMode={viewMode}
                                         isAdmin={isAdmin}
+                                        activeFilter={activeFilter}
                                         onTagClick={handleTagClick} 
                                         onDelete={() => {
                                             setSelectedItem(item);

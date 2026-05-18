@@ -20,7 +20,7 @@ export default function EditTemplatePage() {
     const templateId = params.id;
 
     const router = useRouter();
-    const STORAGE_KEY = 'zzzcode_draft_edit_${templateId}';
+    const STORAGE_KEY = `zzzcode_draft_edit_${templateId}`;
 
     const fromGroup = searchParams.get('group') || 'category';
     const fromTag = searchParams.get('tag') || 'all';
