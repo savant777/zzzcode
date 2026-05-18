@@ -1,19 +1,13 @@
 "use client";
 import { useRouter } from 'next/navigation';
 
-export default function TemplateCard({ item, viewMode, isAdmin, activeFilter, onDelete, onOpenPrivateModal }: any) {
+const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'the plastics'];
+
+export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDelete, onOpenPrivateModal }: any) {
     const router = useRouter();
 
-    const [activeGroup, activeTagSlug] = (activeFilter || 'category:all').split(':');
-    const primaryTagEntry = item.template_tags?.find((t: any) => {
-        const groupName = t.tags.tag_groups.name.toLowerCase();
-        const tagSlug = t.tags.slug.toLowerCase();
-        return activeTagSlug !== 'all' && groupName === activeGroup && tagSlug === activeTagSlug;
-    }) || item.template_tags?.find((t: any) => {
-        const groupName = t.tags.tag_groups.name.toLowerCase();
-        return activeTagSlug === 'all' && groupName === activeGroup;
-    }) || item.template_tags?.find((t: any) => 
-        ['activity', 'commission'].includes(t.tags.tag_groups.name.toLowerCase())
+    const primaryTagEntry = item.template_tags?.find((t: any) => 
+        PRIMARY_ROUTE_GROUPS.includes(t.tags.tag_groups.name.toLowerCase())
     ) || item.template_tags?.[0];
 
     const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';

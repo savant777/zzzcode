@@ -12,6 +12,8 @@ import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import Modal from '@/components/Modal';
 
+const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'the plastics'];
+
 export default function Page() {
     return (
         <Suspense fallback={<div>Loading Dashboard...</div>}>
@@ -148,17 +150,9 @@ function Dashboard() {
     const handleUnlockPrivate = (e: React.FormEvent) => {
         e.preventDefault();
         const toastId = toast.loading("SYSTEM: Verifying_Access_Key...");
-        const [activeGroup, activeTagSlug] = activeFilter.split(':');
 
-        const primaryTagEntry = selectedItem.template_tags?.find((t: any) => {
-            const groupName = t.tags.tag_groups.name.toLowerCase();
-            const tagSlug = t.tags.slug.toLowerCase();
-            return activeTagSlug !== 'all' && groupName === activeGroup && tagSlug === activeTagSlug;
-        }) || selectedItem.template_tags?.find((t: any) => {
-            const groupName = t.tags.tag_groups.name.toLowerCase();
-            return activeTagSlug === 'all' && groupName === activeGroup;
-        }) || selectedItem.template_tags?.find((t: any) => 
-            ['activity', 'commission'].includes(t.tags.tag_groups.name.toLowerCase())
+        const primaryTagEntry = selectedItem.template_tags?.find((t: any) => 
+            PRIMARY_ROUTE_GROUPS.includes(t.tags.tag_groups.name.toLowerCase())
         ) || selectedItem.template_tags?.[0];
 
         const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';
@@ -302,7 +296,6 @@ function Dashboard() {
                                         item={item}
                                         viewMode={viewMode}
                                         isAdmin={isAdmin}
-                                        activeFilter={activeFilter}
                                         onTagClick={handleTagClick} 
                                         onDelete={() => {
                                             setSelectedItem(item);
