@@ -409,6 +409,7 @@ export default function EditTemplatePage() {
                                 <label className="text-sm uppercase opacity-70">HTML_Blueprint</label>
                                 <AutoResizeTextarea
                                     rows={6}
+                                    resizeMode="once"
                                     placeholder='<div class="card">{{content}}</div>'
                                     className="font-Google-Code bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75 transition-all duration-300 scrollbar-hide-resize-y"
                                     onChange={(e) => {
