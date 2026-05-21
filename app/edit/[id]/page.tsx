@@ -14,6 +14,20 @@ import FieldConfigurator from '@/components/FieldConfigurator';
 import TemplateBlockContainer from '@/components/TemplateBlockContainer';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
 
+const getSimilarFieldKey = (field: FieldConfig) => {
+    const rawName = (field.variable_name || field.label || '').trim();
+    return rawName.replace(/[\s_-]*[0-9๐-๙]+$/u, '').toLowerCase();
+};
+
+const copyConfigToSimilarField = (source: FieldConfig, target: FieldConfig): FieldConfig => ({
+    ...target,
+    type: source.type,
+    options: source.options,
+    default_value: source.default_value,
+    placeholder: source.placeholder,
+    config: source.config ? JSON.parse(JSON.stringify(source.config)) : undefined,
+});
+
 export default function EditTemplatePage() {
     const params = useParams();
     const searchParams = useSearchParams();
@@ -186,6 +200,24 @@ export default function EditTemplatePage() {
     const handleOpenEdit = (field: FieldConfig) => {
         setEditingField({ ...field });
         setIsFieldModalOpen(true);
+    };
+
+    const handleApplyToSimilar = (updated: FieldConfig) => {
+        const normalized = normalizeFieldConfig(updated);
+        const sourceKey = getSimilarFieldKey(normalized);
+        let appliedCount = 0;
+
+        setFields(prev => prev.map(field => {
+            if (field.id === normalized.id) return normalized;
+            if ((field.block_name || '') !== (normalized.block_name || '')) return field;
+            if (getSimilarFieldKey(field) !== sourceKey) return field;
+
+            appliedCount += 1;
+            return normalizeFieldConfig(copyConfigToSimilarField(normalized, field));
+        }));
+
+        toast.success(`APPLIED_TO_SIMILAR_FIELDS: ${appliedCount}`);
+        setIsFieldModalOpen(false);
     };
 
     // submit: UPDATE to template and template_tags
@@ -519,6 +551,7 @@ export default function EditTemplatePage() {
                             setFields(prev => prev.map(f => f.id === updated.id ? normalizeFieldConfig(updated) : f));
                             setIsFieldModalOpen(false);
                         }} 
+                        onApplyToSimilar={handleApplyToSimilar}
                     />
                 )}
             </Modal>

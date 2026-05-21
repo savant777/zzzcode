@@ -7,15 +7,29 @@ import ColorPicker from '@/components/ColorPicker';
 interface ConfiguratorProps {
     field: FieldConfig;
     onSave: (updated: FieldConfig) => void;
+    onApplyToSimilar?: (updated: FieldConfig) => void;
     onCancel: () => void;
 }
 
 const defaultSlider = { label: 'Value', min: 0, max: 100, step: 1, unit: 'px', default_value: 0 };
+const defaultColor = '#FFFFFF';
+const imagePositionSliders = [
+    { label: 'X axis (ซ้าย-ขวา)', min: -100, max: 200, step: 1, unit: '%', default_value: 50 },
+    { label: 'Y axis (บน-ล่าง)', min: -100, max: 200, step: 1, unit: '%', default_value: 50 },
+];
+const imageSizeSliders = [
+    { label: 'ความกว้างรูปเทียบพื้นที่ เป็น %', min: 10, max: 300, step: 1, unit: '%', default_value: 100 },
+];
 
 const inputClass = "font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300";
 const compactInputClass = "bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)";
+const isHexColor = (value?: string) => /^#[0-9A-F]{3,8}$/i.test(value || '');
+const cssDeclarationFormat = (cssVariable: string) => {
+    const trimmed = cssVariable.trim();
+    return trimmed ? `${trimmed}: {{value}};` : '{{value}}';
+};
 
-export default function FieldConfigurator({ field, onSave, onCancel }: ConfiguratorProps) {
+export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onCancel }: ConfiguratorProps) {
     const [tempField, setTempField] = useState<FieldConfig>({ ...field });
 
     const selectOptions = useMemo(() => getSelectOptions(tempField), [tempField]);
@@ -64,7 +78,20 @@ export default function FieldConfigurator({ field, onSave, onCancel }: Configura
                         <label className="text-[10px] uppercase opacity-60">Input_Type</label>
                         <select
                             value={tempField.type}
-                            onChange={(e) => updateField({ type: e.target.value as FieldConfig['type'] })}
+                            onChange={(e) => {
+                                const nextType = e.target.value as FieldConfig['type'];
+
+                                if (nextType === 'color' && !isHexColor(tempField.default_value)) {
+                                    updateField({
+                                        type: nextType,
+                                        default_value: defaultColor,
+                                        placeholder: tempField.config?.separate_placeholder ? tempField.placeholder : defaultColor,
+                                    });
+                                    return;
+                                }
+
+                                updateField({ type: nextType });
+                            }}
                             className={`${inputClass} text-(--primary) appearance-none cursor-pointer`}
                         >
                             <option value="text" className="bg-black">Text</option>
@@ -131,15 +158,18 @@ export default function FieldConfigurator({ field, onSave, onCancel }: Configura
                 >
                     Discard
                 </button>
+                {onApplyToSimilar && (
+                    <button
+                        type="button"
+                        onClick={() => onApplyToSimilar(prepareFieldForSave(tempField))}
+                        className="flex-1 py-2 border border-(--primary)/50 text-(--primary) font-black text-[10px] uppercase hover:bg-(--primary)/10 transition-all cursor-pointer"
+                    >
+                        Apply_Similar
+                    </button>
+                )}
                 <button
                     type="button"
-                    onClick={() => {
-                        const firstSelectValue = tempField.type === 'select' ? getSelectDefaultValue(tempField) : '';
-                        onSave(tempField.type === 'select'
-                            ? { ...tempField, default_value: firstSelectValue, placeholder: firstSelectValue }
-                            : tempField
-                        );
-                    }}
+                    onClick={() => onSave(prepareFieldForSave(tempField))}
                     className="flex-1 py-2 bg-(--primary) text-black font-black text-[10px] uppercase hover:brightness-110 transition-all cursor-pointer shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]"
                 >
                     Apply_Protocol
@@ -148,6 +178,13 @@ export default function FieldConfigurator({ field, onSave, onCancel }: Configura
         </div>
     );
 }
+
+const prepareFieldForSave = (field: FieldConfig) => {
+    if (field.type !== 'select') return field;
+
+    const firstSelectValue = getSelectDefaultValue(field);
+    return { ...field, default_value: firstSelectValue, placeholder: firstSelectValue };
+};
 
 const directionPresets = ['to right', 'to left', 'to bottom', 'to top'];
 
@@ -253,23 +290,60 @@ function GradientConfig({ field, onChange }: { field: FieldConfig; onChange: (fi
 }
 
 function DefaultValueConfig({ field, onChange }: { field: FieldConfig; onChange: (field: FieldConfig) => void }) {
+    const separatePlaceholder = field.config?.separate_placeholder || false;
+    const updateDefaultValue = (value: string) => {
+        onChange({
+            ...field,
+            default_value: value,
+            placeholder: separatePlaceholder ? field.placeholder : value,
+        });
+    };
+    const updateSeparatePlaceholder = (checked: boolean) => {
+        onChange({
+            ...field,
+            placeholder: checked ? field.placeholder || field.default_value : field.default_value,
+            config: { ...field.config, separate_placeholder: checked },
+        });
+    };
+
     return (
         <div className="flex flex-col gap-1 animate-in fade-in duration-200">
-            <label className="text-[10px] uppercase opacity-60">Default_Value / Placeholder</label>
+            <label className="text-[10px] uppercase opacity-60">Default_Value</label>
             {field.type === 'bbcode' ? (
                 <textarea
                     rows={5}
                     value={field.default_value}
-                    onChange={(e) => onChange({ ...field, default_value: e.target.value, placeholder: e.target.value })}
+                    onChange={(e) => updateDefaultValue(e.target.value)}
                     className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all resize-y"
                 />
             ) : (
                 <input
                     type="text"
                     value={field.default_value}
-                    onChange={(e) => onChange({ ...field, default_value: e.target.value, placeholder: e.target.value })}
+                    onChange={(e) => updateDefaultValue(e.target.value)}
                     className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"
                 />
+            )}
+
+            <label className="mt-2 flex w-fit items-center gap-2 text-[10px] uppercase text-(--foreground)/60 cursor-pointer">
+                <input
+                    type="checkbox"
+                    checked={separatePlaceholder}
+                    onChange={(e) => updateSeparatePlaceholder(e.target.checked)}
+                />
+                Separate_Placeholder
+            </label>
+
+            {separatePlaceholder && (
+                <div className="flex flex-col gap-1 animate-in fade-in duration-200">
+                    <label className="text-[8px] opacity-40 uppercase">Placeholder</label>
+                    <input
+                        type="text"
+                        value={field.placeholder || ''}
+                        onChange={(e) => onChange({ ...field, placeholder: e.target.value })}
+                        className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"
+                    />
+                </div>
             )}
         </div>
     );
@@ -280,24 +354,24 @@ function ColorConfig({ field, onChange }: { field: FieldConfig; onChange: (field
         <div className="flex flex-col gap-1 animate-in slide-in-from-bottom-2">
             <label className="text-[10px] uppercase text-(--primary) font-bold">Initial_Color_Value (HEX)</label>
             <div className="flex gap-2">
-                <ColorPicker
-                    color={field.default_value.startsWith('#') ? field.default_value : '#FFFFFF'}
+                    <ColorPicker
+                        color={field.default_value.startsWith('#') ? field.default_value : defaultColor}
                     onChange={(newColor) => {
                         const upperColor = newColor.toUpperCase();
-                        onChange({ ...field, default_value: upperColor, placeholder: upperColor });
+                        onChange({ ...field, default_value: upperColor, placeholder: field.config?.separate_placeholder ? field.placeholder : upperColor });
                     }}
                 />
                 <input
                     type="text"
-                    placeholder="#FFFFFF"
+                    placeholder={defaultColor}
                     value={field.default_value}
                     onChange={(e) => {
                         let val = e.target.value.toUpperCase();
                         if (val && !val.startsWith('#')) val = '#' + val;
-                        if (val.length <= 9) onChange({ ...field, default_value: val, placeholder: val });
+                        if (val.length <= 9) onChange({ ...field, default_value: val, placeholder: field.config?.separate_placeholder ? field.placeholder : val });
                     }}
                     onBlur={() => {
-                        if (field.default_value === '#') onChange({ ...field, default_value: '', placeholder: '' });
+                        if (field.default_value === '#') onChange({ ...field, default_value: '', placeholder: field.config?.separate_placeholder ? field.placeholder : '' });
                     }}
                     className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
                 />
@@ -402,10 +476,44 @@ function SelectConfig({
     onOptionsChange: (options: SelectOptionConfig[]) => void;
     onFieldChange: (field: FieldConfig) => void;
 }) {
+    const existingCssVariable = useMemo(() => {
+        const format = options.find(opt => opt.format?.includes('--'))?.format || '';
+        return format.match(/(--[a-zA-Z0-9_-]+)\s*:/)?.[1] || '';
+    }, [options]);
+    const [presetCssVariable, setPresetCssVariable] = useState(existingCssVariable);
+
     const updateOption = (index: number, patch: Partial<SelectOptionConfig>) => {
         const nextOptions = [...options];
         nextOptions[index] = { ...nextOptions[index], ...patch };
         onOptionsChange(nextOptions);
+    };
+
+    const applyPreset = (preset: 'image-position' | 'image-size') => {
+        const format = cssDeclarationFormat(presetCssVariable);
+        const presetOptions: SelectOptionConfig[] = preset === 'image-position'
+            ? [
+                { option: 'center', value: '', type: '', default_value: '', has_format: false, format: '' },
+                { option: 'custom', value: 'Value', type: 'slider', default_value: '', has_format: true, format },
+            ]
+            : [
+                { option: 'cover', value: '', type: '', default_value: '', has_format: false, format: '' },
+                { option: 'contain', value: 'contain', type: '', default_value: '', has_format: true, format },
+                { option: 'auto', value: 'auto', type: '', default_value: '', has_format: true, format },
+                { option: 'custom', value: 'Value', type: 'slider', default_value: '', has_format: true, format },
+            ];
+
+        onFieldChange({
+            ...field,
+            type: 'select',
+            options: '',
+            default_value: '',
+            placeholder: '',
+            config: {
+                ...field.config,
+                select_options: presetOptions,
+                sliders: preset === 'image-position' ? imagePositionSliders : imageSizeSliders,
+            },
+        });
     };
 
     return (
@@ -419,6 +527,33 @@ function SelectConfig({
                 >
                     Add
                 </button>
+            </div>
+
+            <div className="border border-(--primary)/30 bg-black/20 p-3 space-y-2">
+                <label className="text-[10px] uppercase text-(--foreground)/60">Preset</label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
+                    <input
+                        type="text"
+                        value={presetCssVariable}
+                        onChange={(e) => setPresetCssVariable(e.target.value)}
+                        className={compactInputClass}
+                        placeholder="CSS variable เช่น --anml-pos / --anml-size"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => applyPreset('image-position')}
+                        className="cursor-pointer border border-(--primary)/40 px-2 py-1 text-[10px] uppercase text-(--primary) hover:bg-(--primary)/10 transition-colors"
+                    >
+                        Image_Position
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => applyPreset('image-size')}
+                        className="cursor-pointer border border-(--primary)/40 px-2 py-1 text-[10px] uppercase text-(--primary) hover:bg-(--primary)/10 transition-colors"
+                    >
+                        Image_Size
+                    </button>
+                </div>
             </div>
 
             <div className="border border-(--primary)/30 bg-black/20 p-3 space-y-3">
@@ -636,7 +771,6 @@ function CheckboxConfig({ field, onChange }: { field: FieldConfig; onChange: (fi
         onChange({
             ...field,
             default_value: defaultValue === trueValue ? value : field.default_value,
-            placeholder: defaultValue === trueValue ? value : field.placeholder,
             config: { ...field.config, true_value: value },
         });
     };
@@ -645,7 +779,6 @@ function CheckboxConfig({ field, onChange }: { field: FieldConfig; onChange: (fi
         onChange({
             ...field,
             default_value: defaultValue === falseValue ? value : field.default_value,
-            placeholder: defaultValue === falseValue ? value : field.placeholder,
             config: { ...field.config, false_value: value },
         });
     };
@@ -658,7 +791,7 @@ function CheckboxConfig({ field, onChange }: { field: FieldConfig; onChange: (fi
                     <label className="text-[8px] opacity-40 uppercase">Default_State</label>
                     <select
                         value={defaultValue}
-                        onChange={(e) => onChange({ ...field, default_value: e.target.value, placeholder: e.target.value })}
+                        onChange={(e) => onChange({ ...field, default_value: e.target.value })}
                         className={`${compactInputClass} text-(--primary)`}
                     >
                         <option value={trueValue} className="bg-black">{field.config?.true_label || 'ON'} / {trueValue}</option>

@@ -44,6 +44,7 @@ export interface FieldConfig {
         false_label?: string;
         true_value?: string;
         false_value?: string;
+        separate_placeholder?: boolean;
         [key: string]: any;
     };
     is_repeat?: boolean;
@@ -110,24 +111,44 @@ export const getSelectDefaultValue = (field: FieldConfig) => {
     return getSelectOptions(field)[0]?.value || '';
 };
 
+const formatSelectOutput = (format: string, value: string, rawValue?: any, field?: FieldConfig): string => {
+    let output = format.replace(/\{\{value\}\}/g, value);
+
+    if (Array.isArray(rawValue)) {
+        rawValue.forEach((item, index) => {
+            const unit = field?.config?.sliders?.[index]?.unit || '';
+            const itemValue = `${item}${unit}`;
+            output = output
+                .replace(new RegExp(`\\{\\{${index}\\}\\}`, 'g'), itemValue)
+                .replace(new RegExp(`\\{\\{value_${index + 1}\\}\\}`, 'g'), itemValue);
+        });
+    }
+
+    return output;
+};
+
 const resolveSelectValue = (field: FieldConfig, val: any): string => {
     const selectOptions = getSelectOptions(field);
     const selectedOption = typeof val?.option_index === 'number'
         ? selectOptions[val.option_index]
         : selectOptions.find(opt => opt.value === val?.value);
+    const rawCustomValue = val?.custom_value;
     const customValue = selectedOption?.type === 'gradient'
-        ? formatGradientValue(val?.custom_value)
-        : Array.isArray(val?.custom_value)
-        ? val.custom_value.map((v: string | number, idx: number) => `${v}${field.config?.sliders?.[idx]?.unit || ""}`).join(' ')
-        : val?.custom_value;
+        ? formatGradientValue(rawCustomValue)
+        : Array.isArray(rawCustomValue)
+        ? rawCustomValue.map((v: string | number, idx: number) => `${v}${field.config?.sliders?.[idx]?.unit || ""}`).join(' ')
+        : rawCustomValue;
 
     if (selectedOption?.type) {
         return selectedOption.has_format && selectedOption.format
-            ? selectedOption.format.replace(/\{\{value\}\}/g, customValue ?? '')
+            ? formatSelectOutput(selectedOption.format, customValue ?? '', rawCustomValue, field)
             : String(customValue ?? '');
     }
 
-    return selectedOption?.value ?? val?.value ?? '';
+    const optionValue = selectedOption?.value ?? val?.value ?? '';
+    return selectedOption?.has_format && selectedOption.format
+        ? formatSelectOutput(selectedOption.format, optionValue, optionValue, field)
+        : optionValue;
 };
 
 export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
@@ -136,8 +157,16 @@ export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
     const nextConfig = { ...field.config };
     delete nextConfig[`has_${'custom_slider'}`];
     delete nextConfig[`custom_${'trigger'}`];
+    if (field.type === 'select' || field.type === 'slider' || field.type === 'checkbox') {
+        delete nextConfig.separate_placeholder;
+    }
 
-    return { ...field, config: nextConfig };
+    const nextField = { ...field, config: nextConfig };
+    if (field.type === 'select' || field.type === 'slider' || field.type === 'checkbox') {
+        delete nextField.placeholder;
+    }
+
+    return nextField;
 };
 
 const preserveTextNewlines = (html: string): string => {
@@ -414,7 +443,17 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
             if (field.type === 'select' && Array.isArray(val)) {
                 const sliderOption = getSelectOptions(field).find(opt => opt.type === 'slider');
                 if (sliderOption) {
-                    val = val.map((v, idx) => `${v}${field.config?.sliders?.[idx]?.unit || ""}`).join(' ');
+                    const sliderValue = val.map((v, idx) => `${v}${field.config?.sliders?.[idx]?.unit || ""}`).join(' ');
+                    val = sliderOption.has_format && sliderOption.format
+                        ? formatSelectOutput(sliderOption.format, sliderValue, val, field)
+                        : sliderValue;
+                }
+            }
+
+            if (field.type === 'select' && typeof val === 'string') {
+                const selectedOption = getSelectOptions(field).find(opt => opt.value === val);
+                if (selectedOption?.has_format && selectedOption.format) {
+                    val = formatSelectOutput(selectedOption.format, val, val, field);
                 }
             }
 
