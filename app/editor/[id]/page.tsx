@@ -42,6 +42,13 @@ const getDefaultValue = (field: FieldConfig) => {
         return field.config?.gradient || defaultGradientValue;
     }
 
+    if (field.type === 'checkbox') {
+        const trueValue = field.config?.true_value || 'true';
+        const falseValue = field.config?.false_value || 'false';
+
+        return field.default_value === trueValue ? trueValue : falseValue;
+    }
+
     if (field.type === 'select') {
         const defaultValue = getSelectDefaultValue(field);
         const defaultOption = getSelectOptions(field).find(opt => opt.value === defaultValue);

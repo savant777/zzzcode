@@ -24,13 +24,6 @@ export default function FieldConfigurator({ field, onSave, onCancel }: Configura
         setTempField(prev => ({ ...prev, ...patch }));
     };
 
-    const updateConfig = (configPatch: NonNullable<FieldConfig['config']>) => {
-        setTempField(prev => ({
-            ...prev,
-            config: { ...prev.config, ...configPatch },
-        }));
-    };
-
     const saveSelectOptions = (options: SelectOptionConfig[]) => {
         const normalized: SelectOptionConfig[] = options.map(opt => ({
             option: opt.option,
@@ -107,7 +100,7 @@ export default function FieldConfigurator({ field, onSave, onCancel }: Configura
                 )}
 
                 {tempField.type === 'checkbox' && (
-                    <CheckboxConfig field={tempField} onConfigChange={updateConfig} />
+                    <CheckboxConfig field={tempField} onChange={setTempField} />
                 )}
 
                 {tempField.type !== 'color' &&
@@ -630,15 +623,52 @@ function SelectOptionDefaultConfig({
     );
 }
 
-function CheckboxConfig({ field, onConfigChange }: { field: FieldConfig; onConfigChange: (patch: NonNullable<FieldConfig['config']>) => void }) {
+function CheckboxConfig({ field, onChange }: { field: FieldConfig; onChange: (field: FieldConfig) => void }) {
+    const trueValue = field.config?.true_value ?? 'true';
+    const falseValue = field.config?.false_value ?? 'false';
+    const defaultValue = field.default_value === trueValue ? trueValue : falseValue;
+
+    const updateCheckboxConfig = (patch: NonNullable<FieldConfig['config']>) => {
+        onChange({ ...field, config: { ...field.config, ...patch } });
+    };
+
+    const updateTrueValue = (value: string) => {
+        onChange({
+            ...field,
+            default_value: defaultValue === trueValue ? value : field.default_value,
+            placeholder: defaultValue === trueValue ? value : field.placeholder,
+            config: { ...field.config, true_value: value },
+        });
+    };
+
+    const updateFalseValue = (value: string) => {
+        onChange({
+            ...field,
+            default_value: defaultValue === falseValue ? value : field.default_value,
+            placeholder: defaultValue === falseValue ? value : field.placeholder,
+            config: { ...field.config, false_value: value },
+        });
+    };
+
     return (
         <div className="mt-4 p-3 bg-black/40 border border-(--primary)/50 space-y-1 animate-in fade-in duration-300">
             <p className="text-[10px] text-(--primary) font-bold uppercase">Checkbox_Protocol</p>
-            <div className="grid grid-cols-2 gap-4">
-                <CheckboxTextInput label="Checked_Value (If_True)" value={field.config?.true_value ?? 'true'} onChange={(value) => onConfigChange({ true_value: value })} />
-                <CheckboxTextInput label="Unchecked_Value (If_False)" value={field.config?.false_value ?? 'false'} onChange={(value) => onConfigChange({ false_value: value })} />
-                <CheckboxTextInput label="Label_When_Checked" value={field.config?.true_label ?? 'ON'} onChange={(value) => onConfigChange({ true_label: value })} tone="emerald" />
-                <CheckboxTextInput label="Label_When_Unchecked" value={field.config?.false_label ?? 'OFF'} onChange={(value) => onConfigChange({ false_label: value })} tone="rose" />
+            <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="flex flex-col gap-1 col-span-2">
+                    <label className="text-[8px] opacity-40 uppercase">Default_State</label>
+                    <select
+                        value={defaultValue}
+                        onChange={(e) => onChange({ ...field, default_value: e.target.value, placeholder: e.target.value })}
+                        className={`${compactInputClass} text-(--primary)`}
+                    >
+                        <option value={trueValue} className="bg-black">{field.config?.true_label || 'ON'} / {trueValue}</option>
+                        <option value={falseValue} className="bg-black">{field.config?.false_label || 'OFF'} / {falseValue}</option>
+                    </select>
+                </div>
+                <CheckboxTextInput label="Checked_Value (If_True)" value={trueValue} onChange={updateTrueValue} />
+                <CheckboxTextInput label="Unchecked_Value (If_False)" value={falseValue} onChange={updateFalseValue} />
+                <CheckboxTextInput label="Label_When_Checked" value={field.config?.true_label ?? 'ON'} onChange={(value) => updateCheckboxConfig({ true_label: value })} tone="emerald" />
+                <CheckboxTextInput label="Label_When_Unchecked" value={field.config?.false_label ?? 'OFF'} onChange={(value) => updateCheckboxConfig({ false_label: value })} tone="rose" />
             </div>
         </div>
     );

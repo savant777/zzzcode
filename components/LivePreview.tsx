@@ -119,32 +119,42 @@ export default function LivePreview({ html }: { html: string }) {
     `;
 
     const cropOffset = Math.max(0, (viewportWidth - postBodyWidth) / 2);
-    const centeredOffset = Math.max(0, (containerWidth / scale - postBodyWidth) / 2);
+    const scaledWidth = postBodyWidth * scale;
+    const scaledHeight = iframeHeight * scale;
 
     return (
         <div ref={containerRef} className="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hide">
             <div 
                 style={{
-                    width: `${postBodyWidth}px`,
-                    height: `${iframeHeight}px`,
-                    overflow: 'hidden',
-                    transform: `scale(${scale}) translateX(${centeredOffset}px)`,
-                    transformOrigin: 'top left',
-                    transition: 'transform 0.2s ease-out',
+                    width: `${scaledWidth}px`,
+                    height: `${scaledHeight}px`,
+                    margin: '0 auto',
+                    overflow: 'visible',
+                    transition: 'width 0.2s ease-out, height 0.2s ease-out',
                 }}
             >
-                <iframe
-                    ref={iframeRef}
-                    srcDoc={`<!DOCTYPE html><html><head>${styles}</head><body><div class="post_body scaleimages">${html}</div></body></html>`}
+                <div
                     style={{
-                        width: `${viewportWidth}px`,
+                        width: `${postBodyWidth}px`,
                         height: `${iframeHeight}px`,
-                        border: 'none',
-                        marginLeft: `-${cropOffset}px`,
+                        overflow: 'hidden',
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'top left',
+                        transition: 'transform 0.2s ease-out',
                     }}
-                />
+                >
+                    <iframe
+                        ref={iframeRef}
+                        srcDoc={`<!DOCTYPE html><html><head>${styles}</head><body><div class="post_body scaleimages">${html}</div></body></html>`}
+                        style={{
+                            width: `${viewportWidth}px`,
+                            height: `${iframeHeight}px`,
+                            border: 'none',
+                            marginLeft: `-${cropOffset}px`,
+                        }}
+                    />
+                </div>
             </div>
-            <div style={{ height: `${Math.max(0, (iframeHeight * scale) - iframeHeight)}px` }} />
         </div>
     );
 }

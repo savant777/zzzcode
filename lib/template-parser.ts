@@ -141,11 +141,26 @@ export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
 };
 
 const preserveTextNewlines = (html: string): string => {
-    return html.split(/(<[^>]+>)/g).map(part => {
+    const parts = html.split(/(<[^>]+>)/g);
+    const isDivOrParagraphTag = (part?: string) => /^<\/?\s*(div|p)(\s|>|\/)/i.test(part || '');
+    const isClosingDivOrParagraphTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
+    const isHrTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
+    return parts.map((part, index) => {
         if (part.startsWith('<') && part.endsWith('>')) return part;
-        if (!part.trim()) return part;
+        const previousTag = [...parts.slice(0, index)].reverse().find(item => item.startsWith('<') && item.endsWith('>'));
+        const nextTag = parts.slice(index + 1).find(item => item.startsWith('<') && item.endsWith('>'));
 
-        return part.replace(/\r?\n/g, '<br>');
+        if (!part.trim()) {
+            if (!/\r?\n/.test(part)) return part;
+
+            return isDivOrParagraphTag(previousTag) || isClosingDivOrParagraphTag(nextTag) || isHrTag(previousTag) ? '' : '<br>';
+        }
+
+        const trimmedPart = part
+            .replace(isDivOrParagraphTag(previousTag) || isHrTag(previousTag) ? /^[ \t]*\r?\n/ : /^$/, '')
+            .replace(isDivOrParagraphTag(nextTag) ? /\r?\n[ \t]*$/ : /$/, '');
+
+        return trimmedPart.replace(/\r?\n/g, '<br>');
     }).join('');
 };
 
