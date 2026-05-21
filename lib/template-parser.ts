@@ -174,6 +174,8 @@ const preserveTextNewlines = (html: string): string => {
     const isDivOrParagraphTag = (part?: string) => /^<\/?\s*(div|p)(\s|>|\/)/i.test(part || '');
     const isClosingDivOrParagraphTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
     const isHrTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
+    const isLinkTag = (part?: string) => /^<\s*link(\s|>|\/)/i.test(part || '');
+    const isBrTag = (part?: string) => /^<\s*br(\s|>|\/)/i.test(part || '');
     return parts.map((part, index) => {
         if (part.startsWith('<') && part.endsWith('>')) return part;
         const previousTag = [...parts.slice(0, index)].reverse().find(item => item.startsWith('<') && item.endsWith('>'));
@@ -182,7 +184,13 @@ const preserveTextNewlines = (html: string): string => {
         if (!part.trim()) {
             if (!/\r?\n/.test(part)) return part;
 
-            return isDivOrParagraphTag(previousTag) || isClosingDivOrParagraphTag(nextTag) || isHrTag(previousTag) ? '' : '<br>';
+            return isDivOrParagraphTag(previousTag) ||
+                isClosingDivOrParagraphTag(nextTag) ||
+                isHrTag(previousTag) ||
+                isLinkTag(previousTag) ||
+                isBrTag(previousTag)
+                ? ''
+                : '<br>';
         }
 
         const trimmedPart = part
