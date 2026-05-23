@@ -28,6 +28,7 @@ const cssDeclarationFormat = (cssVariable: string) => {
     const trimmed = cssVariable.trim();
     return trimmed ? `${trimmed}: {{value}};` : '{{value}}';
 };
+const cssDeclarationValue = (cssVariable: string, value: string) => cssDeclarationFormat(cssVariable).replace('{{value}}', value);
 
 export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onCancel }: ConfiguratorProps) {
     const [tempField, setTempField] = useState<FieldConfig>({ ...field });
@@ -497,8 +498,8 @@ function SelectConfig({
             ]
             : [
                 { option: 'cover', value: '', type: '', default_value: '', has_format: false, format: '' },
-                { option: 'contain', value: 'contain', type: '', default_value: '', has_format: true, format },
-                { option: 'auto', value: 'auto', type: '', default_value: '', has_format: true, format },
+                { option: 'contain', value: cssDeclarationValue(presetCssVariable, 'contain'), type: '', default_value: '', has_format: false, format: '' },
+                { option: 'auto', value: cssDeclarationValue(presetCssVariable, 'auto'), type: '', default_value: '', has_format: false, format: '' },
                 { option: 'custom', value: 'Value', type: 'slider', default_value: '', has_format: true, format },
             ];
 
