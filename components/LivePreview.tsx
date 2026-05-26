@@ -113,6 +113,18 @@ export default function LivePreview({ html }: { html: string }) {
             hr { color: #fff; background: #303030; height: 1px; border: 0px; margin: 1em 0; }
             a { color: rgb(43, 120, 255); text-decoration: none; transition: .3s; }
             a:hover { text-decoration: underline; }
+            .hidden-content-title {
+                margin-top: 10px;
+                font-size: 22px;
+                color: red;
+                text-align: center;
+            }
+            .hidden-content-body {
+                background: #000;
+                padding: 15px;
+                border-radius: 6px;
+                color: white;
+            }
 
             ::-webkit-scrollbar { display: none; }
         </style>
