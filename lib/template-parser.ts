@@ -269,6 +269,7 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
         .replace(/\[s\]([\s\S]*?)\[\/s\]/g, '<span style="text-decoration: line-through;" class="mycode_s">$1</span>')
         .replace(/\[align=(left|center|right|justify)\]([\s\S]*?)\[\/align\]/g, '<div style="text-align: $1;" class="mycode_align">$2</div>')
         .replace(/\[color=(#?[a-fA-F0-9]{3,6})\]([\s\S]*?)\[\/color\]/g, '<span style="color: $1;" class="mycode_color">$2</span>')
+        .replace(/\[hide\]([\s\S]*?)\[\/hide\]/gi, '<div class="hidden-content"><div class="hidden-content-title"><strong>เนื้อหาที่ถูกซ่อน</strong></div><div class="hidden-content-body">$1</div></div>')
         .replace(/\[hr\]/gi, '<hr class="mycode_hr">')
         .replace(/\[img=(\d+)x(\d+)\]([\s\S]*?)\[\/img\]/gi, (match, w, h, url) => {
             const fileName = url.split('/').pop() || "image";
