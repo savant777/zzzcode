@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { FieldConfig, GradientValue, defaultGradientValue, getSelectOptions } from '@/lib/template-parser';
 import BBCodeEditor from './BBCodeEditor';
 import ColorPicker from './ColorPicker';
@@ -11,6 +12,59 @@ interface FieldRendererProps {
     onChange: (varName: string, newValue: any) => void;
     className?: string;
 }
+
+const isSafeLink = (href: string) => /^https?:\/\//i.test(href);
+
+const renderDescriptionText = (text: string, keyPrefix: string): ReactNode[] => {
+    const nodes: ReactNode[] = [];
+    const urlRegex = /(https?:\/\/[^\s<]+)/gi;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = urlRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+
+        const href = match[0];
+        nodes.push(
+            <a key={`${keyPrefix}-url-${match.index}`} href={href} target="_blank" rel="noopener noreferrer" className="text-(--primary) underline underline-offset-2">
+                {href}
+            </a>
+        );
+        lastIndex = match.index + href.length;
+    }
+
+    if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+    return nodes;
+};
+
+const renderDescription = (description: string): ReactNode[] => {
+    const nodes: ReactNode[] = [];
+    const anchorRegex = /<a\s+href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = anchorRegex.exec(description)) !== null) {
+        if (match.index > lastIndex) {
+            nodes.push(...renderDescriptionText(description.slice(lastIndex, match.index), `text-${lastIndex}`));
+        }
+
+        const href = match[2];
+        const label = match[3].replace(/<[^>]*>/g, '');
+        nodes.push(isSafeLink(href) ? (
+            <a key={`anchor-${match.index}`} href={href} target="_blank" rel="noopener noreferrer" className="text-(--primary) underline underline-offset-2">
+                {label || href}
+            </a>
+        ) : label);
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < description.length) {
+        nodes.push(...renderDescriptionText(description.slice(lastIndex), `text-${lastIndex}`));
+    }
+
+    return nodes;
+};
 
 export default function FieldRenderer({ field, value, onChange, className }: FieldRendererProps) {
     const [showDescription, setShowDescription] = useState(false);
@@ -122,7 +176,7 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
             </div>
             {field.description && showDescription && (
                 <p className="font-Google-Sans text-[10px] leading-relaxed text-(--foreground)/45">
-                    {field.description}
+                    {renderDescription(field.description)}
                 </p>
             )}
                 
