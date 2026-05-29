@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 export default function LivePreview({ html }: { html: string }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const latestHtmlRef = useRef(html);
+    const observerRef = useRef<MutationObserver | null>(null);
+    const heightFrameRef = useRef<number | null>(null);
     const [scale, setScale] = useState(1);
     const [iframeHeight, setIframeHeight] = useState(500);
     const [viewportWidth, setViewportWidth] = useState(1440);
@@ -39,40 +42,61 @@ export default function LivePreview({ html }: { html: string }) {
         };
     }, []);
 
+    const updateIframeHeight = (doc: Document) => {
+        if (heightFrameRef.current) cancelAnimationFrame(heightFrameRef.current);
+
+        heightFrameRef.current = requestAnimationFrame(() => {
+            if (doc.body) {
+                setIframeHeight(doc.body.scrollHeight);
+            }
+        });
+    };
+
+    const updatePreviewHtml = () => {
+        const iframe = iframeRef.current;
+        const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+        const postBody = doc?.querySelector('.post_body');
+
+        if (!doc || !postBody) return;
+
+        postBody.innerHTML = latestHtmlRef.current;
+        updateIframeHeight(doc);
+    };
+
     useEffect(() => {
         const iframe = iframeRef.current;
         if (!iframe) return;
 
         const handleIframeLoad = () => {
             const doc = iframe.contentDocument || iframe.contentWindow?.document;
-            
-            if (doc && doc.body) {
-                const observer = new MutationObserver(() => {
-                    if (doc.body) {
-                        setIframeHeight(doc.body.scrollHeight);
-                    }
-                });
 
-                observer.observe(doc.body, { 
-                    childList: true, 
-                    subtree: true, 
-                    attributes: true 
-                });
+            observerRef.current?.disconnect();
 
-                setIframeHeight(doc.body.scrollHeight);
+            if (!doc?.body) return;
 
-                return () => observer.disconnect();
-            }
+            observerRef.current = new MutationObserver(() => updateIframeHeight(doc));
+            observerRef.current.observe(doc.body, {
+                childList: true,
+                subtree: true,
+                attributes: true
+            });
+
+            updatePreviewHtml();
         };
 
         iframe.addEventListener('load', handleIframeLoad);
-
-        const cleanup = handleIframeLoad();
+        handleIframeLoad();
         
         return () => {
             iframe.removeEventListener('load', handleIframeLoad);
-            if (cleanup) cleanup();
+            observerRef.current?.disconnect();
+            if (heightFrameRef.current) cancelAnimationFrame(heightFrameRef.current);
         };
+    }, []);
+
+    useEffect(() => {
+        latestHtmlRef.current = html;
+        updatePreviewHtml();
     }, [html]);
 
     const styles = `
@@ -157,7 +181,7 @@ export default function LivePreview({ html }: { html: string }) {
                 >
                     <iframe
                         ref={iframeRef}
-                        srcDoc={`<!DOCTYPE html><html><head>${styles}</head><body><div class="post_body scaleimages">${html}</div></body></html>`}
+                        srcDoc={`<!DOCTYPE html><html><head>${styles}</head><body><div class="post_body scaleimages"></div></body></html>`}
                         style={{
                             width: `${viewportWidth}px`,
                             height: `${iframeHeight}px`,
