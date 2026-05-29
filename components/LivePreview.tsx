@@ -1,6 +1,18 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
 
+const stylesheetLinkRegex = /<link\b(?=[^>]*\brel=(["'])stylesheet\1)(?=[^>]*\bhref=(["'])(.*?)\2)[^>]*>/gi;
+
+const extractStylesheetLinks = (html: string) => {
+    const hrefs: string[] = [];
+    const bodyHtml = html.replace(stylesheetLinkRegex, (_, _relQuote, _hrefQuote, href) => {
+        if (href && !hrefs.includes(href)) hrefs.push(href);
+        return '';
+    });
+
+    return { bodyHtml, hrefs };
+};
+
 export default function LivePreview({ html }: { html: string }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -59,7 +71,27 @@ export default function LivePreview({ html }: { html: string }) {
 
         if (!doc || !postBody) return;
 
-        postBody.innerHTML = latestHtmlRef.current;
+        const { bodyHtml, hrefs } = extractStylesheetLinks(latestHtmlRef.current);
+        const existingLinks = Array.from(doc.head.querySelectorAll<HTMLLinkElement>('link[data-live-preview-stylesheet="true"]'));
+
+        existingLinks.forEach(link => {
+            if (!hrefs.includes(link.href) && !hrefs.includes(link.getAttribute('href') || '')) {
+                link.remove();
+            }
+        });
+
+        hrefs.forEach(href => {
+            const hasLink = existingLinks.some(link => link.href === href || link.getAttribute('href') === href);
+            if (hasLink) return;
+
+            const link = doc.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.dataset.livePreviewStylesheet = 'true';
+            doc.head.appendChild(link);
+        });
+
+        postBody.innerHTML = bodyHtml;
         updateIframeHeight(doc);
     };
 
