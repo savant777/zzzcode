@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +12,118 @@ import FieldRenderer from '@/components/FieldRenderer';
 import LivePreview from '@/components/LivePreview';
 
 type GroupedFields = Record<string, FieldConfig[]>;
+type HistoryUpdater<T> = T | ((previous: T) => T);
+
+const HISTORY_LIMIT = 50;
+const HISTORY_DELAY = 700;
+
+const useUndoableState = <T,>(initialValue: T) => {
+    const [value, setValueState] = useState<T>(initialValue);
+    const [past, setPast] = useState<T[]>([]);
+    const [future, setFuture] = useState<T[]>([]);
+    const valueRef = useRef(value);
+    const pendingSnapshotRef = useRef<T | null>(null);
+    const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        valueRef.current = value;
+    }, [value]);
+
+    const clearHistoryTimer = useCallback(() => {
+        if (historyTimerRef.current) {
+            clearTimeout(historyTimerRef.current);
+            historyTimerRef.current = null;
+        }
+    }, []);
+
+    const pushPast = useCallback((snapshot: T) => {
+        setPast(prev => {
+            if (prev[prev.length - 1] === snapshot) return prev;
+            return [...prev.slice(Math.max(0, prev.length - HISTORY_LIMIT + 1)), snapshot];
+        });
+    }, []);
+
+    const commitPending = useCallback(() => {
+        if (pendingSnapshotRef.current === null) return;
+
+        const snapshot = pendingSnapshotRef.current;
+        pendingSnapshotRef.current = null;
+        if (snapshot !== valueRef.current) {
+            pushPast(snapshot);
+        }
+    }, [pushPast]);
+
+    const setValue = useCallback((updater: HistoryUpdater<T>) => {
+        setValueState(prev => {
+            if (pendingSnapshotRef.current === null) {
+                pendingSnapshotRef.current = prev;
+            }
+
+            return typeof updater === 'function'
+                ? (updater as (previous: T) => T)(prev)
+                : updater;
+        });
+
+        setFuture([]);
+        clearHistoryTimer();
+        historyTimerRef.current = setTimeout(commitPending, HISTORY_DELAY);
+    }, [clearHistoryTimer, commitPending]);
+
+    const reset = useCallback((nextValue: T) => {
+        clearHistoryTimer();
+        pendingSnapshotRef.current = null;
+        setPast([]);
+        setFuture([]);
+        setValueState(nextValue);
+    }, [clearHistoryTimer]);
+
+    const undo = useCallback(() => {
+        clearHistoryTimer();
+
+        if (pendingSnapshotRef.current !== null) {
+            const snapshot = pendingSnapshotRef.current;
+            pendingSnapshotRef.current = null;
+            setFuture(prev => [valueRef.current, ...prev]);
+            setValueState(snapshot);
+            return;
+        }
+
+        setPast(prev => {
+            const snapshot = prev[prev.length - 1];
+            if (!snapshot) return prev;
+
+            setFuture(nextFuture => [valueRef.current, ...nextFuture]);
+            setValueState(snapshot);
+            return prev.slice(0, -1);
+        });
+    }, [clearHistoryTimer]);
+
+    const redo = useCallback(() => {
+        clearHistoryTimer();
+        pendingSnapshotRef.current = null;
+
+        setFuture(prev => {
+            const snapshot = prev[0];
+            if (!snapshot) return prev;
+
+            setPast(nextPast => [...nextPast.slice(Math.max(0, nextPast.length - HISTORY_LIMIT + 1)), valueRef.current]);
+            setValueState(snapshot);
+            return prev.slice(1);
+        });
+    }, [clearHistoryTimer]);
+
+    useEffect(() => () => clearHistoryTimer(), [clearHistoryTimer]);
+
+    return {
+        value,
+        setValue,
+        reset,
+        undo,
+        redo,
+        canUndo: pendingSnapshotRef.current !== null || past.length > 0,
+        canRedo: future.length > 0,
+    };
+};
 
 const groupFieldList = (fieldList: FieldConfig[]): GroupedFields => {
     const groups: GroupedFields = {};
@@ -158,7 +270,15 @@ export default function EditorPage() {
     });
 
     const [fields, setFields] = useState<FieldConfig[]>([]);
-    const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
+    const {
+        value: fieldValues,
+        setValue: setFieldValues,
+        reset: resetFieldValues,
+        undo,
+        redo,
+        canUndo,
+        canRedo,
+    } = useUndoableState<Record<string, any>>({});
 
     // --- 2. Computed Preview ---
     const liveHTML = useMemo(() => {
@@ -241,7 +361,7 @@ export default function EditorPage() {
                     setFields(initialFields);
                     
                     const defaults = buildInitialValues(initialFields);
-                    setFieldValues(defaults);
+                    resetFieldValues(defaults);
 
                     // Check Local Draft
                     const savedDraft = localStorage.getItem(STORAGE_KEY);
@@ -252,7 +372,7 @@ export default function EditorPage() {
                                 setFormData(parsed.formData);
                                 const draftFields = (parsed.fields || initialFields).map(normalizeFieldConfig);
                                 setFields(draftFields);
-                                setFieldValues(buildInitialValues(draftFields, parsed.fieldValues || defaults));
+                                resetFieldValues(buildInitialValues(draftFields, parsed.fieldValues || defaults));
                             }
                         } catch (e) { console.error(e); }
                     }
@@ -276,6 +396,27 @@ export default function EditorPage() {
         }, 2000);
         return () => clearTimeout(timer);
     }, [formData, fields, fieldValues]);
+
+    useEffect(() => {
+        const handleHistoryShortcut = (event: KeyboardEvent) => {
+            const isModifier = event.ctrlKey || event.metaKey;
+            if (!isModifier) return;
+
+            const key = event.key.toLowerCase();
+            if (key === 'z' && !event.shiftKey) {
+                event.preventDefault();
+                undo();
+            }
+
+            if (key === 'y' || (key === 'z' && event.shiftKey)) {
+                event.preventDefault();
+                redo();
+            }
+        };
+
+        window.addEventListener('keydown', handleHistoryShortcut);
+        return () => window.removeEventListener('keydown', handleHistoryShortcut);
+    }, [undo, redo]);
 
     // --- 4. Handlers ---
     const handleValueChange = (varName: string, value: any) => {
@@ -384,6 +525,24 @@ export default function EditorPage() {
                             <div className="flex justify-between items-center border-b border-(--primary)/75 pb-2">
                                 <h3 className="text-xl text-(--primary) uppercase">Input_Fields</h3>
                                 <div className="flex-1 flex justify-end gap-1">
+                                    <button
+                                        type="button"
+                                        disabled={!canUndo}
+                                        onClick={undo}
+                                        className="border border-(--primary)/30 px-2 py-0.5 text-[10px] uppercase text-(--primary) hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25 cursor-pointer transition-colors"
+                                        title="Undo (Ctrl+Z)"
+                                    >
+                                        Undo
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!canRedo}
+                                        onClick={redo}
+                                        className="border border-(--primary)/30 px-2 py-0.5 text-[10px] uppercase text-(--primary) hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25 cursor-pointer transition-colors"
+                                        title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+                                    >
+                                        Redo
+                                    </button>
                                     <button 
                                         type="button"
                                         onClick={() => setModalType('clear_draft')}
