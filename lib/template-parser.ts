@@ -124,6 +124,14 @@ const formatSelectOutput = (format: string, value: string, rawValue?: any, field
         });
     }
 
+    if (rawValue && typeof rawValue === 'object' && Array.isArray(rawValue.colors)) {
+        rawValue.colors.forEach((color: string, index: number) => {
+            output = output.replace(new RegExp(`\\{\\{color_${index + 1}\\}\\}`, 'g'), color);
+        });
+
+        output = output.replace(/\{\{gradient_direction\}\}/g, rawValue.direction || defaultGradientValue.direction);
+    }
+
     return output;
 };
 
