@@ -18,6 +18,7 @@ export default function AddTemplatePage() {
 
     // --- 1. States ---
     const [loading, setLoading] = useState(false);
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const [availableTags, setAvailableTags] = useState<any[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
@@ -71,6 +72,15 @@ export default function AddTemplatePage() {
     // Load Tags & Draft
     useEffect(() => {
         const initAddPage = async () => {
+            setIsCheckingAuth(true);
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                toast.error("ERROR_ACCESS_DENIED: LOGIN_REQUIRED");
+                router.replace('/?group=category&tag=all');
+                return;
+            }
+
             const { data } = await supabase.from('tags').select('id, name, slug, tag_groups(name)').eq('is_active', true);
             if (data) setAvailableTags(data);
 
@@ -83,9 +93,11 @@ export default function AddTemplatePage() {
                     if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
                 } catch (e) { console.error("Draft load error", e); }
             }
+
+            setIsCheckingAuth(false);
         };
         initAddPage();
-    }, []);
+    }, [router]);
 
     // Smart Sync
     useEffect(() => {
@@ -202,6 +214,26 @@ export default function AddTemplatePage() {
         localStorage.removeItem(STORAGE_KEY);
         window.location.reload();
     };
+
+    if (isCheckingAuth) {
+        return (
+            <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
+                <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
+                    <Breadcrumbs editorMode="CREATE" />
+                    <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
+                        <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
+                        <span className="lg:hidden">&lt; BACK</span>
+                    </button>
+                </div>
+
+                <div className="flex-1 lg:flex overflow-y-auto lg:overflow-hidden px-4 mb-4 scrollbar-hide">
+                    <div className="min-h-full flex-1 flex items-center justify-center border border-dashed border-(--primary)/10 text-[10px] opacity-20 uppercase tracking-widest select-none">
+                        Verifying_Access...
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">

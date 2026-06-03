@@ -100,6 +100,14 @@ export default function EditTemplatePage() {
     useEffect(() => {
         const initEditPage = async () => {
             setLoading(true);
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                toast.error("ERROR_ACCESS_DENIED: LOGIN_REQUIRED");
+                router.replace('/?group=category&tag=all');
+                return;
+            }
+
             const { data: allTags } = await supabase.from('tags').select('id, name').eq('is_active', true);
             if (allTags) setAvailableTags(allTags);
 
@@ -139,7 +147,7 @@ export default function EditTemplatePage() {
             setLoading(false);
         };
         initEditPage();
-    }, [templateId]);
+    }, [templateId, router]);
 
     // Smart Sync
     useEffect(() => {
