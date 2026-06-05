@@ -10,6 +10,7 @@ import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import AutoResizeTextarea from '@/components/AutoResizeTextarea';
 import TemplateBlockContainer from '@/components/TemplateBlockContainer';
+import { CreatorSession, requireCreator } from '@/lib/creator';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
 
 export default function AddTemplatePage() {
@@ -19,8 +20,10 @@ export default function AddTemplatePage() {
     // --- 1. States ---
     const [loading, setLoading] = useState(false);
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+    const [creatorSession, setCreatorSession] = useState<CreatorSession | null>(null);
     const [availableTags, setAvailableTags] = useState<any[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [creatorTagId, setCreatorTagId] = useState<string | null>(null);
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
     const [fields, setFields] = useState<FieldConfig[]>([]);
     const [modalType, setModalType] = useState<'clear_draft' | null>(null);
@@ -73,16 +76,65 @@ export default function AddTemplatePage() {
     useEffect(() => {
         const initAddPage = async () => {
             setIsCheckingAuth(true);
-            const { data: { user } } = await supabase.auth.getUser();
+            const session = await requireCreator();
 
-            if (!user) {
+            if (!session.user) {
                 toast.error("ERROR_ACCESS_DENIED: LOGIN_REQUIRED");
                 router.replace('/?group=category&tag=all');
                 return;
             }
 
-            const { data } = await supabase.from('tags').select('id, name, slug, tag_groups(name)').eq('is_active', true);
-            if (data) setAvailableTags(data);
+            if (!session.canAccessCreatorTools) {
+                toast.error("ERROR_ACCESS_DENIED: CREATOR_REQUIRED");
+                router.replace('/?group=category&tag=all');
+                return;
+            }
+
+            setCreatorSession(session);
+
+            const { data } = await supabase
+                .from('tags')
+                .select('id, group_id, name, slug, user_id, tag_groups(name)')
+                .eq('is_active', true)
+                .or(`user_id.is.null,user_id.eq.${session.user.id}`);
+
+            let nextTags = data || [];
+            let creatorTag = nextTags.find((tag: any) =>
+                tag.user_id === session.user?.id &&
+                tag.tag_groups?.name?.toLowerCase() === 'creators'
+            );
+
+            if (!creatorTag && session.creator) {
+                const { data: creatorsGroup } = await supabase
+                    .from('tag_groups')
+                    .select('id, name')
+                    .ilike('name', 'creators')
+                    .single();
+
+                if (creatorsGroup) {
+                    const { data: insertedTag, error: creatorTagError } = await supabase
+                        .from('tags')
+                        .insert([{
+                            group_id: creatorsGroup.id,
+                            user_id: session.user.id,
+                            name: session.creator.display_name,
+                            slug: session.creator.slug || null,
+                            is_active: true,
+                        }])
+                        .select('id, group_id, name, slug, user_id, tag_groups(name)')
+                        .single();
+
+                    if (creatorTagError) {
+                        console.error('Creator tag creation error:', creatorTagError);
+                    } else if (insertedTag) {
+                        creatorTag = insertedTag;
+                        nextTags = [...nextTags, insertedTag];
+                    }
+                }
+            }
+
+            if (creatorTag) setCreatorTagId(String(creatorTag.id));
+            setAvailableTags(nextTags.filter((tag: any) => tag.tag_groups?.name?.toLowerCase() !== 'creators'));
 
             const savedDraft = localStorage.getItem(STORAGE_KEY);
             if (savedDraft) {
@@ -156,7 +208,9 @@ export default function AddTemplatePage() {
         const toastId = toast.loading("SYSTEM: Syncing_Module...");
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            if (!creatorSession?.user || !creatorSession.isCreator) {
+                throw new Error("CREATOR_SESSION_REQUIRED");
+            }
             
             const { data: templateData, error: templateError } = await supabase
                 .from('templates')
@@ -165,16 +219,21 @@ export default function AddTemplatePage() {
                     password: formData.is_personal ? formData.password : null,
                     fields_config: fields.map(normalizeFieldConfig),
                     is_active: true,
-                    user_id: user?.id
+                    user_id: creatorSession.user.id
                 }])
                 .select().single();
 
             if (templateError) throw templateError;
             
-            if (selectedTags.length > 0 && templateData) {
+            const templateTagIds = Array.from(new Set([
+                ...selectedTags.map(String),
+                ...(creatorTagId ? [creatorTagId] : [])
+            ]));
+
+            if (templateTagIds.length > 0 && templateData) {
                 const { error: tagError } = await supabase
                     .from('template_tags')
-                    .insert(selectedTags.map(tagId => ({
+                    .insert(templateTagIds.map(tagId => ({
                         template_id: templateData.id,
                         tags_id: tagId
                     })));

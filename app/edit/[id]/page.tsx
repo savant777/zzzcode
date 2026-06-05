@@ -12,6 +12,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import AutoResizeTextarea from '@/components/AutoResizeTextarea';
 import FieldConfigurator from '@/components/FieldConfigurator';
 import TemplateBlockContainer from '@/components/TemplateBlockContainer';
+import { CreatorSession, canManageTemplate, requireCreator } from '@/lib/creator';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
 
 const getSimilarFieldKey = (field: FieldConfig) => {
@@ -46,6 +47,8 @@ export default function EditTemplatePage() {
     const [editingField, setEditingField] = useState<FieldConfig | null>(null);
 
     const [loading, setLoading] = useState(true);
+    const [creatorSession, setCreatorSession] = useState<CreatorSession | null>(null);
+    const [templateOwnerId, setTemplateOwnerId] = useState<string | null>(null);
     const [availableTags, setAvailableTags] = useState<any[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
@@ -100,21 +103,48 @@ export default function EditTemplatePage() {
     useEffect(() => {
         const initEditPage = async () => {
             setLoading(true);
-            const { data: { user } } = await supabase.auth.getUser();
+            const session = await requireCreator();
 
-            if (!user) {
+            if (!session.user) {
                 toast.error("ERROR_ACCESS_DENIED: LOGIN_REQUIRED");
                 router.replace('/?group=category&tag=all');
                 return;
             }
 
-            const { data: allTags } = await supabase.from('tags').select('id, name').eq('is_active', true);
-            if (allTags) setAvailableTags(allTags);
+            if (!session.canAccessCreatorTools) {
+                toast.error("ERROR_ACCESS_DENIED: CREATOR_REQUIRED");
+                router.replace('/?group=category&tag=all');
+                return;
+            }
+
+            setCreatorSession(session);
+
+            const { data: allTags } = session.isOwner
+                ? await supabase
+                    .from('tags')
+                    .select('id, name, slug, user_id, tag_groups(name)')
+                    .eq('is_active', true)
+                : await supabase
+                    .from('tags')
+                    .select('id, name, slug, user_id, tag_groups(name)')
+                    .eq('is_active', true)
+                    .or(`user_id.is.null,user_id.eq.${session.user.id}`);
+
+            if (allTags) {
+                setAvailableTags(allTags.filter((tag: any) => tag.tag_groups?.name?.toLowerCase() !== 'creators'));
+            }
 
             if (templateId) {
                 const { data: template, error } = await supabase.from('templates').select(`*, template_tags(tags_id)`).eq('id', templateId).single();
 
                 if (template) {
+                    if (!canManageTemplate(session, template.user_id)) {
+                        toast.error("ERROR_ACCESS_DENIED: TEMPLATE_OWNER_REQUIRED");
+                        router.replace('/?group=category&tag=all');
+                        return;
+                    }
+
+                    setTemplateOwnerId(template.user_id);
                     setFormData({
                         title: template.title,
                         description: template.description,
@@ -125,7 +155,7 @@ export default function EditTemplatePage() {
                     });
                     setFields((template.fields_config || []).map(normalizeFieldConfig));
                     
-                    const oldTagIds = template.template_tags?.map((t: any) => t.tags_id) || [];
+                    const oldTagIds = template.template_tags?.map((t: any) => String(t.tags_id)) || [];
                     setSelectedTags(oldTagIds);
                 }
             }
@@ -136,7 +166,7 @@ export default function EditTemplatePage() {
                     const parsed = JSON.parse(savedDraft);
                     if (parsed.templateId === templateId) {
                         if (parsed.formData) setFormData(parsed.formData);
-                        if (parsed.selectedTags) setSelectedTags(parsed.selectedTags);
+                        if (parsed.selectedTags) setSelectedTags(parsed.selectedTags.map(String));
                         if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
                     } else {
                         localStorage.removeItem(STORAGE_KEY);
@@ -234,6 +264,10 @@ export default function EditTemplatePage() {
         const toastId = toast.loading("SYSTEM: Updating_Module...");
 
         try {
+            if (!creatorSession || !canManageTemplate(creatorSession, templateOwnerId)) {
+                throw new Error("TEMPLATE_OWNER_REQUIRED");
+            }
+
             const { error: updateError } = await supabase
                 .from('templates')
                 .update({
@@ -253,7 +287,7 @@ export default function EditTemplatePage() {
             await supabase.from('template_tags').delete().eq('template_id', templateId);
             
             if (selectedTags.length > 0) {
-                const tagEntries = selectedTags.map(tagId => ({
+                const tagEntries = Array.from(new Set(selectedTags.map(String))).map(tagId => ({
                     template_id: templateId,
                     tags_id: tagId
                 }));
@@ -384,12 +418,13 @@ export default function EditTemplatePage() {
                                             key={tag.id}
                                             type="button"
                                             onClick={() => {
+                                                const tagId = String(tag.id);
                                                 setSelectedTags(prev => 
-                                                    prev.includes(tag.id) ? prev.filter(id => id !== tag.id) : [...prev, tag.id]
+                                                    prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
                                                 );
                                             }}
                                             className={`px-2 py-1 text-xs font-bold border transition-all cursor-pointer uppercase
-                                                ${selectedTags.includes(tag.id) 
+                                                ${selectedTags.includes(String(tag.id)) 
                                                     ? 'bg-(--primary) text-(--background) border-(--primary)' 
                                                     : 'text-(--foreground)/75 bg-(--background) border-(--foreground)/25 hover:text-(--background) hover:bg-(--foreground)'}
                                             `}

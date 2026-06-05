@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase';
 import SkeletonNav from '@/components/SkeletonNav';
+import { getGroupSlug } from '@/lib/routes';
+
+const GROUP_ORDER = ['creators', 'category', 'css', 'style', 'activity', 'commission', 'the-plastics'];
 
 export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
     const [isLoading, setIsLoading] = useState(true);
@@ -45,7 +48,16 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
                         ...group,
                         tags: tagsByGroup[String(group.id)] || []
                     }))
-                    .filter(group => group.tags.length > 0);
+                    .filter(group => group.tags.length > 0)
+                    .sort((a, b) => {
+                        const orderA = GROUP_ORDER.indexOf(getGroupSlug(a.name));
+                        const orderB = GROUP_ORDER.indexOf(getGroupSlug(b.name));
+                        const safeOrderA = orderA === -1 ? GROUP_ORDER.length : orderA;
+                        const safeOrderB = orderB === -1 ? GROUP_ORDER.length : orderB;
+
+                        if (safeOrderA !== safeOrderB) return safeOrderA - safeOrderB;
+                        return a.id - b.id;
+                    });
                 setMenuData(activeGroups);
             }
             setIsLoading(false);
@@ -54,7 +66,7 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
     }, []);
 
     const handleFilterChange = (groupName: string, tagSlug: string) => {
-        router.push(`/?group=${groupName.toLowerCase()}&tag=${tagSlug.toLowerCase()}`);
+        router.push(`/?group=${getGroupSlug(groupName)}&tag=${tagSlug.toLowerCase()}`);
         
         if (window.innerWidth < 1024) {
             setIsOpen(false);
@@ -89,8 +101,11 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
                             tags={group.tags} 
                             activeFilter={activeFilter}
                             onSelect={(tagSlug: string) => handleFilterChange(group.name, tagSlug)} 
-                            isExpanded={expandedGroup === group.name.toUpperCase()}
-                            onToggle={() => setExpandedGroup(expandedGroup === group.name.toUpperCase() ? null : group.name.toUpperCase())}
+                            isExpanded={expandedGroup === getGroupSlug(group.name).toUpperCase()}
+                            onToggle={() => {
+                                const groupKey = getGroupSlug(group.name).toUpperCase();
+                                setExpandedGroup(expandedGroup === groupKey ? null : groupKey);
+                            }}
                         />
                     ))
                 )}
@@ -130,7 +145,7 @@ function NavGroup({ title, tags, activeFilter, onSelect, isExpanded, onToggle }:
                                 );
                             }
 
-                            const currentKey = `${title.toLowerCase()}:${tag.slug.toLowerCase()}`;
+                            const currentKey = `${getGroupSlug(title)}:${tag.slug.toLowerCase()}`;
                             const isActive = activeFilter === currentKey;
 
                             return (

@@ -1,16 +1,29 @@
 "use client";
 import { useRouter } from 'next/navigation';
+import { getGroupSlug } from '@/lib/routes';
 
-const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'the plastics'];
+const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'the-plastics'];
 
-export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDelete, onOpenPrivateModal }: any) {
+function CreatorBadge({ name }: { name: string }) {
+    return (
+        <div className="absolute top-1 left-1 z-10 max-w-[calc(100%-8px)] flex items-center gap-1 border border-(--primary)/60 bg-(--background)/90 px-1.5 py-1 text-[10px] font-bold uppercase leading-none text-(--primary)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <path d="M20 21a8 8 0 0 0-16 0"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span className="truncate">{name}</span>
+        </div>
+    );
+}
+
+export default function TemplateCard({ item, viewMode, canManage, creatorName, onTagClick, onDelete, onOpenPrivateModal }: any) {
     const router = useRouter();
 
     const primaryTagEntry = item.template_tags?.find((t: any) => 
-        PRIMARY_ROUTE_GROUPS.includes(t.tags.tag_groups.name.toLowerCase())
+        PRIMARY_ROUTE_GROUPS.includes(getGroupSlug(t.tags.tag_groups.name))
     ) || item.template_tags?.[0];
 
-    const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';
+    const group = getGroupSlug(primaryTagEntry?.tags.tag_groups.name) || 'category';
     const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
     const routeQuery = new URLSearchParams({ group, tag: tagSlug }).toString();
 
@@ -36,6 +49,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
             <div className="zzzcode-list-item border border-(--primary) p-2 bg-(--background) transition-all group relative items-center">
                 {/* Preview Image + Orange Filter */}
                 <div className="zzzcode-list-image hidden md:block aspect-square w-full overflow-hidden border border-(--primary)/20 relative">
+                    <CreatorBadge name={creatorName} />
                     <img 
                         src={item.preview_url || '/placeholder.png'} 
                         className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
@@ -62,7 +76,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                                 key={t.tags.slug}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    const group = t.tags.tag_groups.name.toLowerCase();
+                                    const group = getGroupSlug(t.tags.tag_groups.name);
                                     const tagSlug = t.tags.slug.toLowerCase();
                                     router.push(`/?group=${group}&tag=${tagSlug}`);
                                 }}
@@ -97,7 +111,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                         </svg>
                     </button>
 
-                    {isAdmin && (
+                    {canManage && (
                         <>
                             <button
                                 onClick={handleEditClick} 
@@ -134,6 +148,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
         <div className="zzzcode-card-item border border-(--primary) p-2 bg-(--background) transition-all group relative">
             {/* Preview Image + Orange Filter */}
             <div className="zzzcode-card-image aspect-square w-full overflow-hidden border border-(--primary)/20 relative">
+                <CreatorBadge name={creatorName} />
                 <img 
                     src={item.preview_url || '/placeholder.png'} 
                     className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
@@ -157,7 +172,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                         key={t.tags.slug}
                         onClick={(e) => {
                             e.stopPropagation();
-                            const group = t.tags.tag_groups.name.toLowerCase();
+                            const group = getGroupSlug(t.tags.tag_groups.name);
                             const tagSlug = t.tags.slug.toLowerCase();
                             router.push(`/?group=${group}&tag=${tagSlug}`);
                         }}
@@ -185,11 +200,11 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                                         key={t.tags.slug}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            const group = t.tags.tag_groups.name.toLowerCase();
+                                            const group = getGroupSlug(t.tags.tag_groups.name);
                                             const tagSlug = t.tags.slug.toLowerCase();
                                             router.push(`/?group=${group}&tag=${tagSlug}`);
                                         }}
-                                        className="cursor-pointer text-(--primary) text-[10px] font-bold"
+                                        className="cursor-pointer text-(--primary) text-[10px] font-bold text-left"
                                     >
                                         #{t.tags.name}
                                     </button>
@@ -227,7 +242,7 @@ export default function TemplateCard({ item, viewMode, isAdmin, onTagClick, onDe
                         <span className="text-xs -mt-px">use_this</span>
                     </button>
 
-                    {isAdmin && (
+                    {canManage && (
                         <>
                             <button
                                 onClick={handleEditClick}

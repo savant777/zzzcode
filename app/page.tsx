@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { CreatorSession, canManageTemplate, getCurrentCreator } from '@/lib/creator';
+import { getGroupSlug } from '@/lib/routes';
 import { toast } from 'sonner';
 
 // Components
@@ -12,7 +14,7 @@ import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import Modal from '@/components/Modal';
 
-const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'the plastics'];
+const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'the-plastics'];
 
 export default function Page() {
     return (
@@ -28,9 +30,9 @@ function Dashboard() {
 
     // --- 1. States (Essential & Restored) ---
     const [isLoading, setIsLoading] = useState(true);
-    const [user, setUser] = useState<any>(null);
+    const [creatorSession, setCreatorSession] = useState<CreatorSession | null>(null);
+    const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
     const [templates, setTemplates] = useState<any[]>([]);
-    const isAdmin = !!user;
     
     // UI Controls
     const [isOpen, setIsOpen] = useState(true);
@@ -56,16 +58,28 @@ function Dashboard() {
     useEffect(() => {
         const initDashboard = async () => {
             setIsLoading(true);
-            const { data: { user: authUser } } = await supabase.auth.getUser();
-            setUser(authUser);
+            const session = await getCurrentCreator();
+            setCreatorSession(session);
 
-            const { data, error } = await supabase
+            const [{ data }, { data: creators }] = await Promise.all([
+                supabase
                 .from('templates')
                 .select(`*, template_tags(tags(*, tag_groups(name)))`)
                 .eq('is_active', true)
-                .order('id', { ascending: false });
+                    .order('id', { ascending: false }),
+                supabase
+                    .from('creators')
+                    .select('user_id, display_name')
+                    .eq('is_active', true)
+            ]);
 
             if (data) setTemplates(data);
+            if (creators) {
+                setCreatorNames(creators.reduce((acc: Record<string, string>, creator: any) => {
+                    acc[creator.user_id] = creator.display_name;
+                    return acc;
+                }, {}));
+            }
             setIsLoading(false);
         };
 
@@ -98,7 +112,7 @@ function Dashboard() {
             if (tagSlug === 'all') {
                 if (group !== 'category') {
                     return matchesSearch && item.template_tags?.some((t: any) => 
-                        t.tags.tag_groups.name.toLowerCase() === group
+                        getGroupSlug(t.tags.tag_groups.name) === group
                     );
                 }
                 return matchesSearch;
@@ -106,7 +120,7 @@ function Dashboard() {
 
             const matchesFilter = item.template_tags?.some((t: any) => {
                 const currentTagSlug = t.tags.slug.toLowerCase();
-                const currentGroup = t.tags.tag_groups.name.toLowerCase();
+                const currentGroup = getGroupSlug(t.tags.tag_groups.name);
                 return currentGroup === group && currentTagSlug === tagSlug;
             });
             
@@ -138,7 +152,7 @@ function Dashboard() {
     // --- 4. Event Handlers ---
 
     const handleTagClick = (groupName: string, tagSlug: string) => {
-        router.push(`/?group=${groupName.toLowerCase()}&tag=${tagSlug.toLowerCase()}`);
+        router.push(`/?group=${getGroupSlug(groupName)}&tag=${tagSlug.toLowerCase()}`);
     };
 
     const closeModal = () => {
@@ -152,10 +166,10 @@ function Dashboard() {
         const toastId = toast.loading("SYSTEM: Verifying_Access_Key...");
 
         const primaryTagEntry = selectedItem.template_tags?.find((t: any) => 
-            PRIMARY_ROUTE_GROUPS.includes(t.tags.tag_groups.name.toLowerCase())
+            PRIMARY_ROUTE_GROUPS.includes(getGroupSlug(t.tags.tag_groups.name))
         ) || selectedItem.template_tags?.[0];
 
-        const group = primaryTagEntry?.tags.tag_groups.name.toLowerCase() || 'category';
+        const group = getGroupSlug(primaryTagEntry?.tags.tag_groups.name) || 'category';
         const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
         const routeQuery = new URLSearchParams({ group, tag: tagSlug }).toString();
         
@@ -295,7 +309,12 @@ function Dashboard() {
                                         key={item.id} 
                                         item={item}
                                         viewMode={viewMode}
-                                        isAdmin={isAdmin}
+                                        canManage={canManageTemplate(creatorSession || {
+                                            user: null,
+                                            isCreator: false,
+                                            isOwner: false
+                                        }, item.user_id)}
+                                        creatorName={creatorNames[item.user_id] || 'Unknown Creator'}
                                         onTagClick={handleTagClick} 
                                         onDelete={() => {
                                             setSelectedItem(item);
