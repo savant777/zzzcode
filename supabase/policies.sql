@@ -1,5 +1,40 @@
 -- ==========================================
--- 0. CREATORS TABLE
+-- 0. CREATOR ACCESS HELPERS
+-- ==========================================
+-- SECURITY DEFINER helpers avoid recursive RLS checks when policies need to
+-- verify whether the current user is an active creator or owner.
+
+CREATE OR REPLACE FUNCTION public.is_active_creator(check_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.creators c
+    WHERE c.user_id = check_user_id
+      AND c.is_active = true
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_owner(check_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.creators c
+    WHERE c.user_id = check_user_id
+      AND c.role = 'owner'
+      AND c.is_active = true
+  );
+$$;
+
+-- ==========================================
+-- 1. CREATORS TABLE
 -- ==========================================
 ALTER TABLE public.creators ENABLE ROW LEVEL SECURITY;
 
@@ -17,12 +52,16 @@ FOR SELECT
 TO authenticated
 USING (user_id = auth.uid());
 
--- Creator rows are managed manually in Supabase for now.
--- If creator management moves into the app later, use a SECURITY DEFINER helper
--- function for owner checks to avoid recursive RLS policies on this table.
+DROP POLICY IF EXISTS "Allow owner manage creators" ON public.creators;
+CREATE POLICY "Allow owner manage creators"
+ON public.creators
+FOR ALL
+TO authenticated
+USING (public.is_owner(auth.uid()))
+WITH CHECK (public.is_owner(auth.uid()));
 
 -- ==========================================
--- 1. TAG_GROUPS TABLE
+-- 2. TAG_GROUPS TABLE
 -- ==========================================
 ALTER TABLE public.tag_groups ENABLE ROW LEVEL SECURITY;
 
@@ -39,27 +78,11 @@ CREATE POLICY "Allow owner manage tag_groups"
 ON public.tag_groups
 FOR ALL
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.role = 'owner'
-      AND c.is_active = true
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.role = 'owner'
-      AND c.is_active = true
-  )
-);
+USING (public.is_owner(auth.uid()))
+WITH CHECK (public.is_owner(auth.uid()));
 
 -- ==========================================
--- 2. TAGS TABLE
+-- 3. TAGS TABLE
 -- ==========================================
 ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
 
@@ -83,24 +106,8 @@ CREATE POLICY "Allow owner manage tags"
 ON public.tags
 FOR ALL
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.role = 'owner'
-      AND c.is_active = true
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.role = 'owner'
-      AND c.is_active = true
-  )
-);
+USING (public.is_owner(auth.uid()))
+WITH CHECK (public.is_owner(auth.uid()));
 
 DROP POLICY IF EXISTS "Allow creators insert own tags" ON public.tags;
 CREATE POLICY "Allow creators insert own tags"
@@ -109,12 +116,7 @@ FOR INSERT
 TO authenticated
 WITH CHECK (
   user_id = auth.uid()
-  AND EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.is_active = true
-  )
+  AND public.is_active_creator(auth.uid())
 );
 
 DROP POLICY IF EXISTS "Allow creators update own tags" ON public.tags;
@@ -124,21 +126,11 @@ FOR UPDATE
 TO authenticated
 USING (
   user_id = auth.uid()
-  AND EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.is_active = true
-  )
+  AND public.is_active_creator(auth.uid())
 )
 WITH CHECK (
   user_id = auth.uid()
-  AND EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.is_active = true
-  )
+  AND public.is_active_creator(auth.uid())
 );
 
 DROP POLICY IF EXISTS "Allow creators delete own tags" ON public.tags;
@@ -148,16 +140,11 @@ FOR DELETE
 TO authenticated
 USING (
   user_id = auth.uid()
-  AND EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.is_active = true
-  )
+  AND public.is_active_creator(auth.uid())
 );
 
 -- ==========================================
--- 3. TEMPLATES TABLE
+-- 4. TEMPLATES TABLE
 -- ==========================================
 ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
 
@@ -176,12 +163,7 @@ FOR INSERT
 TO authenticated
 WITH CHECK (
   user_id = auth.uid()
-  AND EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.is_active = true
-  )
+  AND public.is_active_creator(auth.uid())
 );
 
 DROP POLICY IF EXISTS "Allow creators update own templates" ON public.templates;
@@ -191,21 +173,11 @@ FOR UPDATE
 TO authenticated
 USING (
   user_id = auth.uid()
-  AND EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.is_active = true
-  )
+  AND public.is_active_creator(auth.uid())
 )
 WITH CHECK (
   user_id = auth.uid()
-  AND EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.is_active = true
-  )
+  AND public.is_active_creator(auth.uid())
 );
 
 DROP POLICY IF EXISTS "Allow creators delete own templates" ON public.templates;
@@ -215,12 +187,7 @@ FOR DELETE
 TO authenticated
 USING (
   user_id = auth.uid()
-  AND EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.is_active = true
-  )
+  AND public.is_active_creator(auth.uid())
 );
 
 DROP POLICY IF EXISTS "Allow owner manage templates" ON public.templates;
@@ -228,27 +195,11 @@ CREATE POLICY "Allow owner manage templates"
 ON public.templates
 FOR ALL
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.role = 'owner'
-      AND c.is_active = true
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.role = 'owner'
-      AND c.is_active = true
-  )
-);
+USING (public.is_owner(auth.uid()))
+WITH CHECK (public.is_owner(auth.uid()));
 
 -- ==========================================
--- 4. TEMPLATE_TAGS (Join Table)
+-- 5. TEMPLATE_TAGS (Join Table)
 -- ==========================================
 ALTER TABLE public.template_tags ENABLE ROW LEVEL SECURITY;
 
@@ -273,26 +224,24 @@ ON public.template_tags
 FOR ALL
 TO authenticated
 USING (
-  EXISTS (
+  public.is_active_creator(auth.uid())
+  AND EXISTS (
     SELECT 1
     FROM public.templates t
     JOIN public.tags tag ON tag.id = template_tags.tags_id
-    JOIN public.creators c ON c.user_id = auth.uid()
     WHERE t.id = template_tags.template_id
       AND t.user_id = auth.uid()
-      AND c.is_active = true
       AND (tag.user_id IS NULL OR tag.user_id = auth.uid())
   )
 )
 WITH CHECK (
-  EXISTS (
+  public.is_active_creator(auth.uid())
+  AND EXISTS (
     SELECT 1
     FROM public.templates t
     JOIN public.tags tag ON tag.id = template_tags.tags_id
-    JOIN public.creators c ON c.user_id = auth.uid()
     WHERE t.id = template_tags.template_id
       AND t.user_id = auth.uid()
-      AND c.is_active = true
       AND (tag.user_id IS NULL OR tag.user_id = auth.uid())
   )
 );
@@ -302,21 +251,5 @@ CREATE POLICY "Allow owner manage template_tags"
 ON public.template_tags
 FOR ALL
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.role = 'owner'
-      AND c.is_active = true
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.creators c
-    WHERE c.user_id = auth.uid()
-      AND c.role = 'owner'
-      AND c.is_active = true
-  )
-);
+USING (public.is_owner(auth.uid()))
+WITH CHECK (public.is_owner(auth.uid()));
