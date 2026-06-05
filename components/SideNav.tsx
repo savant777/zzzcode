@@ -14,14 +14,38 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
     useEffect(() => {
         const fetchMenu = async () => {
             setIsLoading(true);
-            const { data } = await supabase
+            const [{ data: groups, error: groupsError }, { data: tags, error: tagsError }] = await Promise.all([
+                supabase
                 .from('tag_groups')
-                .select(`id, name, tags (name, slug, is_active)`)
-                .eq('tags.is_active', true)
-                .order('id', { ascending: true });
+                    .select('id, name')
+                    .order('id', { ascending: true }),
+                supabase
+                    .from('tags')
+                    .select('id, group_id, name, slug, is_active')
+                    .eq('is_active', true)
+                    .order('id', { ascending: true })
+            ]);
 
-            if (data) {
-                const activeGroups = data.filter(group => group.tags.length > 0);
+            if (groupsError || tagsError) {
+                console.error('SideNav menu load error:', groupsError || tagsError);
+                setIsLoading(false);
+                return;
+            }
+
+            if (groups && tags) {
+                const tagsByGroup = tags.reduce((acc: Record<string, any[]>, tag: any) => {
+                    const key = String(tag.group_id);
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(tag);
+                    return acc;
+                }, {});
+
+                const activeGroups = groups
+                    .map(group => ({
+                        ...group,
+                        tags: tagsByGroup[String(group.id)] || []
+                    }))
+                    .filter(group => group.tags.length > 0);
                 setMenuData(activeGroups);
             }
             setIsLoading(false);
