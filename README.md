@@ -250,9 +250,10 @@ lib/
   template-parser.ts
 
 supabase/
-  schema.sql       # Table definitions and core database structure
-  policies.sql     # Row-Level Security policies
-  functions.sql    # Slug generation, tag indexing, triggers, and helpers
+  schema.sql              # Table definitions and core database structure
+  migration-creators.sql  # Non-destructive migration for creator support
+  policies.sql            # Row-Level Security policies
+  functions.sql           # Slug generation, tag indexing, triggers, and helpers
 ```
 
 ## Database Overview

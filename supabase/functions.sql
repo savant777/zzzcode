@@ -16,9 +16,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS tags_slug_trigger ON tags;
 CREATE TRIGGER tags_slug_trigger
 BEFORE INSERT OR UPDATE ON tags
 FOR EACH ROW EXECUTE PROCEDURE trigger_slugify_tags();
 
-CREATE INDEX idx_template_tags_tags_id ON template_tags(tags_id);
-CREATE INDEX idx_tags_group_id ON tags(group_id);
+CREATE INDEX IF NOT EXISTS idx_template_tags_tags_id ON template_tags(tags_id);
+CREATE INDEX IF NOT EXISTS idx_tags_group_id ON tags(group_id);
+CREATE INDEX IF NOT EXISTS idx_tags_user_id ON tags(user_id);
+CREATE INDEX IF NOT EXISTS idx_templates_user_id ON templates(user_id);
+CREATE INDEX IF NOT EXISTS idx_creators_slug ON creators(slug);
+CREATE INDEX IF NOT EXISTS idx_creators_active ON creators(is_active);
