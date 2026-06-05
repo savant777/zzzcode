@@ -259,10 +259,19 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                             <path d="M432-288H288q-79.68 0-135.84-56.23Q96-400.45 96-480.23 96-560 152.16-616q56.16-56 135.84-56h144v72H288q-50 0-85 35t-35 85q0 50 35 85t85 35h144v72Zm-96-156v-72h288v72H336Zm192 156v-72h144q50 0 85-35t35-85q0-50-35-85t-85-35H528v-72h144q79.68 0 135.84 56.23 56.16 56.22 56.16 136Q864-400 807.84-344 751.68-288 672-288H528Z"/>
                         </svg>
                     </button>
-                    <button type="button" title="แทรก details summary" onClick={() => setShowDetailsOption(true)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor" className="-scale-x-100">
-                            <path d="M120-240v-80h520v80H120Zm664-40L584-480l200-200 56 56-144 144 144 144-56 56ZM120-440v-80h400v80H120Zm0-200v-80h520v80H120Z"/>
-                        </svg>
+                    
+                </div>
+
+                {/* กลุ่มซ่อนเนื้อหา */}
+                <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
+                    <button type="button" title="details summary" onClick={() => setShowDetailsOption(true)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <span className="block min-w-5 px-0.5 text-center text-[10px] font-black uppercase leading-5">details</span>
+                    </button>
+                    <button type="button" title="spoiler" onClick={() => insertTag('[spoiler]', '[/spoiler]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <span className="block min-w-5 px-0.5 text-center text-[10px] font-black uppercase leading-5">spoiler</span>
+                    </button>
+                    <button type="button" title="hide" onClick={() => insertTag('[hide]', '[/hide]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <span className="block min-w-5 px-0.5 text-center text-[10px] font-black uppercase leading-5">hide</span>
                     </button>
                 </div>
 

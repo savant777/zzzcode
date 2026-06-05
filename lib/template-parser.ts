@@ -184,6 +184,7 @@ const preserveTextNewlines = (html: string): string => {
     const isHrTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
     const isLinkTag = (part?: string) => /^<\s*link(\s|>|\/)/i.test(part || '');
     const isBrTag = (part?: string) => /^<\s*br(\s|>|\/)/i.test(part || '');
+    const isListTag = (part?: string) => /^<\/?\s*(ul|ol)(\s|>|\/)/i.test(part || '');
     return parts.map((part, index) => {
         if (part.startsWith('<') && part.endsWith('>')) return part;
         const previousTag = [...parts.slice(0, index)].reverse().find(item => item.startsWith('<') && item.endsWith('>'));
@@ -196,7 +197,8 @@ const preserveTextNewlines = (html: string): string => {
                 isClosingDivOrParagraphTag(nextTag) ||
                 isHrTag(previousTag) ||
                 isLinkTag(previousTag) ||
-                isBrTag(previousTag)
+                isBrTag(previousTag) ||
+                isListTag(previousTag)
                 ? ''
                 : '<br>';
         }
@@ -277,6 +279,7 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
         .replace(/\[s\]([\s\S]*?)\[\/s\]/g, '<span style="text-decoration: line-through;" class="mycode_s">$1</span>')
         .replace(/\[align=(left|center|right|justify)\]([\s\S]*?)\[\/align\]/g, '<div style="text-align: $1;" class="mycode_align">$2</div>')
         .replace(/\[color=(#?[a-fA-F0-9]{3,6})\]([\s\S]*?)\[\/color\]/g, '<span style="color: $1;" class="mycode_color">$2</span>')
+        .replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, (_match, content) => `<div style="margin-top:5px"><div class="quotetitle"><input class="button2 btnlite" type="button" value="View Spoiler" style="text-align:center;width:115px;margin:0px;padding: 5px;background-color: #e7e7e7;color: black;border: 0;" onclick="if (this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display != '') { this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display = '';      this.innerText = ''; this.value = 'Hide Spoiler'; } else { this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display = 'none'; this.innerText = ''; this.value = 'View Spoiler'; }"></div><div class="quotecontent" style="margin: 5px 0px;padding: 15px;background: #202020;font-size: 13px;color: #fff;"><div style="display: none;">${content}</div></div></div>`)
         .replace(/\[hide\]([\s\S]*?)\[\/hide\]/gi, '<div class="hidden-content"><div class="hidden-content-title"><strong>เนื้อหาที่ถูกซ่อน</strong></div><div class="hidden-content-body">$1</div></div>')
         .replace(/\[hr\]/gi, '<hr class="mycode_hr">')
         .replace(/\[img=(\d+)x(\d+)\]([\s\S]*?)\[\/img\]/gi, (match, w, h, url) => {
