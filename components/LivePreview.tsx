@@ -18,7 +18,9 @@ export default function LivePreview({ html }: { html: string }) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const latestHtmlRef = useRef(html);
     const observerRef = useRef<MutationObserver | null>(null);
+    const resizeObserverRef = useRef<ResizeObserver | null>(null);
     const heightFrameRef = useRef<number | null>(null);
+    const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [scale, setScale] = useState(1);
     const [iframeHeight, setIframeHeight] = useState(500);
     const [viewportWidth, setViewportWidth] = useState(1440);
@@ -54,14 +56,78 @@ export default function LivePreview({ html }: { html: string }) {
         };
     }, []);
 
+    const measureIframeHeight = (doc: Document) => {
+        const body = doc.body;
+        const postBody = doc.querySelector<HTMLElement>('.post_body');
+
+        if (body && postBody) {
+            const bodyStyle = doc.defaultView?.getComputedStyle(body);
+            const bodyPaddingBottom = Number.parseFloat(bodyStyle?.paddingBottom || '0') || 0;
+
+            return Math.ceil(Math.max(
+                postBody.offsetTop + postBody.scrollHeight + bodyPaddingBottom,
+                postBody.offsetTop + postBody.offsetHeight + bodyPaddingBottom,
+                1
+            ));
+        }
+
+        const root = doc.documentElement;
+        return Math.ceil(Math.max(
+            body?.scrollHeight || 0,
+            body?.offsetHeight || 0,
+            root?.scrollHeight || 0,
+            root?.offsetHeight || 0,
+            postBody ? postBody.offsetTop + postBody.scrollHeight : 0,
+            postBody ? postBody.offsetTop + postBody.offsetHeight : 0,
+            1
+        ));
+    };
+
     const updateIframeHeight = (doc: Document) => {
         if (heightFrameRef.current) cancelAnimationFrame(heightFrameRef.current);
 
         heightFrameRef.current = requestAnimationFrame(() => {
-            if (doc.body) {
-                setIframeHeight(doc.body.scrollHeight);
+            if (doc.body && doc.documentElement) {
+                setIframeHeight(measureIframeHeight(doc));
             }
         });
+    };
+
+    const scheduleHeightRetries = (doc: Document) => {
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+
+        const delays = [50, 150, 350, 700, 1200];
+        let index = 0;
+
+        const run = () => {
+            updateIframeHeight(doc);
+            index += 1;
+            if (index < delays.length) {
+                retryTimerRef.current = setTimeout(run, delays[index]);
+            }
+        };
+
+        retryTimerRef.current = setTimeout(run, delays[index]);
+    };
+
+    const watchLateLoadingAssets = (doc: Document) => {
+        const update = () => {
+            updateIframeHeight(doc);
+            scheduleHeightRetries(doc);
+        };
+
+        doc.querySelectorAll<HTMLImageElement>('img').forEach(img => {
+            if (img.complete) return;
+            img.addEventListener('load', update, { once: true });
+            img.addEventListener('error', update, { once: true });
+        });
+
+        doc.head.querySelectorAll<HTMLLinkElement>('link[data-live-preview-stylesheet="true"]').forEach(link => {
+            link.addEventListener('load', update, { once: true });
+            link.addEventListener('error', update, { once: true });
+        });
+
+        doc.fonts?.ready.then(update).catch(() => undefined);
     };
 
     const updatePreviewHtml = () => {
@@ -93,6 +159,8 @@ export default function LivePreview({ html }: { html: string }) {
 
         postBody.innerHTML = bodyHtml;
         updateIframeHeight(doc);
+        watchLateLoadingAssets(doc);
+        scheduleHeightRetries(doc);
     };
 
     useEffect(() => {
@@ -105,6 +173,11 @@ export default function LivePreview({ html }: { html: string }) {
             observerRef.current?.disconnect();
 
             if (!doc?.body) return;
+
+            resizeObserverRef.current?.disconnect();
+            resizeObserverRef.current = new ResizeObserver(() => updateIframeHeight(doc));
+            resizeObserverRef.current.observe(doc.body);
+            if (doc.documentElement) resizeObserverRef.current.observe(doc.documentElement);
 
             observerRef.current = new MutationObserver(() => updateIframeHeight(doc));
             observerRef.current.observe(doc.body, {
@@ -122,7 +195,9 @@ export default function LivePreview({ html }: { html: string }) {
         return () => {
             iframe.removeEventListener('load', handleIframeLoad);
             observerRef.current?.disconnect();
+            resizeObserverRef.current?.disconnect();
             if (heightFrameRef.current) cancelAnimationFrame(heightFrameRef.current);
+            if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
         };
     }, []);
 
