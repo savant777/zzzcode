@@ -96,7 +96,7 @@ function Dashboard() {
             const [group, tagSlug] = activeFilter.split(':'); 
             
             if (tagSlug === 'all') {
-                if (['activity', 'commission'].includes(group)) {
+                if (group !== 'category') {
                     return matchesSearch && item.template_tags?.some((t: any) => 
                         t.tags.tag_groups.name.toLowerCase() === group
                     );
