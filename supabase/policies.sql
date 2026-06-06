@@ -33,6 +33,34 @@ AS $$
   );
 $$;
 
+CREATE OR REPLACE FUNCTION public.has_same_creator_role(check_user_id uuid, next_role text)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.creators c
+    WHERE c.user_id = check_user_id
+      AND c.role = next_role
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_tag_group_slug(check_group_id bigint, check_slug text)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.tag_groups tg
+    WHERE tg.id = check_group_id
+      AND lower(regexp_replace(trim(tg.name), '\s+', '-', 'g')) = check_slug
+  );
+$$;
+
 -- ==========================================
 -- 1. CREATORS TABLE
 -- ==========================================
@@ -51,6 +79,22 @@ ON public.creators
 FOR SELECT
 TO authenticated
 USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Allow creators update own profile" ON public.creators;
+CREATE POLICY "Allow creators update own profile"
+ON public.creators
+FOR UPDATE
+TO authenticated
+USING (
+  user_id = auth.uid()
+  AND public.is_active_creator(auth.uid())
+)
+WITH CHECK (
+  user_id = auth.uid()
+  AND public.is_active_creator(auth.uid())
+  AND public.has_same_creator_role(auth.uid(), role)
+  AND is_active = true
+);
 
 DROP POLICY IF EXISTS "Allow owner manage creators" ON public.creators;
 CREATE POLICY "Allow owner manage creators"
@@ -117,6 +161,7 @@ TO authenticated
 WITH CHECK (
   user_id = auth.uid()
   AND public.is_active_creator(auth.uid())
+  AND NOT public.is_tag_group_slug(group_id, 'the-plastics')
 );
 
 DROP POLICY IF EXISTS "Allow creators update own tags" ON public.tags;
@@ -127,10 +172,12 @@ TO authenticated
 USING (
   user_id = auth.uid()
   AND public.is_active_creator(auth.uid())
+  AND NOT public.is_tag_group_slug(group_id, 'the-plastics')
 )
 WITH CHECK (
   user_id = auth.uid()
   AND public.is_active_creator(auth.uid())
+  AND NOT public.is_tag_group_slug(group_id, 'the-plastics')
 );
 
 DROP POLICY IF EXISTS "Allow creators delete own tags" ON public.tags;
@@ -141,6 +188,7 @@ TO authenticated
 USING (
   user_id = auth.uid()
   AND public.is_active_creator(auth.uid())
+  AND NOT public.is_tag_group_slug(group_id, 'the-plastics')
 );
 
 -- ==========================================
