@@ -27,7 +27,9 @@ This keeps the public experience simple and avoids exposing template setup tools
 
 Template creators use the create and edit pages to build, configure, and maintain templates.
 
-At the moment, only the project owner can create and configure templates. In the future, the project may support additional creators logging in to manage and update their own templates.
+Creators sign in with Discord. Access is limited to Discord accounts that are linked to an active creator profile, and new creators must pass an invite-code onboarding flow before a creator profile can be created.
+
+The project owner can manage all templates, tags, and creator-owned content. Other creators can manage their own templates and creator-owned tags.
 
 ## Features
 
@@ -40,6 +42,9 @@ At the moment, only the project owner can create and configure templates. In the
 - Undo/redo support in the editor
 - Template creation page for setting up new templates
 - Template edit page for updating existing templates and field configuration
+- Creator profile page with Discord account linking
+- Creator tag management page with search, filters, sorting, and soft-delete/deactivation
+- Invite-code creator onboarding with Discord authentication
 - Automatic field detection from template blueprint syntax
 - Support for text, BBCode, color, select, slider, checkbox, and gradient fields
 - Repeatable blocks for templates with multiple similar sections
@@ -175,6 +180,31 @@ The edit page lets creators update template details, tags, blueprint code, field
 
 Existing field settings are preserved when possible, even when the blueprint changes.
 
+### 5. Manage Tags
+
+Creators can use the manage tags page to view, search, filter, sort, add, edit, and deactivate tags.
+
+Tag management rules:
+
+- global tags are owner-managed
+- creator-owned tags can only be managed by their creator
+- the `creators` tag group is managed by the system and is not editable from the tag manager
+- the `the-plastics` tag group is locked to the project owner
+- deactivating a tag uses `is_active = false` instead of deleting the row
+
+### 6. Creator Sign-In and Onboarding
+
+The creator sign-in page is intentionally not exposed as a main navigation item. It can be accessed directly when onboarding a new creator.
+
+The onboarding flow is:
+
+1. Enter the creator invite code.
+2. Continue with Discord login.
+3. Enter a display name.
+4. The system creates the creator profile and matching creator tag.
+
+The regular login button is only for existing authorized creators. If a Discord account is not linked to an active creator profile, the user is signed out and returned to the public dashboard.
+
 ## Local Development
 
 Install dependencies:
@@ -188,7 +218,19 @@ Create `.env.local`:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+CREATOR_INVITE_CODE=your_bcrypt_hashed_invite_code
 ```
+
+`CREATOR_INVITE_CODE` should be a bcrypt hash. If the hash contains `$`, escape each `$` in `.env.local`.
+
+Example:
+
+```env
+CREATOR_INVITE_CODE=\$2a\$12\$...
+```
+
+The service role key is only used by server-side API routes. It must not be exposed with a `NEXT_PUBLIC_` prefix.
 
 Run the development server:
 
@@ -234,6 +276,10 @@ Runs ESLint.
 app/
   page.tsx              # Public dashboard
   create/page.tsx       # Template creation page
+  creator/profile/      # Creator profile management
+  creator/signin/       # Invite-code and Discord onboarding flow
+  creator/tags/         # Creator tag management
+  api/creator/          # Server-side creator invite and onboarding APIs
   edit/[id]/page.tsx    # Template configuration page
   editor/[id]/page.tsx  # Public template editor
 
@@ -246,6 +292,8 @@ components/
   ColorPicker.tsx
 
 lib/
+  creator.ts
+  routes.ts
   supabase.ts
   template-parser.ts
 
@@ -258,14 +306,17 @@ supabase/
 
 ## Database Overview
 
-The app uses Supabase to store template data, tags, and creator-managed configuration.
+The app uses Supabase to store template data, tags, creator profiles, and creator-managed configuration.
 
 Main tables:
 
+- `creators` stores creator profiles, roles, Discord identity data, active status, and Supabase auth ownership.
 - `templates` stores template metadata, blueprint code, field configuration, privacy settings, status, timestamps, and creator ownership.
 - `tag_groups` stores groups for organizing tags.
-- `tags` stores individual tags, slugs, and active status.
+- `tags` stores individual tags, slugs, ownership, and active status.
 - `template_tags` connects templates and tags through a many-to-many relationship.
+
+SQL setup files are stored in the `supabase/` folder. For an existing database with real data, use non-destructive migration files instead of running `schema.sql`, because `schema.sql` is intended for fresh database setup.
 
 ## Portfolio Notes
 
@@ -277,6 +328,7 @@ Key implementation highlights:
 - dynamic form rendering from stored JSON field configuration
 - live preview isolation through an iframe
 - Supabase data model for templates, tags, and template-tag relationships
+- Discord-based creator authentication with invite-code onboarding
 - draft persistence with local storage
 - creator-focused configuration flow separate from the public user editor
 

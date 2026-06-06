@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { CreatorSession, getCurrentCreator } from '@/lib/creator';
@@ -26,6 +27,8 @@ function MenuLabel({ symbol, label, flipSymbol = false }: { symbol: string; labe
 }
 
 export default function MainHeader() {
+    const pathname = usePathname();
+    const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
     const [creatorSession, setCreatorSession] = useState<CreatorSession | null>(null);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -34,12 +37,14 @@ export default function MainHeader() {
 
     const loadCreatorSession = async () => {
         const session = await getCurrentCreator();
+        const isCreatorSignInPage = pathname === '/creator/signin';
 
-        if (session.user && !session.isCreator) {
+        if (session.user && !session.isCreator && !isCreatorSignInPage) {
             await supabase.auth.signOut();
             setCreatorSession(null);
             setIsLoading(false);
             toast.error("CREATOR_ACCESS_DENIED: DISCORD_ID_NOT_LINKED");
+            router.replace('/?group=category&tag=all');
             return;
         }
 
@@ -55,7 +60,7 @@ export default function MainHeader() {
         });
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [pathname]);
 
     const isCreator = !!creatorSession?.isCreator;
 
