@@ -10,6 +10,7 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import AutoResizeTextarea from '@/components/AutoResizeTextarea';
+import BlueprintGuide from '@/components/BlueprintGuide';
 import FieldConfigurator from '@/components/FieldConfigurator';
 import TemplateBlockContainer from '@/components/TemplateBlockContainer';
 import { CreatorSession, canManageTemplate, requireCreator } from '@/lib/creator';
@@ -53,7 +54,7 @@ export default function EditTemplatePage() {
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
     const [fields, setFields] = useState<FieldConfig[]>([]);
-    const [modalType, setModalType] = useState<'clear_draft' | null>(null);
+    const [modalType, setModalType] = useState<'clear_draft' | 'blueprint_guide' | null>(null);
 
     const [formData, setFormData] = useState({
         title: '',
@@ -481,7 +482,17 @@ export default function EditTemplatePage() {
                             </div>
 
                             <div className="flex flex-col gap-1">
-                                <label className="text-sm uppercase opacity-70">HTML_Blueprint</label>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-sm uppercase opacity-70">HTML_Blueprint</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setModalType('blueprint_guide')}
+                                        className="mb-px text-[10px] leading-none text-(--primary)/70 hover:text-(--primary) transition-colors cursor-pointer"
+                                        aria-label="Open blueprint guide"
+                                    >
+                                        [?]
+                                    </button>
+                                </div>
                                 <AutoResizeTextarea
                                     rows={6}
                                     resizeMode="once"
@@ -538,7 +549,7 @@ export default function EditTemplatePage() {
             <Modal 
                 isOpen={modalType !== null} 
                 onClose={() => setModalType(null)} 
-                title={modalType === 'clear_draft' ? 'Memory Wipe Confirmation' : ''}
+                title={modalType === 'clear_draft' ? 'Memory Wipe Confirmation' : 'Blueprint Quick Guide'}
             >
                 {modalType === 'clear_draft' && (
                     <div className="space-y-6">
@@ -578,6 +589,9 @@ export default function EditTemplatePage() {
                             </button>
                         </div>
                     </div>
+                )}
+                {modalType === 'blueprint_guide' && (
+                    <BlueprintGuide />
                 )}
             </Modal>
 
