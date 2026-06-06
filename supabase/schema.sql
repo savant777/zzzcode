@@ -20,6 +20,8 @@ $$ language 'plpgsql';
 -- ==========================================
 CREATE TABLE creators (
   user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  discord_id text UNIQUE,
+  discord_username text,
   display_name text NOT NULL,
   slug text UNIQUE,
   role text NOT NULL DEFAULT 'creator',
@@ -94,3 +96,15 @@ CREATE TABLE template_tags (
   created_at timestamp with time zone DEFAULT now(),
   PRIMARY KEY (template_id, tags_id)
 );
+
+-- ==========================================
+-- 7. INDEXES
+-- ==========================================
+CREATE INDEX IF NOT EXISTS idx_template_tags_tags_id ON template_tags(tags_id);
+CREATE INDEX IF NOT EXISTS idx_tags_group_id ON tags(group_id);
+CREATE INDEX IF NOT EXISTS idx_tags_user_id ON tags(user_id);
+CREATE INDEX IF NOT EXISTS idx_templates_user_id ON templates(user_id);
+CREATE INDEX IF NOT EXISTS idx_creators_slug ON creators(slug);
+CREATE INDEX IF NOT EXISTS idx_creators_active ON creators(is_active);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_creators_discord_id_unique ON creators(discord_id)
+WHERE discord_id IS NOT NULL;

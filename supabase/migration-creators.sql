@@ -11,6 +11,8 @@ $$ language 'plpgsql';
 
 CREATE TABLE IF NOT EXISTS public.creators (
   user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  discord_id text UNIQUE,
+  discord_username text,
   display_name text NOT NULL,
   slug text UNIQUE,
   role text NOT NULL DEFAULT 'creator',
@@ -20,6 +22,10 @@ CREATE TABLE IF NOT EXISTS public.creators (
 
   CONSTRAINT creators_role_check CHECK (role IN ('owner', 'creator'))
 );
+
+ALTER TABLE public.creators
+ADD COLUMN IF NOT EXISTS discord_id text,
+ADD COLUMN IF NOT EXISTS discord_username text;
 
 ALTER TABLE public.tags
 ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
@@ -42,12 +48,16 @@ CREATE INDEX IF NOT EXISTS idx_tags_user_id ON public.tags(user_id);
 CREATE INDEX IF NOT EXISTS idx_templates_user_id ON public.templates(user_id);
 CREATE INDEX IF NOT EXISTS idx_creators_slug ON public.creators(slug);
 CREATE INDEX IF NOT EXISTS idx_creators_active ON public.creators(is_active);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_creators_discord_id_unique ON public.creators(discord_id)
+WHERE discord_id IS NOT NULL;
 
 -- Add yourself as the first owner after replacing the values below.
--- INSERT INTO public.creators (user_id, display_name, slug, role)
--- VALUES ('YOUR_AUTH_USER_ID', 'Your Name', 'your-slug', 'owner')
+-- INSERT INTO public.creators (user_id, discord_id, discord_username, display_name, slug, role)
+-- VALUES ('YOUR_AUTH_USER_ID', 'YOUR_DISCORD_ID', 'your_discord_username', 'Your Name', 'your-slug', 'owner')
 -- ON CONFLICT (user_id) DO UPDATE
--- SET display_name = EXCLUDED.display_name,
+-- SET discord_id = EXCLUDED.discord_id,
+--     discord_username = EXCLUDED.discord_username,
+--     display_name = EXCLUDED.display_name,
 --     slug = EXCLUDED.slug,
 --     role = EXCLUDED.role,
 --     is_active = true;

@@ -264,6 +264,16 @@ export default function CreatorProfilePage() {
                                 <div className="text-[10px] uppercase tracking-widest text-(--foreground)/40">Auth_Email</div>
                                 <div className="break-all font-Google-Sans text-(--foreground)/80">{user?.email || 'N/A'}</div>
                             </div>
+
+                            <div className="border border-(--primary)/20 bg-black/20 p-3">
+                                <div className="text-[10px] uppercase tracking-widest text-(--foreground)/40">Discord_Username</div>
+                                <div className="break-all font-Google-Sans text-(--foreground)/80">{creator?.discord_username || 'N/A'}</div>
+                            </div>
+
+                            <div className="border border-(--primary)/20 bg-black/20 p-3">
+                                <div className="text-[10px] uppercase tracking-widest text-(--foreground)/40">Discord_ID</div>
+                                <div className="break-all font-Google-Sans text-(--foreground)/80">{creator?.discord_id || 'N/A'}</div>
+                            </div>
                         </div>
 
                         <div className="border-t border-(--primary)/20 pt-3 text-[10px] uppercase tracking-widest text-(--foreground)/35">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { CreatorSession, getCurrentCreator } from '@/lib/creator';
 import TypingHeader from './TypingHeader';
@@ -30,11 +31,18 @@ export default function MainHeader() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [modalType, setModalType] = useState<'login' | 'logout' | null>(null);
     const [loading, setLoading] = useState(false);
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
 
     const loadCreatorSession = async () => {
         const session = await getCurrentCreator();
+
+        if (session.user && !session.isCreator) {
+            await supabase.auth.signOut();
+            setCreatorSession(null);
+            setIsLoading(false);
+            toast.error("CREATOR_ACCESS_DENIED: DISCORD_ID_NOT_LINKED");
+            return;
+        }
+
         setCreatorSession(session);
         setIsLoading(false);
     };
@@ -51,26 +59,23 @@ export default function MainHeader() {
 
     const isCreator = !!creatorSession?.isCreator;
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleLogin = async () => {
         setLoading(true);
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'discord',
+                options: {
+                    redirectTo: window.location.origin,
+                },
             });
 
             if (error) {
-                alert(`Authentication Error: ${error.message}`);
-            } else {
-                setModalType(null);
-                setEmail('');
-                setPassword('');
-                window.location.reload();
+                toast.error(`DISCORD_AUTH_ERROR: ${error.message}`);
             }
         } catch (err) {
             console.error("Login unexpected error:", err);
+            toast.error("DISCORD_AUTH_ERROR: UNEXPECTED_FAILURE");
         } finally {
             setLoading(false);
         }
@@ -187,37 +192,19 @@ export default function MainHeader() {
                 title={modalType === 'login' ? 'Creator Authentication' : 'Creator Logout'}
             >
                 {modalType === 'login' && (
-                    <form onSubmit={handleLogin} className="space-y-4 text-(--foreground)">
-                        <div className="space-y-1">
-                            <label className="text-[10px] uppercase opacity-50">Creator_Email</label>
-                            <input
-                                type="email"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="creator@zzzcode.dev"
-                                className="w-full bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75"
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] uppercase opacity-50">Creator_Secret_Key</label>
-                            <input
-                                type="password"
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="******"
-                                className="w-full bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75"
-                            />
-                        </div>
+                    <div className="space-y-4 text-(--foreground)">
+                        <p className="text-xs leading-relaxed text-(--foreground)/70">
+                            Creator access only. Continue with the Discord account linked to your creator profile.
+                        </p>
                         <button
-                            type="submit"
+                            type="button"
+                            onClick={handleLogin}
                             disabled={loading}
-                            className="cursor-pointer w-full bg-(--primary) text-black py-2 font-bold uppercase mt-2 hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="cursor-pointer w-full bg-(--primary) text-black py-2 font-bold uppercase hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {loading ? 'Initializing...' : 'Initialize_Creator_Session'}
+                            {loading ? 'Connecting...' : 'Login_With_Discord'}
                         </button>
-                    </form>
+                    </div>
                 )}
 
                 {modalType === 'logout' && (
