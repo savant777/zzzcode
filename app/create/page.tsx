@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderB
 export default function AddTemplatePage() {
     const router = useRouter();
     const STORAGE_KEY = 'zzzcode_draft_template';
+    const skipDraftSaveRef = useRef(false);
 
     // --- 1. States ---
     const [loading, setLoading] = useState(false);
@@ -166,6 +167,8 @@ export default function AddTemplatePage() {
     // Auto-Save Draft (Debounced 2s)
     useEffect(() => {
         const timer = setTimeout(() => {
+            if (skipDraftSaveRef.current) return;
+
             if (formData.title || formData.html_blueprint) {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ formData, fields, selectedTags }));
             }
@@ -206,6 +209,7 @@ export default function AddTemplatePage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        skipDraftSaveRef.current = true;
         const toastId = toast.loading("SYSTEM: Syncing_Module...");
 
         try {
@@ -263,6 +267,7 @@ export default function AddTemplatePage() {
             toast.success("PROTOCOL_SUCCESS", { id: toastId });
             router.push(`/edit/${templateData.id}?group=${targetGroup}&tag=${targetTag}`);
         } catch (error: any) {
+            skipDraftSaveRef.current = false;
             toast.error(`CRITICAL_FAILURE: ${error.message}`, { id: toastId });
         } finally {
             setLoading(false);
