@@ -28,6 +28,17 @@ export default function CreatorSignInPage() {
     const [inviteCode, setInviteCode] = useState('');
     const [displayName, setDisplayName] = useState('');
 
+    const getAccessToken = async () => {
+        const { data: sessionData } = await supabase.auth.getSession();
+
+        if (sessionData.session?.access_token) {
+            return sessionData.session.access_token;
+        }
+
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        return refreshData.session?.access_token || null;
+    };
+
     useEffect(() => {
         const initSignIn = async () => {
             const session = await getCurrentCreator();
@@ -39,11 +50,19 @@ export default function CreatorSignInPage() {
 
             if (session.user) {
                 const inviteVerified = sessionStorage.getItem('zzzcode_invite_verified') === 'true';
+                const accessToken = await getAccessToken();
 
                 if (!inviteVerified) {
                     await supabase.auth.signOut();
                     toast.error("INVITE_CODE_REQUIRED");
                     router.replace('/?group=category&tag=all');
+                    return;
+                }
+
+                if (!accessToken) {
+                    toast.error("AUTH_SESSION_REQUIRED: PLEASE_LOGIN_WITH_DISCORD_AGAIN");
+                    setStep('discord');
+                    setLoading(false);
                     return;
                 }
 
@@ -107,9 +126,9 @@ export default function CreatorSignInPage() {
         setSubmitting(true);
 
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            const accessToken = await getAccessToken();
 
-            if (!session?.access_token) {
+            if (!accessToken) {
                 throw new Error("AUTH_SESSION_REQUIRED");
             }
 
@@ -117,7 +136,7 @@ export default function CreatorSignInPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${session.access_token}`,
+                    Authorization: `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify({ displayName }),
             });
