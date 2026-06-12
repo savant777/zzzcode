@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useRef, useState, useEffect } from 'react';
 import { HexColorPicker } from "react-colorful";
 import Modal from './Modal';
@@ -7,6 +7,27 @@ interface Props {
     value: string;
     onChange: (val: string) => void;
 }
+
+type YouTubeTag = 'yt' | 'ytauto' | 'hideyt';
+
+const extractYouTubeId = (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+
+    try {
+        const url = new URL(trimmed);
+        const videoId = url.searchParams.get('v');
+        if (videoId) return videoId;
+
+        const pathMatch = url.pathname.match(/\/(?:embed|shorts|live)\/([^/?#]+)/) || url.pathname.match(/^\/([^/?#]+)/);
+        if (pathMatch?.[1]) return pathMatch[1];
+    } catch {
+        const urlMatch = trimmed.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]+)/);
+        if (urlMatch?.[1]) return urlMatch[1];
+    }
+
+    return trimmed.replace(/^[^A-Za-z0-9_-]+|[^A-Za-z0-9_-]+$/g, '').split(/[?&#]/)[0];
+};
 
 export default function BBCodeEditor({ value, onChange }: Props) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -77,6 +98,14 @@ export default function BBCodeEditor({ value, onChange }: Props) {
         setShowColorPicker(false);
     };
 
+    const applyAbbr = () => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const selectedText = value.substring(textarea.selectionStart, textarea.selectionEnd) || 'เนื้อหา';
+        insertRaw(`<abbr title="">${selectedText}</abbr>`);
+    };
+
     // Insert Image
     const [imgData, setImgData] = useState({ url: '', w: '', h: '' });
     const [showImgOption, setShowImgOption] = useState(false);
@@ -90,6 +119,25 @@ export default function BBCodeEditor({ value, onChange }: Props) {
         insertTag(tag + imgData.url, '[/img]');
         setShowImgOption(false);
         setImgData({ url: '', w: '', h: '' });
+    };
+
+    // Insert YouTube
+    const [showYoutubeOption, setShowYoutubeOption] = useState(false);
+    const [youtubeData, setYoutubeData] = useState({ url: '' });
+    const [youtubeTag, setYoutubeTag] = useState<YouTubeTag>('yt');
+
+    const openYoutubeOption = (tag: YouTubeTag) => {
+        setYoutubeTag(tag);
+        setShowYoutubeOption(true);
+    };
+
+    const applyYoutube = () => {
+        const videoId = extractYouTubeId(youtubeData.url);
+        if (!videoId) return;
+
+        insertRaw(`[${youtubeTag}=${videoId}][/${youtubeTag}]`);
+        setShowYoutubeOption(false);
+        setYoutubeData({ url: '' });
     };
 
     // Insert Url
@@ -171,11 +219,17 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                             <path d="M200-120v-80h560v80H200Zm123-223q-56-63-56-167v-330h103v336q0 56 28 91t82 35q54 0 82-35t28-91v-336h103v330q0 104-56 167t-157 63q-101 0-157-63Z"/>
                         </svg>
                     </button>
+                    <button title="abbr" onClick={applyAbbr} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
+                            <path d="M323-343q-56-63-56-167v-330h103v336q0 56 28 91t82 35q54 0 82-35t28-91v-336h103v330q0 104-56 167t-157 63q-101 0-157-63Z"/>
+                            <path d="M200-160h560" fill="none" stroke="currentColor" strokeWidth="72" strokeLinecap="butt" strokeDasharray="64 44"/>
+                        </svg>
+                    </button>
                     <button title="ขีดทับ" onClick={() => insertTag('[s]', '[/s]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M486-160q-76 0-135-45t-85-123l88-38q14 48 48.5 79t85.5 31q42 0 76-20t34-64q0-18-7-33t-19-27h112q5 14 7.5 28.5T694-340q0 86-61.5 133T486-160ZM80-480v-80h800v80H80Zm402-326q66 0 115.5 32.5T674-674l-88 39q-9-29-33.5-52T484-710q-41 0-68 18.5T386-640h-96q2-69 54.5-117.5T482-806Z"/>
                         </svg>
-                    </button>
+                    </button>                    
                 </div>
 
                 {/* กลุ่มจัดแนว */}
@@ -260,6 +314,19 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                         </svg>
                     </button>
                     
+                </div>
+
+                {/* YouTube group */}
+                <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
+                    <button type="button" title="YouTube" onClick={() => openYoutubeOption('yt')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <span className="block min-w-5 px-0.5 text-center text-[10px] font-black uppercase leading-5">yt</span>
+                    </button>
+                    <button type="button" title="YouTube autoplay" onClick={() => openYoutubeOption('ytauto')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <span className="block min-w-5 px-0.5 text-center text-[10px] font-black uppercase leading-5">ytauto</span>
+                    </button>
+                    <button type="button" title="Hidden YouTube autoplay" onClick={() => openYoutubeOption('hideyt')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <span className="block min-w-5 px-0.5 text-center text-[10px] font-black uppercase leading-5">hideyt</span>
+                    </button>
                 </div>
 
                 {/* กลุ่มซ่อนเนื้อหา */}
@@ -355,6 +422,41 @@ export default function BBCodeEditor({ value, onChange }: Props) {
             </div>
         </Modal>
         <Modal
+            isOpen={showYoutubeOption}
+            onClose={() => setShowYoutubeOption(false)}
+            title={`INSERT_${youtubeTag.toUpperCase()}`}
+        >
+            <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase opacity-60">YouTube_URL_OR_ID</label>
+                    <p className="text-[9px] opacity-80">เช่น https://youtu.be/gixs8ZYd-rs?si=Oxrjtr0OiIRd7IUP หรือ gixs8ZYd-rs</p>
+                    <input
+                        type="text"
+                        value={youtubeData.url}
+                        onChange={(e) => setYoutubeData({ url: e.target.value })}
+                        className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                        placeholder="ใส่ลิงก์ youtube หรือ id หลังเครื่องหมาย ="
+                    />
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowYoutubeOption(false)}
+                        className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={applyYoutube}
+                        className="cursor-pointer flex-1 py-2 bg-(--primary) text-(--background) font-bold uppercase text-xs hover:brightness-110 transition-all"
+                    >
+                        Insert
+                    </button>
+                </div>
+            </div>
+        </Modal>
+        <Modal
             isOpen={showUrlOption}
             onClose={() => setShowUrlOption(false)}
             title="INSERT_LINK"
@@ -411,7 +513,7 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                         value={detailsData.summary}
                         onChange={(e) => setDetailsData(prev => ({ ...prev, summary: e.target.value }))}
                         className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
-                        placeholder="หัวข้อ"
+                        placeholder="เธซเธฑเธงเธเนเธญ"
                     />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -421,7 +523,7 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                         value={detailsData.details}
                         onChange={(e) => setDetailsData(prev => ({ ...prev, details: e.target.value }))}
                         className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300 resize-y"
-                        placeholder="เนื้อหา"
+                        placeholder="เน€เธเธทเนเธญเธซเธฒ"
                     />
                 </div>
                 <div className="flex gap-2 pt-2">

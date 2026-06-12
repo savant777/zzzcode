@@ -215,6 +215,25 @@ const escapeRegExp = (value: string): string => {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
+const extractYouTubeId = (input: string): string => {
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+
+    try {
+        const url = new URL(trimmed);
+        const videoId = url.searchParams.get('v');
+        if (videoId) return videoId;
+
+        const pathMatch = url.pathname.match(/\/(?:embed|shorts|live)\/([^/?#]+)/) || url.pathname.match(/^\/([^/?#]+)/);
+        if (pathMatch?.[1]) return pathMatch[1];
+    } catch {
+        const urlMatch = trimmed.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]+)/);
+        if (urlMatch?.[1]) return urlMatch[1];
+    }
+
+    return trimmed.replace(/^[^A-Za-z0-9_-]+|[^A-Za-z0-9_-]+$/g, '').split(/[?&#]/)[0];
+};
+
 export const parseBBCode = (text: string, convertNewlines: boolean = true): string => {
     if (!text) return "";
 
@@ -279,6 +298,18 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
         .replace(/\[s\]([\s\S]*?)\[\/s\]/g, '<span style="text-decoration: line-through;" class="mycode_s">$1</span>')
         .replace(/\[align=(left|center|right|justify)\]([\s\S]*?)\[\/align\]/g, '<div style="text-align: $1;" class="mycode_align">$2</div>')
         .replace(/\[color=(#?[a-fA-F0-9]{3,6})\]([\s\S]*?)\[\/color\]/g, '<span style="color: $1;" class="mycode_color">$2</span>')
+        .replace(/\[yt=([^\]]+)\]\[\/yt\]/gi, (_match, input) => {
+            const videoId = extractYouTubeId(input);
+            return videoId ? `<iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen="" style="aspect-ratio: 16 / 9;width: 100%;"></iframe>` : '';
+        })
+        .replace(/\[ytauto=([^\]]+)\]\[\/ytauto\]/gi, (_match, input) => {
+            const videoId = extractYouTubeId(input);
+            return videoId ? `<iframe src="https://www.youtube.com/embed/${videoId}?rel=0&controls=0&showinfo=0&autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen="" style="aspect-ratio: 16 / 9;width: 100%;"></iframe>` : '';
+        })
+        .replace(/\[hideyt=([^\]]+)\]\[\/hideyt\]/gi, (_match, input) => {
+            const videoId = extractYouTubeId(input);
+            return videoId ? `<iframe style="display:none;" width="0" height="0" src="https://www.youtube.com/embed/${videoId}?autoplay=1&loop=1&playlist=${videoId}" frameborder="0" allow="autoplay"></iframe>` : '';
+        })
         .replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, (_match, content) => `<div style="margin-top:5px"><div class="quotetitle"><input class="button2 btnlite" type="button" value="View Spoiler" style="text-align:center;width:115px;margin:0px;padding: 5px;background-color: #e7e7e7;color: black;border: 0;" onclick="if (this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display != '') { this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display = '';      this.innerText = ''; this.value = 'Hide Spoiler'; } else { this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display = 'none'; this.innerText = ''; this.value = 'View Spoiler'; }"></div><div class="quotecontent" style="margin: 5px 0px;padding: 15px;background: #202020;font-size: 13px;color: #fff;"><div style="display: none;">${content}</div></div></div>`)
         .replace(/\[hide\]([\s\S]*?)\[\/hide\]/gi, '<div class="hidden-content"><div class="hidden-content-title"><strong>เนื้อหาที่ถูกซ่อน</strong></div><div class="hidden-content-body">$1</div></div>')
         .replace(/\[hr\]/gi, '<hr class="mycode_hr">')
