@@ -45,6 +45,7 @@ export interface FieldConfig {
         true_value?: string;
         false_value?: string;
         separate_placeholder?: boolean;
+        show_word_count?: boolean;
         [key: string]: any;
     };
     is_repeat?: boolean;

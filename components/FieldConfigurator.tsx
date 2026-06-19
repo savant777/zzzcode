@@ -139,6 +139,19 @@ export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onC
                     <DefaultValueConfig field={tempField} onChange={setTempField} />
                 )}
 
+                {tempField.type === 'bbcode' && (
+                    <label className="flex w-fit items-center gap-2 text-[10px] uppercase text-(--foreground)/60 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={tempField.config?.show_word_count || false}
+                            onChange={(e) => updateField({
+                                config: { ...tempField.config, show_word_count: e.target.checked },
+                            })}
+                        />
+                        Show_Word_Count
+                    </label>
+                )}
+
                 <div className="flex flex-col gap-1">
                     <label className="text-[10px] uppercase opacity-60">Field_Instruction</label>
                     <textarea

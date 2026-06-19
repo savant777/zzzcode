@@ -66,6 +66,43 @@ const renderDescription = (description: string): ReactNode[] => {
     return nodes;
 };
 
+const countWords = (input: string) => {
+    const plainText = input
+        .replace(/\[[^\]]+\]/g, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&[a-z0-9#]+;/gi, ' ')
+        .trim();
+
+    if (!plainText) return 0;
+
+    if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+        const segmenter = new Intl.Segmenter(['th', 'en'], { granularity: 'word' });
+        const wordSegments = Array.from(segmenter.segment(plainText)).filter(segment => segment.isWordLike);
+        const thaiAttachedPrefixes = new Set(['ก็', 'ไม่']);
+
+        return wordSegments.reduce((count, segment, index) => {
+            const nextSegment = wordSegments[index + 1]?.segment || '';
+            const shouldAttachToNextThaiWord = thaiAttachedPrefixes.has(segment.segment) &&
+                nextSegment !== 'มา' &&
+                /[\u0E00-\u0E7F]/.test(nextSegment);
+
+            return shouldAttachToNextThaiWord ? count : count + 1;
+        }, 0);
+    }
+
+    return plainText.split(/\s+/).filter(Boolean).length;
+};
+
+function WordCount({ value }: { value: string }) {
+    const wordCount = countWords(value);
+
+    return (
+        <div className="font-Google-Sans text-[10px] leading-none text-(--foreground)/40">
+            word_count: {wordCount.toLocaleString('th-TH')} คำ
+        </div>
+    );
+}
+
 export default function FieldRenderer({ field, value, onChange, className }: FieldRendererProps) {
     const [showDescription, setShowDescription] = useState(false);
     const selectOptions = field.type === 'select' ? getSelectOptions(field) : [];
@@ -193,10 +230,13 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
 
             {/* --- TYPE: BBCODE --- */}
             {field.type === 'bbcode' && (
-                <BBCodeEditor 
-                    value={value || ''} 
-                    onChange={(val) => onChange(field.variable_name, val)}
-                />
+                <>
+                    <BBCodeEditor 
+                        value={value || ''} 
+                        onChange={(val) => onChange(field.variable_name, val)}
+                    />
+                    {field.config?.show_word_count && <WordCount value={value || ''} />}
+                </>
             )}
 
             {/* --- TYPE: COLOR --- */}
@@ -282,6 +322,7 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                                                     value={entry?.custom_value || ''}
                                                     onChange={(val) => updateMultipleEntries(selectedMultipleEntries.map((item: any) => item.option_index === index ? { ...item, custom_value: val } : item))}
                                                 />
+                                                {field.config?.show_word_count && <WordCount value={entry?.custom_value || ''} />}
                                             </div>
                                             )}
 
@@ -386,10 +427,13 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                     )}
 
                     {selectedSelectOption?.type === 'bbcode' && (
-                        <BBCodeEditor
-                            value={value?.custom_value || ''}
-                            onChange={(val) => onChange(field.variable_name, { option_index: selectedSelectIndex, value: selectedSelectValue, custom_value: val })}
-                        />
+                        <div>
+                            <BBCodeEditor
+                                value={value?.custom_value || ''}
+                                onChange={(val) => onChange(field.variable_name, { option_index: selectedSelectIndex, value: selectedSelectValue, custom_value: val })}
+                            />
+                            {field.config?.show_word_count && <WordCount value={value?.custom_value || ''} />}
+                        </div>
                     )}
 
                     {selectedSelectOption?.type === 'color' && (
