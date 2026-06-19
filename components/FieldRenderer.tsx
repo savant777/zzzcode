@@ -78,21 +78,28 @@ const countWords = (input: string) => {
     if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
         const segmenter = new Intl.Segmenter(['th', 'en'], { granularity: 'word' });
         const wordSegments = Array.from(segmenter.segment(plainText)).filter(segment => segment.isWordLike);
-        const thaiAttachedPrefixes = new Set(['ก็', 'ไม่', 'จะ', 'ได้', 'ไป', 'มา']);
-        const thaiAttachedSuffixes = new Set(['ที่', 'ไว้']);
+        const thaiAttachedPrefixes = new Set(['ก็', 'ไม่']);
+        const thaiAttachedPairs = new Set([
+            'กลับ|มา',
+            'ก่อน|ที่',
+            'ไป|มอง',
+            'ไป|ที่',
+            'เอา|ไว้',
+            'ทิ้ง|ไว้',
+            'มา|ใช้',
+            'ตอน|ที่',
+        ]);
 
         return wordSegments.reduce((count, segment, index) => {
             const currentSegment = segment.segment;
-            const previousSegment = wordSegments[index - 1]?.segment || '';
             const nextSegment = wordSegments[index + 1]?.segment || '';
-            const previousIsThai = /[\u0E00-\u0E7F]/.test(previousSegment);
             const nextIsThai = /[\u0E00-\u0E7F]/.test(nextSegment);
             const shouldAttachToNextThaiWord = thaiAttachedPrefixes.has(currentSegment) &&
                 nextSegment !== 'มา' &&
                 nextIsThai;
-            const shouldAttachToPreviousThaiWord = thaiAttachedSuffixes.has(currentSegment) && previousIsThai;
+            const shouldAttachPair = thaiAttachedPairs.has(`${currentSegment}|${nextSegment}`);
 
-            return shouldAttachToNextThaiWord || shouldAttachToPreviousThaiWord ? count : count + 1;
+            return shouldAttachToNextThaiWord || shouldAttachPair ? count : count + 1;
         }, 0);
     }
 
