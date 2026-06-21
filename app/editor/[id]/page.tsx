@@ -237,9 +237,7 @@ const buildInitialValues = (fieldList: FieldConfig[], savedValues?: Record<strin
         const savedBlock = savedValues?.[blockName];
 
         if (Array.isArray(savedBlock)) {
-            values[blockName] = savedBlock.length > 0
-                ? savedBlock.map(entry => createBlockEntry(blockFields, entry))
-                : [createBlockEntry(blockFields)];
+            values[blockName] = savedBlock.map(entry => createBlockEntry(blockFields, entry));
         } else {
             values[blockName] = [createBlockEntry(blockFields, savedValues)];
         }
@@ -455,12 +453,9 @@ export default function EditorPage() {
 
     const handleRemoveBlockEntry = (blockName: string, entryIndex: number) => {
         setFieldValues(prev => {
-            const blockFields = getBlockFields(blockName);
             const entries = Array.isArray(prev[blockName]) && prev[blockName].length > 0
                 ? [...prev[blockName]]
-                : [createBlockEntry(blockFields)];
-
-            if (entries.length <= 1) return prev;
+                : [];
 
             entries.splice(entryIndex, 1);
 
@@ -591,9 +586,9 @@ export default function EditorPage() {
                             })}
 
                             {fieldLayout.blocks.map(({ blockName, groups, fields: blockFields }) => {
-                                const entries = Array.isArray(fieldValues[blockName]) && fieldValues[blockName].length > 0
+                                const entries = Array.isArray(fieldValues[blockName])
                                     ? fieldValues[blockName]
-                                    : [createBlockEntry(blockFields)];
+                                    : [];
 
                                 return (
                                     <div key={blockName} className="border border-dashed border-(--primary)/40 p-3">
@@ -616,6 +611,11 @@ export default function EditorPage() {
                                         </div>
 
                                         <div className="flex flex-col gap-4">
+                                            {entries.length === 0 && (
+                                                <div className="border border-dashed border-(--primary)/20 bg-black/10 p-4 text-center text-[10px] uppercase tracking-[0.2em] text-(--foreground)/30">
+                                                    No_Block_Items
+                                                </div>
+                                            )}
                                             {entries.map((entryValues: Record<string, any>, entryIndex: number) => (
                                                 <div key={`${blockName}-${entryIndex}`} className="border border-(--primary)/20 bg-black/20 p-3">
                                                     <div className="flex items-center gap-2 mb-3">
@@ -625,9 +625,8 @@ export default function EditorPage() {
                                                         <div className="ml-auto flex gap-1">
                                                             <button
                                                                 type="button"
-                                                                disabled={entries.length <= 1}
                                                                 onClick={() => handleRemoveBlockEntry(blockName, entryIndex)}
-                                                                className="cursor-pointer border border-red-500/30 px-2 py-1 text-[10px] uppercase text-red-300 hover:border-red-500 disabled:cursor-not-allowed disabled:opacity-30 transition-colors"
+                                                                className="cursor-pointer border border-red-500/30 px-2 py-1 text-[10px] uppercase text-red-300 hover:border-red-500 transition-colors"
                                                             >
                                                                 Remove
                                                             </button>
