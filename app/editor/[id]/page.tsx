@@ -268,7 +268,6 @@ export default function EditorPage() {
     });
 
     const [fields, setFields] = useState<FieldConfig[]>([]);
-    const [visibleBlockDescriptions, setVisibleBlockDescriptions] = useState<Record<string, boolean>>({});
     const {
         value: fieldValues,
         setValue: setFieldValues,
@@ -596,25 +595,9 @@ export default function EditorPage() {
                                     <div key={blockName} className="border border-dashed border-(--primary)/40 p-3">
                                         <div className="flex items-center gap-2 border-b border-(--primary)/30 pb-2 mb-3">
                                             <div className="min-w-0">
-                                                <div className="flex items-center gap-1">
-                                                    <h4 className="text-xs font-black uppercase tracking-[0.2em] text-(--primary) truncate">
-                                                        BLOCK_SCOPE: {blockName}
-                                                    </h4>
-                                                    {blockDescription && (
-                                                        <button
-                                                            type="button"
-                                                            aria-label={`Show description for ${blockName}`}
-                                                            aria-pressed={visibleBlockDescriptions[blockName] || false}
-                                                            onClick={() => setVisibleBlockDescriptions(prev => ({
-                                                                ...prev,
-                                                                [blockName]: !prev[blockName],
-                                                            }))}
-                                                            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-(--primary)/40 text-[10px] font-bold leading-none text-(--primary)/70 hover:border-(--primary) hover:text-(--primary) transition-colors cursor-pointer"
-                                                        >
-                                                            i
-                                                        </button>
-                                                    )}
-                                                </div>
+                                                <h4 className="text-xs font-black uppercase tracking-[0.2em] text-(--primary) truncate">
+                                                    BLOCK_SCOPE: {blockName}
+                                                </h4>
                                                 <p className="text-[10px] uppercase text-(--foreground)/35">
                                                     {entries.length} item{entries.length === 1 ? '' : 's'}
                                                 </p>
@@ -628,7 +611,7 @@ export default function EditorPage() {
                                             </button>
                                         </div>
 
-                                        {blockDescription && visibleBlockDescriptions[blockName] && (
+                                        {blockDescription && (
                                             <p className="mb-3 font-Google-Sans text-[10px] leading-relaxed whitespace-pre-wrap text-(--foreground)/45">
                                                 {blockDescription}
                                             </p>
