@@ -244,7 +244,7 @@ export default function LivePreview({ html }: { html: string }) {
                 vertical-align: middle;
             }
 
-            hr { color: #fff; background: #303030; height: 1px; border: 0px; margin: 1em 0; }
+            hr { color: #fff; background-color: #303030; height: 1px; border: 0px; }
             a { color: rgb(43, 120, 255); text-decoration: none; transition: .3s; }
             a:hover { text-decoration: none; }
             .hidden-content-title {
