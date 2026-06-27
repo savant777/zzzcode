@@ -219,8 +219,8 @@ const preserveTextNewlines = (html: string): string => {
         }
 
         const trimmedPart = part
-            .replace(isDivOrParagraphTag(previousTag) || isHrTag(previousTag) ? /^[ \t]*\r?\n/ : /^$/, '')
-            .replace(isDivOrParagraphTag(nextTag) ? /\r?\n[ \t]*$/ : /$/, '');
+            .replace(isOpeningDivOrParagraphTag(previousTag) || isHrTag(previousTag) ? /^(?:[ \t]*\r?\n)+/ : /^$/, '')
+            .replace(isDivOrParagraphTag(nextTag) ? /(?:\r?\n[ \t]*)+$/ : /$/, '');
 
         return trimmedPart.replace(/\r?\n/g, '<br>');
     }).join('');
