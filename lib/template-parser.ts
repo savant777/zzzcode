@@ -6,6 +6,7 @@ export interface FieldConfig {
     type: 'text' | 'bbcode' | 'color' | 'select' | 'slider' | 'checkbox' | 'gradient';
     
     block_name?: string;
+    block_description?: string;
     block_order: number;
 
     group_name: string;
@@ -373,6 +374,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
         
         if (!fields.some(f => f.variable_name === varName && f.block_name === blockName)) {
             const oldField = existingFields.find(f => f.variable_name === varName && f.block_name === blockName);
+            const oldBlockField = existingFields.find(f => f.block_name === blockName);
 
             let initialVal = oldField?.default_value || "5";
             if (oldField?.config?.sliders?.[0]?.default_value !== undefined) {
@@ -386,6 +388,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 label: oldField?.label || varName,
                 type: oldField?.type || 'slider',
                 block_name: blockName,
+                block_description: oldField?.block_description ?? oldBlockField?.block_description,
                 block_order: oldField?.block_order ?? 0,
                 group_name: oldField?.group_name || "Repeat_Element",
                 group_order: oldField?.group_order ?? 90,
@@ -432,6 +435,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
 
         if (!fields.some(f => f.variable_name === varName && f.block_name === blockName)) {
             const oldField = existingFields.find(f => f.variable_name === varName && f.block_name === blockName);
+            const oldBlockField = existingFields.find(f => f.block_name === blockName);
             fields.push({
                 ...(oldField || {}),
                 id: oldField?.id || crypto.randomUUID(),
@@ -439,6 +443,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 label: oldField?.label || varName,
                 type: oldField?.type || (varName.startsWith('is_') ? 'checkbox' : 'text'),
                 block_name: blockName,
+                block_description: oldField?.block_description ?? oldBlockField?.block_description,
                 block_order: oldField?.block_order ?? blockMap[blockId],
                 group_name: currentGroupName,
                 group_order: oldField?.group_order ?? groupMap[groupKey],

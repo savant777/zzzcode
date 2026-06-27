@@ -204,6 +204,14 @@ export default function AddTemplatePage() {
             setFields(updated);
         }
     };
+
+    const handleBlockDescriptionChange = (blockName: string, description: string) => {
+        setFields(prev => prev.map(field =>
+            (field.block_name || "GLOBAL") === blockName
+                ? { ...field, block_description: description }
+                : field
+        ));
+    };
     
     // submit: INSERT to template and template_tags
     const handleSubmit = async (e: React.FormEvent) => {
@@ -499,6 +507,7 @@ export default function AddTemplatePage() {
                                                     sensors={sensors}
                                                     onFieldDragEnd={handleFieldDragEnd}
                                                     onGroupDragEnd={handleGroupDragEnd}
+                                                    onBlockDescriptionChange={handleBlockDescriptionChange}
                                                 />
                                             ))}
                                         </div>

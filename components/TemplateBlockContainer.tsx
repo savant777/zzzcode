@@ -4,10 +4,12 @@ import { DndContext, closestCenter } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import TemplateGroupContainer from './TemplateGroupContainer';
 
-export default function TemplateBlockContainer({ blockName, groups, sensors, onFieldDragEnd, onGroupDragEnd, onEdit }: any) {
+export default function TemplateBlockContainer({ blockName, groups, sensors, onFieldDragEnd, onGroupDragEnd, onEdit, onBlockDescriptionChange }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
         id: blockName 
     });
+    const blockFields = Object.values(groups).flat() as any[];
+    const blockDescription = blockFields[0]?.block_description || '';
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -40,6 +42,21 @@ export default function TemplateBlockContainer({ blockName, groups, sensors, onF
                 </svg>
                 {blockName === "GLOBAL" ? "Standard_Fields" : `BLOCK_SCOPE: ${blockName}`}
             </div>
+
+            {blockName !== "GLOBAL" && (
+                <div className="mb-3 flex flex-col gap-1">
+                    <label className="text-[9px] uppercase tracking-[0.2em] text-(--foreground)/35">
+                        Block_Description
+                    </label>
+                    <textarea
+                        rows={2}
+                        value={blockDescription}
+                        onChange={(e) => onBlockDescriptionChange?.(blockName, e.target.value)}
+                        className="font-Google-Sans bg-black/30 border border-(--primary)/20 p-2 text-xs outline-none focus:border-(--primary)/50 resize-y"
+                        placeholder="Optional helper text for this repeatable block..."
+                    />
+                </div>
+            )}
 
             {/* SortableContext for Group in each Block */}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onGroupDragEnd(e, blockName)}>

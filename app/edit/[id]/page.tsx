@@ -236,6 +236,14 @@ export default function EditTemplatePage() {
         }
     };
 
+    const handleBlockDescriptionChange = (blockName: string, description: string) => {
+        setFields(prev => prev.map(field =>
+            (field.block_name || "GLOBAL") === blockName
+                ? { ...field, block_description: description }
+                : field
+        ));
+    };
+
     const handleOpenEdit = (field: FieldConfig) => {
         setEditingField({ ...field });
         setIsFieldModalOpen(true);
@@ -535,6 +543,7 @@ export default function EditTemplatePage() {
                                                     onFieldDragEnd={handleFieldDragEnd}
                                                     onGroupDragEnd={handleGroupDragEnd}
                                                     onEdit={handleOpenEdit}
+                                                    onBlockDescriptionChange={handleBlockDescriptionChange}
                                                 />
                                             ))}
                                         </div>
