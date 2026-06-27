@@ -612,7 +612,7 @@ export default function EditorPage() {
                                         </div>
 
                                         {blockDescription && (
-                                            <p className="mb-3 font-Google-Sans text-[10px] leading-relaxed whitespace-pre-wrap text-(--foreground)/45">
+                                            <p className="mb-3 font-Google-Sans text-xs leading-relaxed whitespace-pre-wrap text-(--foreground)/70">
                                                 {blockDescription}
                                             </p>
                                         )}
