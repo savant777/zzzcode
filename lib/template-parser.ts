@@ -6,6 +6,8 @@ export interface FieldConfig {
     type: 'text' | 'bbcode' | 'color' | 'select' | 'slider' | 'checkbox' | 'gradient';
     
     block_name?: string;
+    parent_block_name?: string;
+    block_depth?: number;
     block_description?: string;
     block_order: number;
 
@@ -64,6 +66,12 @@ export type SelectOptionConfig = {
 export type GradientValue = {
     direction: string;
     colors: string[];
+};
+
+type BlockScope = {
+    blockName?: string;
+    parentBlockName?: string;
+    depth: number;
 };
 
 export const defaultGradientValue: GradientValue = {
@@ -217,6 +225,12 @@ const escapeRegExp = (value: string): string => {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
+const sameFieldScope = (field: FieldConfig, varName: string, blockName?: string, parentBlockName?: string) => {
+    return field.variable_name === varName &&
+        field.block_name === blockName &&
+        field.parent_block_name === parentBlockName;
+};
+
 const extractYouTubeId = (input: string): string => {
     const trimmed = input.trim();
     if (!trimmed) return '';
@@ -355,14 +369,20 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
     while ((bMatch = bCloseRegex.exec(html)) !== null) blockTags.push({ type: 'close', name: bMatch[1], pos: bMatch.index });
     blockTags.sort((a, b) => a.pos - b.pos);
 
-    const getBlockAtPos = (pos: number) => {
+    const getBlockScopeAtPos = (pos: number): BlockScope => {
         const stack: string[] = [];
         for (const tag of blockTags) {
             if (tag.pos > pos) break;
             if (tag.type === 'open') stack.push(tag.name);
             else stack.pop();
         }
-        return stack[stack.length - 1];
+        const limitedStack = stack.slice(-2);
+
+        return {
+            blockName: limitedStack[limitedStack.length - 1],
+            parentBlockName: limitedStack.length > 1 ? limitedStack[limitedStack.length - 2] : undefined,
+            depth: Math.min(1, Math.max(0, stack.length - 1)),
+        };
     };
 
     // 2. find REPEAT varName
@@ -370,11 +390,13 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
     let rMatch;
     while ((rMatch = repeatRegex.exec(html)) !== null) {
         const varName = rMatch[1].trim();
-        const blockName = getBlockAtPos(rMatch.index);
+        const blockScope = getBlockScopeAtPos(rMatch.index);
+        const blockName = blockScope.blockName;
+        const parentBlockName = blockScope.parentBlockName;
         
-        if (!fields.some(f => f.variable_name === varName && f.block_name === blockName)) {
-            const oldField = existingFields.find(f => f.variable_name === varName && f.block_name === blockName);
-            const oldBlockField = existingFields.find(f => f.block_name === blockName);
+        if (!fields.some(f => sameFieldScope(f, varName, blockName, parentBlockName))) {
+            const oldField = existingFields.find(f => sameFieldScope(f, varName, blockName, parentBlockName));
+            const oldBlockField = existingFields.find(f => f.block_name === blockName && f.parent_block_name === parentBlockName);
 
             let initialVal = oldField?.default_value || "5";
             if (oldField?.config?.sliders?.[0]?.default_value !== undefined) {
@@ -388,6 +410,8 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 label: oldField?.label || varName,
                 type: oldField?.type || 'slider',
                 block_name: blockName,
+                parent_block_name: parentBlockName,
+                block_depth: oldField?.block_depth ?? blockScope.depth,
                 block_description: oldField?.block_description ?? oldBlockField?.block_description,
                 block_order: oldField?.block_order ?? 0,
                 group_name: oldField?.group_name || "Repeat_Element",
@@ -415,8 +439,10 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
         const varName = match[1].trim();
         const defaultValue = match[2]?.trim() || varName;
         const inlineGroup = match[3]?.trim();
-        const blockName = getBlockAtPos(match.index);
-        const blockId = blockName || "GLOBAL";
+        const blockScope = getBlockScopeAtPos(match.index);
+        const blockName = blockScope.blockName;
+        const parentBlockName = blockScope.parentBlockName;
+        const blockId = blockName ? `${parentBlockName || "ROOT"}>${blockName}` : "GLOBAL";
 
         if (blockMap[blockId] === undefined) blockMap[blockId] = ++lastBlockOrder;
 
@@ -433,9 +459,9 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
         const groupKey = `${blockId}-${currentGroupName}`;
         if (groupMap[groupKey] === undefined) groupMap[groupKey] = lastGroupOrder++;
 
-        if (!fields.some(f => f.variable_name === varName && f.block_name === blockName)) {
-            const oldField = existingFields.find(f => f.variable_name === varName && f.block_name === blockName);
-            const oldBlockField = existingFields.find(f => f.block_name === blockName);
+        if (!fields.some(f => sameFieldScope(f, varName, blockName, parentBlockName))) {
+            const oldField = existingFields.find(f => sameFieldScope(f, varName, blockName, parentBlockName));
+            const oldBlockField = existingFields.find(f => f.block_name === blockName && f.parent_block_name === parentBlockName);
             fields.push({
                 ...(oldField || {}),
                 id: oldField?.id || crypto.randomUUID(),
@@ -443,6 +469,8 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 label: oldField?.label || varName,
                 type: oldField?.type || (varName.startsWith('is_') ? 'checkbox' : 'text'),
                 block_name: blockName,
+                parent_block_name: parentBlockName,
+                block_depth: oldField?.block_depth ?? blockScope.depth,
                 block_description: oldField?.block_description ?? oldBlockField?.block_description,
                 block_order: oldField?.block_order ?? blockMap[blockId],
                 group_name: currentGroupName,
@@ -458,29 +486,86 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
 };
 
 export const generateFinalHTML = (blueprint: string, values: any, fields: FieldConfig[], isExport: boolean = false): string => {
-    const processTemplate = (content: string, currentValues: any): string => {
+    const processTemplate = (content: string, currentValues: any, currentBlockName?: string, parentBlockName?: string): string => {
         let result = content;
 
-        // 1. [BLOCK:name]...[/BLOCK:name]
-        const blockRegex = /\[BLOCK:([^\]]+)\]([\s\S]*?)\[\/BLOCK:\1\]/g;
-        result = result.replace(blockRegex, (_, blockName, blockContent) => {
-            const blockEntries = values[blockName] || [];
-            if (!Array.isArray(blockEntries)) return "";
+        const renderBlocks = (input: string) => {
+            const openRegex = /\[BLOCK:([^\]]+)\]/g;
+            let output = '';
+            let cursor = 0;
+            let openMatch: RegExpExecArray | null;
 
-            return blockEntries.map((entryValues: any) => {
-                return processTemplate(blockContent, { ...currentValues, ...entryValues });
-            }).join('');
-        });
+            const findMatchingClose = (blockName: string, searchStart: number) => {
+                const tagRegex = /\[(\/?)BLOCK:([^\]]+)\]/g;
+                tagRegex.lastIndex = searchStart;
+                let depth = 1;
+                let tagMatch: RegExpExecArray | null;
 
-        // 2. [REPEAT:varName]...[/REPEAT]
+                while ((tagMatch = tagRegex.exec(input)) !== null) {
+                    const isClose = tagMatch[1] === '/';
+                    const tagBlockName = tagMatch[2];
+                    if (tagBlockName !== blockName) continue;
+
+                    if (isClose) {
+                        depth -= 1;
+                        if (depth === 0) {
+                            return {
+                                contentStart: searchStart,
+                                contentEnd: tagMatch.index,
+                                closeEnd: tagRegex.lastIndex,
+                            };
+                        }
+                    } else depth += 1;
+                }
+
+                return null;
+            };
+
+            while ((openMatch = openRegex.exec(input)) !== null) {
+                const blockName = openMatch[1];
+                const openStart = openMatch.index;
+                const openEnd = openRegex.lastIndex;
+                const closeMatch = findMatchingClose(blockName, openEnd);
+
+                if (!closeMatch) continue;
+
+                output += input.slice(cursor, openStart);
+
+                const blockContent = input.slice(closeMatch.contentStart, closeMatch.contentEnd);
+                const blockEntries = Array.isArray(currentValues[blockName])
+                    ? currentValues[blockName]
+                    : values[blockName] || [];
+
+                if (Array.isArray(blockEntries)) {
+                    output += blockEntries.map((entryValues: any) => {
+                        return processTemplate(
+                            blockContent,
+                            { ...currentValues, ...entryValues },
+                            blockName,
+                            currentBlockName
+                        );
+                    }).join('');
+                }
+
+                cursor = closeMatch.closeEnd;
+                openRegex.lastIndex = closeMatch.closeEnd;
+            }
+
+            return output + input.slice(cursor);
+        };
+
+        result = renderBlocks(result);
+
+        // 1. [REPEAT:varName]...[/REPEAT]
         const repeatRegex = /\[REPEAT:([^\]]+)\]([\s\S]*?)\[\/REPEAT\]/g;
         result = result.replace(repeatRegex, (_, varName, repeatContent) => {
             const count = parseInt(currentValues[varName] ?? values[varName]) || 0;
             return Array(count).fill(repeatContent).join('');
         });
 
-        // 3. replace {{variable}}
-        fields.forEach(field => {
+        // 2. replace {{variable}} for the current block scope only.
+        const scopedFields = fields.filter(field => field.block_name === currentBlockName && field.parent_block_name === parentBlockName);
+        scopedFields.forEach(field => {
             const varName = field.variable_name;
             const safeVarName = escapeRegExp(varName);
             let val = currentValues[varName] ?? values[varName] ?? field.default_value;
@@ -565,9 +650,13 @@ export const getBlocksConfig = (fields: FieldConfig[]) => {
     return blocks;
 };
 
-export const reorderFields = (fields: FieldConfig[], groupName: string, activeId: string, overId: string): FieldConfig[] => {
-    const inGroup = fields.filter(f => f.group_name === groupName).sort((a, b) => a.field_order - b.field_order);
-    const otherGroups = fields.filter(f => f.group_name !== groupName);
+export const reorderFields = (fields: FieldConfig[], groupName: string, activeId: string, overId: string, blockName?: string, parentBlockName?: string): FieldConfig[] => {
+    const isInScope = (field: FieldConfig) =>
+        field.group_name === groupName &&
+        (field.block_name || "GLOBAL") === (blockName || "GLOBAL") &&
+        field.parent_block_name === parentBlockName;
+    const inGroup = fields.filter(isInScope).sort((a, b) => a.field_order - b.field_order);
+    const otherGroups = fields.filter(f => !isInScope(f));
     const oldIndex = inGroup.findIndex(f => f.id === activeId);
     const newIndex = inGroup.findIndex(f => f.id === overId);
     if (oldIndex === -1 || newIndex === -1) return fields;
@@ -578,9 +667,12 @@ export const reorderFields = (fields: FieldConfig[], groupName: string, activeId
     return [...otherGroups, ...updatedInGroup];
 };
 
-export const reorderGroups = (fields: FieldConfig[], blockName: string, activeGroupName: string, overGroupName: string): FieldConfig[] => {
-    const fieldsInBlock = fields.filter(f => (f.block_name || "GLOBAL") === blockName);
-    const otherFields = fields.filter(f => (f.block_name || "GLOBAL") !== blockName);
+export const reorderGroups = (fields: FieldConfig[], blockName: string, activeGroupName: string, overGroupName: string, parentBlockName?: string): FieldConfig[] => {
+    const isInBlock = (field: FieldConfig) =>
+        (field.block_name || "GLOBAL") === blockName &&
+        field.parent_block_name === parentBlockName;
+    const fieldsInBlock = fields.filter(isInBlock);
+    const otherFields = fields.filter(f => !isInBlock(f));
 
     const groupNames = Array.from(new Set(fieldsInBlock.map(f => f.group_name)))
         .sort((a, b) => {
@@ -606,11 +698,12 @@ export const reorderGroups = (fields: FieldConfig[], blockName: string, activeGr
     return [...otherFields, ...updatedInBlock];
 };
 
-export const reorderBlocks = (fields: FieldConfig[], activeBlockId: string, overBlockId: string): FieldConfig[] => {
-    const blockNames = Array.from(new Set(fields.map(f => f.block_name || "GLOBAL")))
+export const reorderBlocks = (fields: FieldConfig[], activeBlockId: string, overBlockId: string, parentBlockName?: string): FieldConfig[] => {
+    const isInBlockScope = (field: FieldConfig) => field.parent_block_name === parentBlockName;
+    const blockNames = Array.from(new Set(fields.filter(isInBlockScope).map(f => f.block_name || "GLOBAL")))
         .sort((a, b) => {
-            const fA = fields.find(f => (f.block_name || "GLOBAL") === a);
-            const fB = fields.find(f => (f.block_name || "GLOBAL") === b);
+            const fA = fields.find(f => isInBlockScope(f) && (f.block_name || "GLOBAL") === a);
+            const fB = fields.find(f => isInBlockScope(f) && (f.block_name || "GLOBAL") === b);
             return (fA?.block_order ?? 0) - (fB?.block_order ?? 0);
         });
 
@@ -623,8 +716,11 @@ export const reorderBlocks = (fields: FieldConfig[], activeBlockId: string, over
     const [movedBlock] = reorderedBlockNames.splice(oldIndex, 1);
     reorderedBlockNames.splice(newIndex, 0, movedBlock);
 
-    return fields.map(field => ({
-        ...field,
-        block_order: reorderedBlockNames.indexOf(field.block_name || "GLOBAL")
-    }));
+    return fields.map(field => isInBlockScope(field)
+        ? {
+            ...field,
+            block_order: reorderedBlockNames.indexOf(field.block_name || "GLOBAL")
+        }
+        : field
+    );
 };

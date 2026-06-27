@@ -4,7 +4,7 @@ import { DndContext, closestCenter } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import TemplateFieldItem from './TemplateFieldItem';
 
-export default function TemplateGroupContainer({ id, groupName, gIdx, groupFields, onFieldDragEnd, sensors, onEdit }: any) {
+export default function TemplateGroupContainer({ id, groupName, gIdx, groupFields, onFieldDragEnd, sensors, onEdit, blockName, parentBlockName }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
     const style = {
@@ -32,7 +32,7 @@ export default function TemplateGroupContainer({ id, groupName, gIdx, groupField
             </div>
 
             {/* SortableContext for Field in each Group */}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onFieldDragEnd(e, groupName)}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onFieldDragEnd(e, groupName, blockName, parentBlockName)}>
                 <SortableContext items={groupFields.map((f: any) => f.id)} strategy={verticalListSortingStrategy}>
                     <div className="flex flex-col gap-2 pl-3 border-l border-white/5 ml-1">
                         {groupFields.map((field: any) => (

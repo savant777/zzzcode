@@ -16,6 +16,23 @@ import TemplateBlockContainer from '@/components/TemplateBlockContainer';
 import { CreatorSession, canManageTemplate, requireCreator } from '@/lib/creator';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
 
+const groupFieldsByGroup = (fieldList: FieldConfig[]) => {
+    const groups: Record<string, FieldConfig[]> = {};
+
+    fieldList.forEach(field => {
+        const groupName = field.group_name || "General";
+        if (!groups[groupName]) groups[groupName] = [];
+        groups[groupName].push(field);
+    });
+
+    return Object.entries(groups)
+        .sort(([, a], [, b]) => (a[0].group_order || 0) - (b[0].group_order || 0))
+        .reduce((acc, [groupName, groupFields]) => {
+            acc[groupName] = groupFields.sort((a, b) => (a.field_order || 0) - (b.field_order || 0));
+            return acc;
+        }, {} as Record<string, FieldConfig[]>);
+};
+
 const getSimilarFieldKey = (field: FieldConfig) => {
     const rawName = (field.variable_name || field.label || '').trim();
     return rawName.replace(/[\s_-]*[0-9๐-๙]+$/u, '').toLowerCase();
@@ -71,31 +88,41 @@ export default function EditTemplatePage() {
     );
 
     const nestedData = useMemo(() => {
-        const blocks: Record<string, Record<string, FieldConfig[]>> = {};
+        const rootBlocks: Record<string, FieldConfig[]> = {};
+        const childBlocks: Record<string, Record<string, FieldConfig[]>> = {};
 
         fields.forEach(f => {
+            if (f.block_name && f.parent_block_name) {
+                if (!childBlocks[f.parent_block_name]) childBlocks[f.parent_block_name] = {};
+                if (!childBlocks[f.parent_block_name][f.block_name]) childBlocks[f.parent_block_name][f.block_name] = [];
+                childBlocks[f.parent_block_name][f.block_name].push(f);
+                return;
+            }
+
             const bName = f.block_name || "GLOBAL";
-            const gName = f.group_name || "General";
-            if (!blocks[bName]) blocks[bName] = {};
-            if (!blocks[bName][gName]) blocks[bName][gName] = [];
-            blocks[bName][gName].push(f);
+            if (!rootBlocks[bName]) rootBlocks[bName] = [];
+            rootBlocks[bName].push(f);
         });
 
-        return Object.entries(blocks)
-            .sort(([nameA, groupsA], [nameB, groupsB]) => {
-                const orderA = Object.values(groupsA)[0][0].block_order || 0;
-                const orderB = Object.values(groupsB)[0][0].block_order || 0;
+        return Object.entries(rootBlocks)
+            .sort(([nameA, fieldsA], [nameB, fieldsB]) => {
+                const orderA = fieldsA[0].block_order || 0;
+                const orderB = fieldsB[0].block_order || 0;
                 return orderA - orderB;
             })
-            .reduce((acc, [bName, groups]) => {
-                acc[bName] = Object.entries(groups)
-                    .sort(([, a], [, b]) => (a[0].group_order || 0) - (b[0].group_order || 0))
-                    .reduce((gAcc, [gName, fList]) => {
-                        gAcc[gName] = fList.sort((a, b) => (a.field_order || 0) - (b.field_order || 0));
-                        return gAcc;
-                    }, {} as Record<string, FieldConfig[]>);
+            .reduce((acc, [bName, blockFields]) => {
+                acc[bName] = {
+                    groups: groupFieldsByGroup(blockFields),
+                    childBlocks: Object.entries(childBlocks[bName] || {})
+                        .sort(([, a], [, b]) => (a[0].block_order || 0) - (b[0].block_order || 0))
+                        .map(([childBlockName, childFields]) => ({
+                            blockName: childBlockName,
+                            groups: groupFieldsByGroup(childFields),
+                            childBlocks: [],
+                        })),
+                };
                 return acc;
-            }, {} as Record<string, Record<string, FieldConfig[]>>);
+            }, {} as Record<string, { groups: Record<string, FieldConfig[]>; childBlocks: any[] }>);
     }, [fields]);
 
     // --- 2. Effects ---
@@ -219,26 +246,26 @@ export default function EditTemplatePage() {
     };
 
     // drag and drop to re-order group
-    const handleGroupDragEnd = (event: any, blockName: string) => {
+    const handleGroupDragEnd = (event: any, blockName: string, parentBlockName?: string) => {
         const { active, over } = event;
         if (over && active.id !== over.id) {
-            const updated = reorderGroups(fields, blockName, active.id, over.id);
+            const updated = reorderGroups(fields, blockName, active.id, over.id, parentBlockName);
             setFields(updated);
         }
     };
 
     // drag and drop to re-order field
-    const handleFieldDragEnd = (event: any, groupName: string) => {
+    const handleFieldDragEnd = (event: any, groupName: string, blockName?: string, parentBlockName?: string) => {
         const { active, over } = event;
         if (over && active.id !== over.id) {
-            const updated = reorderFields(fields, groupName, active.id, over.id);
+            const updated = reorderFields(fields, groupName, active.id, over.id, blockName, parentBlockName);
             setFields(updated);
         }
     };
 
-    const handleBlockDescriptionChange = (blockName: string, description: string) => {
+    const handleBlockDescriptionChange = (blockName: string, description: string, parentBlockName?: string) => {
         setFields(prev => prev.map(field =>
-            (field.block_name || "GLOBAL") === blockName
+            (field.block_name || "GLOBAL") === blockName && field.parent_block_name === parentBlockName
                 ? { ...field, block_description: description }
                 : field
         ));
@@ -257,6 +284,7 @@ export default function EditTemplatePage() {
         setFields(prev => prev.map(field => {
             if (field.id === normalized.id) return normalized;
             if ((field.block_name || '') !== (normalized.block_name || '')) return field;
+            if (field.parent_block_name !== normalized.parent_block_name) return field;
             if (getSimilarFieldKey(field) !== sourceKey) return field;
 
             appliedCount += 1;
@@ -534,11 +562,12 @@ export default function EditTemplatePage() {
                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
                                     <SortableContext items={Object.keys(nestedData)} strategy={verticalListSortingStrategy}>
                                         <div className="flex flex-col">
-                                            {Object.entries(nestedData).map(([blockName, groups]) => (
+                                            {Object.entries(nestedData).map(([blockName, blockData]) => (
                                                 <TemplateBlockContainer 
                                                     key={blockName}
                                                     blockName={blockName}
-                                                    groups={groups}
+                                                    groups={blockData.groups}
+                                                    childBlocks={blockData.childBlocks}
                                                     sensors={sensors}
                                                     onFieldDragEnd={handleFieldDragEnd}
                                                     onGroupDragEnd={handleGroupDragEnd}

@@ -13,6 +13,12 @@ import LivePreview from '@/components/LivePreview';
 
 type GroupedFields = Record<string, FieldConfig[]>;
 type HistoryUpdater<T> = T | ((previous: T) => T);
+type BlockLayout = {
+    blockName: string;
+    fields: FieldConfig[];
+    groups: GroupedFields;
+    childBlocks: BlockLayout[];
+};
 
 const HISTORY_LIMIT = 50;
 const HISTORY_DELAY = 700;
@@ -210,11 +216,26 @@ const getDefaultValue = (field: FieldConfig) => {
     return field.default_value;
 };
 
-const createBlockEntry = (blockFields: FieldConfig[], source?: Record<string, any>) => {
+const createBlockEntry = (
+    blockFields: FieldConfig[],
+    source?: Record<string, any>,
+    childBlockMap: Record<string, FieldConfig[]> = {},
+    fallbackBlockValues?: Record<string, any>
+) => {
     const entry: Record<string, any> = {};
 
     blockFields.forEach(field => {
         entry[field.variable_name] = source?.[field.variable_name] ?? getDefaultValue(field);
+    });
+
+    Object.entries(childBlockMap).forEach(([childBlockName, childFields]) => {
+        const savedChildBlock = source?.[childBlockName] ?? fallbackBlockValues?.[childBlockName];
+
+        if (Array.isArray(savedChildBlock)) {
+            entry[childBlockName] = savedChildBlock.map(childEntry => createBlockEntry(childFields, childEntry));
+        } else {
+            entry[childBlockName] = [createBlockEntry(childFields)];
+        }
     });
 
     return entry;
@@ -223,9 +244,14 @@ const createBlockEntry = (blockFields: FieldConfig[], source?: Record<string, an
 const buildInitialValues = (fieldList: FieldConfig[], savedValues?: Record<string, any>) => {
     const values: Record<string, any> = {};
     const blockBuckets: Record<string, FieldConfig[]> = {};
+    const childBlockBuckets: Record<string, Record<string, FieldConfig[]>> = {};
 
     fieldList.forEach(field => {
-        if (field.block_name) {
+        if (field.block_name && field.parent_block_name) {
+            if (!childBlockBuckets[field.parent_block_name]) childBlockBuckets[field.parent_block_name] = {};
+            if (!childBlockBuckets[field.parent_block_name][field.block_name]) childBlockBuckets[field.parent_block_name][field.block_name] = [];
+            childBlockBuckets[field.parent_block_name][field.block_name].push(field);
+        } else if (field.block_name) {
             if (!blockBuckets[field.block_name]) blockBuckets[field.block_name] = [];
             blockBuckets[field.block_name].push(field);
         } else {
@@ -235,11 +261,12 @@ const buildInitialValues = (fieldList: FieldConfig[], savedValues?: Record<strin
 
     Object.entries(blockBuckets).forEach(([blockName, blockFields]) => {
         const savedBlock = savedValues?.[blockName];
+        const childBlocks = childBlockBuckets[blockName] || {};
 
         if (Array.isArray(savedBlock)) {
-            values[blockName] = savedBlock.map(entry => createBlockEntry(blockFields, entry));
+            values[blockName] = savedBlock.map(entry => createBlockEntry(blockFields, entry, childBlocks, savedValues));
         } else {
-            values[blockName] = [createBlockEntry(blockFields, savedValues)];
+            values[blockName] = [createBlockEntry(blockFields, savedValues, childBlocks, savedValues)];
         }
     });
 
@@ -288,9 +315,18 @@ export default function EditorPage() {
     const fieldLayout = useMemo(() => {
         const globalFields = fields.filter(field => !field.block_name);
         const blockBuckets: Record<string, FieldConfig[]> = {};
+        const childBlockBuckets: Record<string, Record<string, FieldConfig[]>> = {};
 
         fields.forEach(field => {
             if (!field.block_name) return;
+
+            if (field.parent_block_name) {
+                if (!childBlockBuckets[field.parent_block_name]) childBlockBuckets[field.parent_block_name] = {};
+                if (!childBlockBuckets[field.parent_block_name][field.block_name]) childBlockBuckets[field.parent_block_name][field.block_name] = [];
+                childBlockBuckets[field.parent_block_name][field.block_name].push(field);
+                return;
+            }
+
             if (!blockBuckets[field.block_name]) blockBuckets[field.block_name] = [];
             blockBuckets[field.block_name].push(field);
         });
@@ -301,7 +337,15 @@ export default function EditorPage() {
                 blockName,
                 fields: blockFields,
                 groups: groupFieldList(blockFields),
-            }));
+                childBlocks: Object.entries(childBlockBuckets[blockName] || {})
+                    .sort(([, a], [, b]) => (a[0]?.block_order ?? 0) - (b[0]?.block_order ?? 0))
+                    .map(([childBlockName, childFields]) => ({
+                        blockName: childBlockName,
+                        fields: childFields,
+                        groups: groupFieldList(childFields),
+                        childBlocks: [],
+                    })),
+            } as BlockLayout));
 
         return {
             globalGroups: groupFieldList(globalFields),
@@ -421,17 +465,33 @@ export default function EditorPage() {
         setFieldValues(prev => ({ ...prev, [varName]: value }));
     };
 
-    const getBlockFields = (blockName: string) => fields.filter(field => field.block_name === blockName);
+    const getBlockFields = (blockName: string, parentBlockName?: string) => fields.filter(field =>
+        field.block_name === blockName &&
+        field.parent_block_name === parentBlockName
+    );
+
+    const getChildBlockFieldsMap = (parentBlockName: string) => {
+        return fields
+            .filter(field => field.parent_block_name === parentBlockName && field.block_name)
+            .reduce((acc, field) => {
+                const childBlockName = field.block_name as string;
+                if (!acc[childBlockName]) acc[childBlockName] = [];
+                acc[childBlockName].push(field);
+                return acc;
+            }, {} as Record<string, FieldConfig[]>);
+    };
 
     const handleBlockValueChange = (blockName: string, entryIndex: number, varName: string, value: any) => {
         setFieldValues(prev => {
             const blockFields = getBlockFields(blockName);
+            const childBlocks = getChildBlockFieldsMap(blockName);
             const entries = Array.isArray(prev[blockName]) && prev[blockName].length > 0
                 ? [...prev[blockName]]
-                : [createBlockEntry(blockFields)];
+                : [createBlockEntry(blockFields, undefined, childBlocks)];
 
             entries[entryIndex] = {
-                ...createBlockEntry(blockFields, entries[entryIndex]),
+                ...createBlockEntry(blockFields, entries[entryIndex], childBlocks),
+                ...entries[entryIndex],
                 [varName]: value,
             };
 
@@ -439,14 +499,40 @@ export default function EditorPage() {
         });
     };
 
+    const handleNestedBlockValueChange = (parentBlockName: string, parentEntryIndex: number, childBlockName: string, childEntryIndex: number, varName: string, value: any) => {
+        setFieldValues(prev => {
+            const parentFields = getBlockFields(parentBlockName);
+            const childFields = getBlockFields(childBlockName, parentBlockName);
+            const parentEntries = Array.isArray(prev[parentBlockName]) && prev[parentBlockName].length > 0
+                ? [...prev[parentBlockName]]
+                : [createBlockEntry(parentFields)];
+            const parentEntry = { ...createBlockEntry(parentFields, parentEntries[parentEntryIndex]), ...parentEntries[parentEntryIndex] };
+            const childEntries = Array.isArray(parentEntry[childBlockName]) && parentEntry[childBlockName].length > 0
+                ? [...parentEntry[childBlockName]]
+                : [createBlockEntry(childFields)];
+
+            childEntries[childEntryIndex] = {
+                ...createBlockEntry(childFields, childEntries[childEntryIndex]),
+                [varName]: value,
+            };
+            parentEntries[parentEntryIndex] = {
+                ...parentEntry,
+                [childBlockName]: childEntries,
+            };
+
+            return { ...prev, [parentBlockName]: parentEntries };
+        });
+    };
+
     const handleAddBlockEntry = (blockName: string) => {
         setFieldValues(prev => {
             const blockFields = getBlockFields(blockName);
+            const childBlocks = getChildBlockFieldsMap(blockName);
             const entries = Array.isArray(prev[blockName]) ? prev[blockName] : [];
 
             return {
                 ...prev,
-                [blockName]: [...entries, createBlockEntry(blockFields)],
+                [blockName]: [...entries, createBlockEntry(blockFields, undefined, childBlocks)],
             };
         });
     };
@@ -460,6 +546,46 @@ export default function EditorPage() {
             entries.splice(entryIndex, 1);
 
             return { ...prev, [blockName]: entries };
+        });
+    };
+
+    const handleAddNestedBlockEntry = (parentBlockName: string, parentEntryIndex: number, childBlockName: string) => {
+        setFieldValues(prev => {
+            const parentFields = getBlockFields(parentBlockName);
+            const childFields = getBlockFields(childBlockName, parentBlockName);
+            const parentEntries = Array.isArray(prev[parentBlockName]) && prev[parentBlockName].length > 0
+                ? [...prev[parentBlockName]]
+                : [createBlockEntry(parentFields)];
+            const parentEntry = { ...createBlockEntry(parentFields, parentEntries[parentEntryIndex]), ...parentEntries[parentEntryIndex] };
+            const childEntries = Array.isArray(parentEntry[childBlockName]) ? parentEntry[childBlockName] : [];
+
+            parentEntries[parentEntryIndex] = {
+                ...parentEntry,
+                [childBlockName]: [...childEntries, createBlockEntry(childFields)],
+            };
+
+            return { ...prev, [parentBlockName]: parentEntries };
+        });
+    };
+
+    const handleRemoveNestedBlockEntry = (parentBlockName: string, parentEntryIndex: number, childBlockName: string, childEntryIndex: number) => {
+        setFieldValues(prev => {
+            const parentFields = getBlockFields(parentBlockName);
+            const parentEntries = Array.isArray(prev[parentBlockName]) && prev[parentBlockName].length > 0
+                ? [...prev[parentBlockName]]
+                : [createBlockEntry(parentFields)];
+            const parentEntry = { ...createBlockEntry(parentFields, parentEntries[parentEntryIndex]), ...parentEntries[parentEntryIndex] };
+            const childEntries = Array.isArray(parentEntry[childBlockName]) && parentEntry[childBlockName].length > 0
+                ? [...parentEntry[childBlockName]]
+                : [];
+
+            childEntries.splice(childEntryIndex, 1);
+            parentEntries[parentEntryIndex] = {
+                ...parentEntry,
+                [childBlockName]: childEntries,
+            };
+
+            return { ...prev, [parentBlockName]: parentEntries };
         });
     };
 
@@ -585,7 +711,7 @@ export default function EditorPage() {
                                 )
                             })}
 
-                            {fieldLayout.blocks.map(({ blockName, groups, fields: blockFields }) => {
+                            {fieldLayout.blocks.map(({ blockName, groups, fields: blockFields, childBlocks }) => {
                                 const entries = Array.isArray(fieldValues[blockName])
                                     ? fieldValues[blockName]
                                     : [];
@@ -666,6 +792,97 @@ export default function EditorPage() {
                                                                                 />
                                                                             )
                                                                         })}
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })}
+
+                                                        {childBlocks.map((childBlock) => {
+                                                            const childEntries = Array.isArray(entryValues[childBlock.blockName])
+                                                                ? entryValues[childBlock.blockName]
+                                                                : [];
+                                                            const childDescription = childBlock.fields.find(field => field.block_description)?.block_description;
+
+                                                            return (
+                                                                <div key={`${blockName}-${entryIndex}-${childBlock.blockName}`} className="border border-dashed border-(--primary)/30 bg-black/20 p-3">
+                                                                    <div className="flex items-center gap-2 border-b border-(--primary)/20 pb-2 mb-3">
+                                                                        <div className="min-w-0">
+                                                                            <h5 className="text-[11px] font-black uppercase tracking-[0.2em] text-(--primary)/80 truncate">
+                                                                                NESTED_BLOCK: {childBlock.blockName}
+                                                                            </h5>
+                                                                            <p className="text-[10px] uppercase text-(--foreground)/30">
+                                                                                {childEntries.length} item{childEntries.length === 1 ? '' : 's'}
+                                                                            </p>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleAddNestedBlockEntry(blockName, entryIndex, childBlock.blockName)}
+                                                                            className="ml-auto cursor-pointer border border-(--primary)/40 px-3 py-1 text-[10px] font-black uppercase text-(--primary) hover:border-(--primary) transition-colors"
+                                                                        >
+                                                                            Add
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {childDescription && (
+                                                                        <p className="mb-3 font-Google-Sans text-xs leading-relaxed whitespace-pre-wrap text-(--foreground)/60">
+                                                                            {childDescription}
+                                                                        </p>
+                                                                    )}
+
+                                                                    <div className="flex flex-col gap-3">
+                                                                        {childEntries.length === 0 && (
+                                                                            <div className="border border-dashed border-(--primary)/15 bg-black/10 p-3 text-center text-[10px] uppercase tracking-[0.2em] text-(--foreground)/25">
+                                                                                No_Nested_Block_Items
+                                                                            </div>
+                                                                        )}
+                                                                        {childEntries.map((childEntryValues: Record<string, any>, childEntryIndex: number) => (
+                                                                            <div key={`${blockName}-${entryIndex}-${childBlock.blockName}-${childEntryIndex}`} className="border border-(--primary)/15 bg-black/20 p-3">
+                                                                                <div className="mb-3 flex items-center gap-2">
+                                                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-(--foreground)/45">
+                                                                                        #{childEntryIndex + 1}
+                                                                                    </span>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleRemoveNestedBlockEntry(blockName, entryIndex, childBlock.blockName, childEntryIndex)}
+                                                                                        className="ml-auto cursor-pointer border border-red-500/25 px-2 py-1 text-[10px] uppercase text-red-300 hover:border-red-500 transition-colors"
+                                                                                    >
+                                                                                        Remove
+                                                                                    </button>
+                                                                                </div>
+
+                                                                                <div className="flex flex-col gap-5">
+                                                                                    {Object.entries(childBlock.groups).map(([childGroupName, childGroupFields]) => {
+                                                                                        const totalChildFields = childGroupFields.length;
+
+                                                                                        return (
+                                                                                            <div key={`${blockName}-${entryIndex}-${childBlock.blockName}-${childEntryIndex}-${childGroupName}`}>
+                                                                                                <div className="flex items-center gap-2 px-2 py-1 bg-(--primary)/5 border-l-2 border-(--primary)/70 mb-2 select-none">
+                                                                                                    <h6 className="text-xs font-bold uppercase tracking-[0.2em] text-(--primary)/80">
+                                                                                                        {childGroupName}
+                                                                                                    </h6>
+                                                                                                </div>
+
+                                                                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                                                                    {childGroupFields.map((field, index) => {
+                                                                                                        const isWide = field.type === "bbcode" || (totalChildFields % 2 !== 0 && index === 0);
+
+                                                                                                        return (
+                                                                                                            <FieldRenderer
+                                                                                                                key={`${field.id}-${entryIndex}-${childEntryIndex}`}
+                                                                                                                field={field}
+                                                                                                                value={childEntryValues[field.variable_name]}
+                                                                                                                onChange={(varName, value) => handleNestedBlockValueChange(blockName, entryIndex, childBlock.blockName, childEntryIndex, varName, value)}
+                                                                                                                className={isWide ? "lg:col-span-2" : "col-span-1"}
+                                                                                                            />
+                                                                                                        )
+                                                                                                    })}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )
+                                                                                    })}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
                                                                 </div>
                                                             )
