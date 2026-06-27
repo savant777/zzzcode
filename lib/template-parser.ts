@@ -189,40 +189,29 @@ export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
 
 const preserveTextNewlines = (html: string): string => {
     const parts = html.split(/(<[^>]+>)/g);
-    const isDivOrParagraphTag = (part?: string) => /^<\/?\s*(div|p)(\s|>|\/)/i.test(part || '');
-    const isClosingDivOrParagraphTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
-    const isOpeningDivOrParagraphTag = (part?: string) => /^<\s*(div|p)(\s|>|\/)/i.test(part || '');
-    const isHrTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
-    const isLinkTag = (part?: string) => /^<\s*link(\s|>|\/)/i.test(part || '');
-    const isBrTag = (part?: string) => /^<\s*br(\s|>|\/)/i.test(part || '');
-    const isListTag = (part?: string) => /^<\/?\s*(ul|ol)(\s|>|\/)/i.test(part || '');
+    const isClosingDivTag = (part?: string) => /^<\/\s*div\s*>/i.test(part || '');
+    const brAfterClosingDiv = (value: string) => {
+        const newlineCount = value.match(/\r?\n/g)?.length || 0;
+        return '<br>'.repeat(Math.max(0, newlineCount - 1));
+    };
+
     return parts.map((part, index) => {
         if (part.startsWith('<') && part.endsWith('>')) return part;
         const previousTag = [...parts.slice(0, index)].reverse().find(item => item.startsWith('<') && item.endsWith('>'));
-        const nextTag = parts.slice(index + 1).find(item => item.startsWith('<') && item.endsWith('>'));
 
         if (!part.trim()) {
             if (!/\r?\n/.test(part)) return part;
-
-            const newlineCount = part.match(/\r?\n/g)?.length || 0;
-            if (isClosingDivOrParagraphTag(previousTag) && isOpeningDivOrParagraphTag(nextTag)) {
-                return newlineCount > 1 ? '<br>' : '';
-            }
-
-            return isClosingDivOrParagraphTag(nextTag) ||
-                isHrTag(previousTag) ||
-                isLinkTag(previousTag) ||
-                isBrTag(previousTag) ||
-                isListTag(previousTag)
-                ? ''
-                : '<br>';
+            return isClosingDivTag(previousTag) ? brAfterClosingDiv(part) : '';
         }
 
-        const trimmedPart = part
-            .replace(isOpeningDivOrParagraphTag(previousTag) || isHrTag(previousTag) ? /^(?:[ \t]*\r?\n)+/ : /^$/, '')
-            .replace(isDivOrParagraphTag(nextTag) ? /(?:\r?\n[ \t]*)+$/ : /$/, '');
+        if (isClosingDivTag(previousTag)) {
+            const leadingWhitespace = part.match(/^(?:[ \t]*\r?\n)+/)?.[0] || '';
+            if (leadingWhitespace) {
+                return brAfterClosingDiv(leadingWhitespace) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
+            }
+        }
 
-        return trimmedPart.replace(/\r?\n/g, '<br>');
+        return part.replace(/\r?\n/g, '<br>');
     }).join('');
 };
 
