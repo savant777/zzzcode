@@ -191,6 +191,7 @@ const preserveTextNewlines = (html: string): string => {
     const parts = html.split(/(<[^>]+>)/g);
     const isDivOrParagraphTag = (part?: string) => /^<\/?\s*(div|p)(\s|>|\/)/i.test(part || '');
     const isClosingDivOrParagraphTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
+    const isOpeningDivOrParagraphTag = (part?: string) => /^<\s*(div|p)(\s|>|\/)/i.test(part || '');
     const isHrTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
     const isLinkTag = (part?: string) => /^<\s*link(\s|>|\/)/i.test(part || '');
     const isBrTag = (part?: string) => /^<\s*br(\s|>|\/)/i.test(part || '');
@@ -203,8 +204,12 @@ const preserveTextNewlines = (html: string): string => {
         if (!part.trim()) {
             if (!/\r?\n/.test(part)) return part;
 
-            return isDivOrParagraphTag(previousTag) ||
-                isClosingDivOrParagraphTag(nextTag) ||
+            const newlineCount = part.match(/\r?\n/g)?.length || 0;
+            if (isClosingDivOrParagraphTag(previousTag) && isOpeningDivOrParagraphTag(nextTag)) {
+                return newlineCount > 1 ? '<br>' : '';
+            }
+
+            return isClosingDivOrParagraphTag(nextTag) ||
                 isHrTag(previousTag) ||
                 isLinkTag(previousTag) ||
                 isBrTag(previousTag) ||
