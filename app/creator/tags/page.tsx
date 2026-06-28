@@ -32,6 +32,7 @@ type TagForm = {
     group_id: string;
     name: string;
     slug: string;
+    is_global: boolean;
     is_active: boolean;
 };
 
@@ -42,6 +43,7 @@ const emptyForm: TagForm = {
     group_id: '',
     name: '',
     slug: '',
+    is_global: false,
     is_active: true,
 };
 
@@ -142,6 +144,8 @@ export default function ManageTagsPage() {
 
     const currentUserId = creatorSession?.user?.id;
     const currentDisplayName = creatorSession?.creator?.display_name;
+    const canToggleGlobalOwner = creatorSession?.isOwner
+        && (modalType === 'add' || !selectedTag?.user_id || selectedTag.user_id === currentUserId);
 
     const filteredTags = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -290,6 +294,7 @@ export default function ManageTagsPage() {
         setForm({
             ...emptyForm,
             group_id: availableTagGroups[0]?.id ? String(availableTagGroups[0].id) : '',
+            is_global: false,
         });
         setModalType('add');
     };
@@ -303,6 +308,7 @@ export default function ManageTagsPage() {
             group_id: String(tag.group_id),
             name: tag.name,
             slug: tag.slug || '',
+            is_global: tag.user_id === null,
             is_active: tag.is_active,
         });
         setModalType('edit');
@@ -352,7 +358,7 @@ export default function ManageTagsPage() {
                     .from('tags')
                     .insert([{
                         ...nextTag,
-                        user_id: creatorSession.isOwner ? null : creatorSession.user.id,
+                        user_id: creatorSession.isOwner && form.is_global ? null : creatorSession.user.id,
                     }]);
 
                 if (error) throw error;
@@ -366,7 +372,12 @@ export default function ManageTagsPage() {
 
                 const { error } = await supabase
                     .from('tags')
-                    .update(nextTag)
+                    .update({
+                        ...nextTag,
+                        ...(canToggleGlobalOwner ? {
+                            user_id: form.is_global ? null : creatorSession.user.id,
+                        } : {}),
+                    })
                     .eq('id', selectedTag.id);
 
                 if (error) throw error;
@@ -680,6 +691,21 @@ export default function ManageTagsPage() {
                         </span>
                         Active_Tag
                     </label>
+
+                    {canToggleGlobalOwner && (
+                        <label className="block flex items-center gap-3 text-xs uppercase text-(--foreground)/75 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only"
+                                checked={form.is_global}
+                                onChange={(event) => setForm(prev => ({ ...prev, is_global: event.target.checked }))}
+                            />
+                            <span className="flex h-5 w-5 items-center justify-center border border-(--primary)/50 bg-black/20">
+                                {form.is_global && <span className="h-3 w-3 bg-(--primary)" />}
+                            </span>
+                            Global_Tag
+                        </label>
+                    )}
 
                     <div className="flex gap-2 pt-2">
                         <button
