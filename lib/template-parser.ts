@@ -189,8 +189,8 @@ export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
 
 const preserveTextNewlines = (html: string): string => {
     const parts = html.split(/(<[^>]+>)/g);
-    const isClosingDivTag = (part?: string) => /^<\/\s*div\s*>/i.test(part || '');
-    const brAfterClosingDiv = (value: string) => {
+    const isClosingBlockSpacingTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
+    const brAfterClosingBlockSpacingTag = (value: string) => {
         const newlineCount = value.match(/\r?\n/g)?.length || 0;
         return '<br>'.repeat(Math.max(0, newlineCount - 1));
     };
@@ -201,13 +201,13 @@ const preserveTextNewlines = (html: string): string => {
 
         if (!part.trim()) {
             if (!/\r?\n/.test(part)) return part;
-            return isClosingDivTag(previousTag) ? brAfterClosingDiv(part) : '';
+            return isClosingBlockSpacingTag(previousTag) ? brAfterClosingBlockSpacingTag(part) : '';
         }
 
-        if (isClosingDivTag(previousTag)) {
+        if (isClosingBlockSpacingTag(previousTag)) {
             const leadingWhitespace = part.match(/^(?:[ \t]*\r?\n)+/)?.[0] || '';
             if (leadingWhitespace) {
-                return brAfterClosingDiv(leadingWhitespace) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
+                return brAfterClosingBlockSpacingTag(leadingWhitespace) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
             }
         }
 
