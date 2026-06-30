@@ -45,6 +45,7 @@ CREATE TABLE templates (
   title text NOT NULL,
   description text,
   is_personal boolean DEFAULT false,
+  supports_multiple_drafts boolean DEFAULT false,
   password text,
   preview_url text,
   html_blueprint text,

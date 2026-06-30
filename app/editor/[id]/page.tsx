@@ -13,6 +13,12 @@ import LivePreview from '@/components/LivePreview';
 
 type GroupedFields = Record<string, FieldConfig[]>;
 type HistoryUpdater<T> = T | ((previous: T) => T);
+type EditorDraft = {
+    id: string;
+    name: string;
+    fieldValues: Record<string, any>;
+    updatedAt: string;
+};
 type BlockLayout = {
     blockName: string;
     fields: FieldConfig[];
@@ -22,6 +28,23 @@ type BlockLayout = {
 
 const HISTORY_LIMIT = 50;
 const HISTORY_DELAY = 700;
+
+const createDraftId = () => `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const createEditorDraft = (name: string, fieldValues: Record<string, any>): EditorDraft => ({
+    id: createDraftId(),
+    name,
+    fieldValues,
+    updatedAt: new Date().toISOString(),
+});
+
+const normalizeDraftName = (name: string | undefined, index: number) => {
+    const fallbackName = `Draft ${index + 1}`;
+    if (!name) return fallbackName;
+
+    const legacyCharacterName = name.match(/^Character\s+(\d+)$/i);
+    return legacyCharacterName ? `Draft ${legacyCharacterName[1]}` : name;
+};
 
 const useUndoableState = <T,>(initialValue: T) => {
     const [value, setValueState] = useState<T>(initialValue);
@@ -285,16 +308,20 @@ export default function EditorPage() {
     const breadcrumbPath = `${fromGroup}:${fromTag}`;
 
     // --- 1. States ---
-    const [modalType, setModalType] = useState<'clear_draft' | null>(null);
+    const [modalType, setModalType] = useState<'clear_draft' | 'clear_current_draft' | 'delete_draft' | 'rename_draft' | null>(null);
     const [loading, setLoading] = useState(true);
+    const [renameDraftName, setRenameDraftName] = useState('');
 
     const [formData, setFormData] = useState({
         title: '',
         description: '',
+        supports_multiple_drafts: false,
         html_blueprint: '',
     });
 
     const [fields, setFields] = useState<FieldConfig[]>([]);
+    const [drafts, setDrafts] = useState<EditorDraft[]>([]);
+    const [activeDraftId, setActiveDraftId] = useState('');
     const {
         value: fieldValues,
         setValue: setFieldValues,
@@ -304,6 +331,11 @@ export default function EditorPage() {
         canUndo,
         canRedo,
     } = useUndoableState<Record<string, any>>({});
+
+    const activeDraft = useMemo(
+        () => drafts.find(draft => draft.id === activeDraftId),
+        [drafts, activeDraftId]
+    );
 
     // --- 2. Computed Preview ---
     const liveHTML = useMemo(() => {
@@ -390,6 +422,7 @@ export default function EditorPage() {
                     const initialData = {
                         title: template.title,
                         description: template.description,
+                        supports_multiple_drafts: template.supports_multiple_drafts || false,
                         html_blueprint: template.html_blueprint,
                     };
                     
@@ -403,6 +436,9 @@ export default function EditorPage() {
                     setFields(initialFields);
                     
                     const defaults = buildInitialValues(initialFields);
+                    const initialDraft = createEditorDraft('Draft 1', defaults);
+                    setDrafts([initialDraft]);
+                    setActiveDraftId(initialDraft.id);
                     resetFieldValues(defaults);
 
                     // Check Local Draft
@@ -411,10 +447,29 @@ export default function EditorPage() {
                         try {
                             const parsed = JSON.parse(savedDraft);
                             if (parsed.templateId === templateId) {
-                                setFormData(parsed.formData);
+                                setFormData({
+                                    ...initialData,
+                                    ...(parsed.formData || {}),
+                                    supports_multiple_drafts: initialData.supports_multiple_drafts,
+                                });
                                 const draftFields = (parsed.fields || initialFields).map(normalizeFieldConfig);
                                 setFields(draftFields);
-                                resetFieldValues(buildInitialValues(draftFields, parsed.fieldValues || defaults));
+                                const migratedDrafts = Array.isArray(parsed.drafts) && parsed.drafts.length > 0
+                                    ? parsed.drafts.map((draft: Partial<EditorDraft>, index: number) => ({
+                                        id: draft.id || createDraftId(),
+                                        name: normalizeDraftName(draft.name, index),
+                                        fieldValues: buildInitialValues(draftFields, draft.fieldValues || {}),
+                                        updatedAt: draft.updatedAt || new Date().toISOString(),
+                                    }))
+                                    : [createEditorDraft('Draft 1', buildInitialValues(draftFields, parsed.fieldValues || defaults))];
+                                const nextActiveDraftId = migratedDrafts.some((draft: EditorDraft) => draft.id === parsed.activeDraftId)
+                                    ? parsed.activeDraftId
+                                    : migratedDrafts[0].id;
+                                const nextActiveDraft = migratedDrafts.find((draft: EditorDraft) => draft.id === nextActiveDraftId) || migratedDrafts[0];
+
+                                setDrafts(migratedDrafts);
+                                setActiveDraftId(nextActiveDraft.id);
+                                resetFieldValues(nextActiveDraft.fieldValues);
                             }
                         } catch (e) { console.error(e); }
                     }
@@ -427,17 +482,35 @@ export default function EditorPage() {
         return undefined;
     }, [templateId, router]);
 
+    useEffect(() => {
+        if (loading || !activeDraftId) return;
+
+        setDrafts(prev => prev.map(draft => draft.id === activeDraftId
+            ? { ...draft, fieldValues, updatedAt: new Date().toISOString() }
+            : draft
+        ));
+    }, [fieldValues, activeDraftId, loading]);
+
     // Auto-Save Draft
     useEffect(() => {
         const timer = setTimeout(() => {
-            if (formData.title || formData.html_blueprint) {
+            if (!loading && (formData.title || formData.html_blueprint)) {
+                const nextDrafts = drafts.map(draft => draft.id === activeDraftId
+                    ? { ...draft, fieldValues, updatedAt: new Date().toISOString() }
+                    : draft
+                );
+
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
-                    templateId, formData, fields, fieldValues 
+                    templateId,
+                    formData,
+                    fields,
+                    activeDraftId,
+                    drafts: nextDrafts,
                 }));
             }
         }, 2000);
         return () => clearTimeout(timer);
-    }, [formData, fields, fieldValues]);
+    }, [formData, fields, drafts, activeDraftId, fieldValues, loading]);
 
     useEffect(() => {
         const handleHistoryShortcut = (event: KeyboardEvent) => {
@@ -461,6 +534,74 @@ export default function EditorPage() {
     }, [undo, redo]);
 
     // --- 4. Handlers ---
+    const syncActiveDraft = (values: Record<string, any> = fieldValues) => {
+        if (!activeDraftId) return;
+
+        setDrafts(prev => prev.map(draft => draft.id === activeDraftId
+            ? { ...draft, fieldValues: values, updatedAt: new Date().toISOString() }
+            : draft
+        ));
+    };
+
+    const handleSelectDraft = (draftId: string) => {
+        const nextDraft = drafts.find(draft => draft.id === draftId);
+        if (!nextDraft || nextDraft.id === activeDraftId) return;
+
+        syncActiveDraft();
+        setActiveDraftId(nextDraft.id);
+        resetFieldValues(buildInitialValues(fields, nextDraft.fieldValues));
+    };
+
+    const handleAddDraft = () => {
+        const nextDraftNumber = drafts.length + 1;
+        const nextDraft = createEditorDraft(`Draft ${nextDraftNumber}`, buildInitialValues(fields));
+
+        syncActiveDraft();
+        setDrafts(prev => [...prev, nextDraft]);
+        setActiveDraftId(nextDraft.id);
+        resetFieldValues(nextDraft.fieldValues);
+        toast.success(`DRAFT_CREATED: ${nextDraft.name}`);
+    };
+
+    const handleRenameDraft = () => {
+        if (!activeDraft) return;
+
+        setRenameDraftName(activeDraft.name);
+        setModalType('rename_draft');
+    };
+
+    const handleSubmitRenameDraft = (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!activeDraft) return;
+
+        const nextName = renameDraftName.trim();
+        if (!nextName) return;
+
+        setDrafts(prev => prev.map(draft => draft.id === activeDraft.id
+            ? { ...draft, name: nextName, updatedAt: new Date().toISOString() }
+            : draft
+        ));
+        setModalType(null);
+    };
+
+    const handleDeleteDraft = () => {
+        if (!activeDraft || drafts.length <= 1) return;
+        setModalType('delete_draft');
+    };
+
+    const handleConfirmDeleteDraft = () => {
+        if (!activeDraft || drafts.length <= 1) return;
+
+        const nextDrafts = drafts.filter(draft => draft.id !== activeDraft.id);
+        const nextDraft = nextDrafts[0];
+
+        setDrafts(nextDrafts);
+        setActiveDraftId(nextDraft.id);
+        resetFieldValues(buildInitialValues(fields, nextDraft.fieldValues));
+        setModalType(null);
+        toast.success(`DRAFT_DELETED: ${activeDraft.name}`);
+    };
+
     const handleValueChange = (varName: string, value: any) => {
         setFieldValues(prev => ({ ...prev, [varName]: value }));
     };
@@ -594,6 +735,19 @@ export default function EditorPage() {
         window.location.reload();
     };
 
+    const handleClearCurrentDraft = () => {
+        if (!activeDraft) return;
+
+        const defaults = buildInitialValues(fields);
+        resetFieldValues(defaults);
+        setDrafts(prev => prev.map(draft => draft.id === activeDraft.id
+            ? { ...draft, fieldValues: defaults, updatedAt: new Date().toISOString() }
+            : draft
+        ));
+        setModalType(null);
+        toast.success(`DRAFT_CLEARED: ${activeDraft.name}`);
+    };
+
     const handleCopy = async () => {
         if (!liveHTML) return;
 
@@ -681,6 +835,76 @@ export default function EditorPage() {
                         </div>
                         
                         <div className="flex flex-col gap-6 overflow-y-auto scrollbar-hide">
+                            {formData.supports_multiple_drafts && (
+                            <div className="border border-(--primary)/30 bg-black/20 p-3">
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex items-center justify-between gap-2 border-b border-(--primary)/20 pb-2">
+                                        <div className="min-w-0">
+                                            <h4 className="text-xs font-black uppercase tracking-[0.2em] text-(--primary)">
+                                                Template_Drafts
+                                            </h4>
+                                            <p className="text-[10px] uppercase text-(--foreground)/35 truncate">
+                                                {activeDraft ? `Editing: ${activeDraft.name}` : 'No active draft'}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddDraft}
+                                            className="cursor-pointer bg-(--primary) px-3 py-1 text-[10px] font-black uppercase text-(--background) transition-all hover:brightness-110"
+                                        >
+                                            Add_Draft
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                                        <div className="relative min-w-0">
+                                            <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-(--primary)">
+                                                <svg width="12" height="12" viewBox="0 0 524 524" fill="currentColor">
+                                                    <path d="M64 191L98 157 262 320 426 157 460 191 262 387 64 191Z"/>
+                                                </svg>
+                                            </div>
+                                            <select
+                                                value={activeDraftId}
+                                                onChange={(event) => handleSelectDraft(event.target.value)}
+                                                className="w-full cursor-pointer appearance-none border border-(--primary)/50 bg-black/20 p-2 pr-6 font-Google-Sans text-sm text-(--primary) outline-none transition-all duration-300 focus:border-(--primary)/75"
+                                            >
+                                                {drafts.map((draft, index) => (
+                                                    <option key={draft.id} value={draft.id} className="bg-black">
+                                                        {draft.name || `Draft ${index + 1}`}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            disabled={!activeDraft}
+                                            onClick={handleRenameDraft}
+                                            className="cursor-pointer border border-(--primary)/30 px-3 py-2 text-[10px] font-black uppercase text-(--primary) transition-colors hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25"
+                                        >
+                                            Rename
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={!activeDraft}
+                                            onClick={() => setModalType('clear_current_draft')}
+                                            className="cursor-pointer border border-amber-400/30 px-3 py-2 text-[10px] font-black uppercase text-amber-200 transition-colors hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-25"
+                                        >
+                                            Clear
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={drafts.length <= 1}
+                                            onClick={handleDeleteDraft}
+                                            className="cursor-pointer border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase text-red-300 transition-colors hover:border-red-500 disabled:cursor-not-allowed disabled:opacity-25"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            )}
+
                             {Object.entries(fieldLayout.globalGroups).map(([groupName, groupFields]) => {
                                 const totalFields = groupFields.length;
                                 
@@ -924,7 +1148,7 @@ export default function EditorPage() {
             <Modal 
                 isOpen={modalType !== null} 
                 onClose={() => setModalType(null)} 
-                title={modalType === 'clear_draft' ? 'Memory Wipe Confirmation' : ''}
+                title={modalType === 'clear_draft' ? 'Clear All Drafts' : modalType === 'clear_current_draft' ? 'Clear Current Draft' : modalType === 'delete_draft' ? 'Delete Draft' : modalType === 'rename_draft' ? 'Rename Draft' : ''}
             >
                 {modalType === 'clear_draft' && (
                     <div className="space-y-6">
@@ -964,6 +1188,112 @@ export default function EditorPage() {
                             </button>
                         </div>
                     </div>
+                )}
+                {modalType === 'clear_current_draft' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-2 text-amber-300 mb-2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            <span className="text-xs uppercase font-black tracking-[0.2em]">Clear_Current_Draft</span>
+                        </div>
+
+                        <div className="space-y-2">
+                            <p className="text-white/60 text-xs leading-relaxed">
+                                คุณแน่ใจหรือไม่ที่จะล้างข้อมูล <span className="text-amber-200 font-bold">{activeDraft?.name || 'ดราฟต์นี้'}</span> ?
+                            </p>
+                            <p className="text-[10px] text-white/40 uppercase leading-tight">
+                                Other template drafts in the dropdown will stay unchanged.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setModalType(null)}
+                                className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleClearCurrentDraft}
+                                className="cursor-pointer flex-1 py-2 bg-amber-400 text-black font-bold uppercase text-xs hover:bg-amber-300 transition-all"
+                            >
+                                Clear_This
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {modalType === 'delete_draft' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-2 text-red-500 mb-2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="16" x2="12" y2="18"></line>
+                            </svg>
+                            <span className="text-xs uppercase font-black tracking-[0.2em]">Destructive_Action</span>
+                        </div>
+
+                        <div className="space-y-2">
+                            <p className="text-white/60 text-xs leading-relaxed">
+                                คุณแน่ใจหรือไม่ที่จะลบ <span className="text-red-400 font-bold">{activeDraft?.name || 'ดราฟต์นี้'}</span> ?
+                            </p>
+                            <p className="text-[10px] text-white/40 uppercase leading-tight">
+                                Warning: This draft will be removed from the dropdown. Other template drafts will stay unchanged.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setModalType(null)}
+                                className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                            >
+                                Abort
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDeleteDraft}
+                                className="cursor-pointer flex-1 py-2 bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-500 transition-all"
+                            >
+                                Confirm_Delete
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {modalType === 'rename_draft' && (
+                    <form onSubmit={handleSubmitRenameDraft} className="space-y-5">
+                        <div className="flex flex-col gap-1">
+                            <label className="text-sm uppercase opacity-70">Draft_Name</label>
+                            <input
+                                autoFocus
+                                type="text"
+                                value={renameDraftName}
+                                onChange={(event) => setRenameDraftName(event.target.value)}
+                                className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75 transition-all duration-300"
+                                placeholder="Draft 1"
+                            />
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setModalType(null)}
+                                className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={!renameDraftName.trim()}
+                                className="cursor-pointer flex-1 py-2 bg-(--primary) text-(--background) font-bold uppercase text-xs hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30 transition-all"
+                            >
+                                Save_Name
+                            </button>
+                        </div>
+                    </form>
                 )}
             </Modal>
         </div>

@@ -52,6 +52,7 @@ export default function AddTemplatePage() {
         description: '',
         preview_url: '',
         is_personal: false,
+        supports_multiple_drafts: false,
         password: '',
         html_blueprint: '',
     });
@@ -169,7 +170,7 @@ export default function AddTemplatePage() {
             if (savedDraft) {
                 try {
                     const parsed = JSON.parse(savedDraft);
-                    if (parsed.formData) setFormData(parsed.formData);
+                    if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData }));
                     if (parsed.selectedTags) setSelectedTags(parsed.selectedTags);
                     if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
                 } catch (e) { console.error("Draft load error", e); }
@@ -467,6 +468,34 @@ export default function AddTemplatePage() {
                                         onChange={(e) => setFormData({...formData, password: e.target.value})}
                                         disabled={!formData.is_personal}
                                     />
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-sm uppercase opacity-70">Template_Drafts</label>
+                                <div className="flex gap-2">
+                                    <label className="flex h-full aspect-square items-center gap-2 cursor-pointer group relative">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only"
+                                            checked={formData.supports_multiple_drafts}
+                                            onChange={(e) => setFormData({...formData, supports_multiple_drafts: e.target.checked})}
+                                        />
+                                        <div className="w-full h-full bg-black/20 border border-(--primary)/50 focus:border-(--primary)/75 transition-all duration-300
+                                            flex items-center justify-center p-2">
+                                            {formData.supports_multiple_drafts && (
+                                                <div className="w-4/5 h-4/5 bg-(--primary) animate-in zoom-in-50 duration-200" />
+                                            )}
+                                        </div>
+                                    </label>
+                                    <div className="flex-1 min-w-0 font-Google-Sans px-1 py-[6.75px] outline-none transition-all duration-300">
+                                        <p className="text-xs font-black uppercase text-(--primary)">
+                                            Multi_Drafts
+                                        </p>
+                                        <p className="font-Google-Sans text-[10px] leading-tight text-(--foreground)/40">
+                                            Show draft dropdown and add/clear draft controls in the public editor.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
