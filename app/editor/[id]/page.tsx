@@ -447,12 +447,8 @@ export default function EditorPage() {
                         try {
                             const parsed = JSON.parse(savedDraft);
                             if (parsed.templateId === templateId) {
-                                setFormData({
-                                    ...initialData,
-                                    ...(parsed.formData || {}),
-                                    supports_multiple_drafts: initialData.supports_multiple_drafts,
-                                });
-                                const draftFields = (parsed.fields || initialFields).map(normalizeFieldConfig);
+                                setFormData(initialData);
+                                const draftFields = initialFields;
                                 setFields(draftFields);
                                 const migratedDrafts = Array.isArray(parsed.drafts) && parsed.drafts.length > 0
                                     ? parsed.drafts.map((draft: Partial<EditorDraft>, index: number) => ({
@@ -502,8 +498,6 @@ export default function EditorPage() {
 
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
                     templateId,
-                    formData,
-                    fields,
                     activeDraftId,
                     drafts: nextDrafts,
                 }));
