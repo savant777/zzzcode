@@ -44,6 +44,12 @@ export const metadata: Metadata = {
         ],
         type: "website",
     },
+    twitter: {
+        card: "summary",
+        title: "ZZZCODE EDITOR",
+        description: "editor for zzzcode's templates",
+        images: ["/zzzcode-editor-logo.png"],
+    },
 };
 
 export default function RootLayout({
