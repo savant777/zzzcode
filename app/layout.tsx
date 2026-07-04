@@ -23,8 +23,27 @@ const googlecode = Google_Sans_Code({
 });
 
 export const metadata: Metadata = {
+    metadataBase: new URL("https://zzzcode.vercel.app"),
     title: "ZZZCODE EDITOR",
     description: "editor for zzzcode's templates",
+    icons: {
+        icon: "/zzzcode-editor-favicon.ico",
+    },
+    openGraph: {
+        title: "ZZZCODE EDITOR",
+        description: "editor for zzzcode's templates",
+        url: "https://zzzcode.vercel.app/?group=category&tag=all",
+        siteName: "ZZZCODE EDITOR",
+        images: [
+            {
+                url: "/zzzcode-editor-logo.png",
+                width: 630,
+                height: 630,
+                alt: "ZZZCODE EDITOR",
+            },
+        ],
+        type: "website",
+    },
 };
 
 export default function RootLayout({
