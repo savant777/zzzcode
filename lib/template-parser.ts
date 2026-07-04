@@ -190,6 +190,8 @@ export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
 const preserveTextNewlines = (html: string): string => {
     const parts = html.split(/(<[^>]+>)/g);
     const isClosingBlockSpacingTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
+    const isOpeningDivSpacingTag = (part?: string) => /^<\s*div(\s|>|\/)/i.test(part || '');
+    const isSpacingTag = (part?: string) => isClosingBlockSpacingTag(part) || isOpeningDivSpacingTag(part);
     const brAfterClosingBlockSpacingTag = (value: string) => {
         const newlineCount = value.match(/\r?\n/g)?.length || 0;
         return '<br>'.repeat(Math.max(0, newlineCount - 1));
@@ -201,10 +203,10 @@ const preserveTextNewlines = (html: string): string => {
 
         if (!part.trim()) {
             if (!/\r?\n/.test(part)) return part;
-            return isClosingBlockSpacingTag(previousTag) ? brAfterClosingBlockSpacingTag(part) : '';
+            return isSpacingTag(previousTag) ? brAfterClosingBlockSpacingTag(part) : '';
         }
 
-        if (isClosingBlockSpacingTag(previousTag)) {
+        if (isSpacingTag(previousTag)) {
             const leadingWhitespace = part.match(/^(?:[ \t]*\r?\n)+/)?.[0] || '';
             if (leadingWhitespace) {
                 return brAfterClosingBlockSpacingTag(leadingWhitespace) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
