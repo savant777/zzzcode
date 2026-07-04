@@ -34,14 +34,6 @@ export const metadata: Metadata = {
         description: "editor for zzzcode's templates",
         url: "https://zzzcode.vercel.app/?group=category&tag=all",
         siteName: "ZZZCODE EDITOR",
-        images: [
-            {
-                url: "/zzzcode-editor-logo.png",
-                width: 630,
-                height: 630,
-                alt: "ZZZCODE EDITOR",
-            },
-        ],
         type: "website",
     },
     twitter: {
