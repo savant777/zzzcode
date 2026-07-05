@@ -31,6 +31,8 @@ const extractYouTubeId = (input: string) => {
 
 export default function BBCodeEditor({ value, onChange }: Props) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const colorPickerRef = useRef<HTMLDivElement>(null);
+    const boldColorPickerRef = useRef<HTMLDivElement>(null);
 
     const insertTag = (open: string, close: string, forcedContent?: string) => {
         const textarea = textareaRef.current;
@@ -92,10 +94,33 @@ export default function BBCodeEditor({ value, onChange }: Props) {
     // Color Picker
     const [currentColor, setCurrentColor] = useState("#000000");
     const [showColorPicker, setShowColorPicker] = useState(false);
+    const [boldColor, setBoldColor] = useState("#ff8c00");
+    const [showBoldColorPicker, setShowBoldColorPicker] = useState(false);
+
+    useEffect(() => {
+        const handlePointerDown = (event: MouseEvent) => {
+            const target = event.target as Node;
+
+            if (showColorPicker && colorPickerRef.current && !colorPickerRef.current.contains(target)) {
+                setShowColorPicker(false);
+            }
+
+            if (showBoldColorPicker && boldColorPickerRef.current && !boldColorPickerRef.current.contains(target)) {
+                setShowBoldColorPicker(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handlePointerDown);
+        return () => document.removeEventListener('mousedown', handlePointerDown);
+    }, [showColorPicker, showBoldColorPicker]);
 
     const applyColor = () => {
         insertTag(`[color=${currentColor}]`, "[/color]");
         setShowColorPicker(false);
+    };
+
+    const applyBoldColor = () => {
+        insertTag(`[b][color=${boldColor}]`, "[/color][/b]");
     };
 
     const applyAbbr = () => {
@@ -259,6 +284,48 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                 {/* กลุ่มตกแต่ง */}
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
                     <div className="relative">
+                        <button title="ตัวหนาพร้อมใส่สี (เลือกสีข้าง ๆ)" onClick={applyBoldColor} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
+                                <path d="M272-280V-840h221c43 0 83 13 120 40s55 64 55 111-8 60-23 79-30 32-43 40c17 7 35 21 56 41s31 50 31 90c0 59-22 101-65 125-43 24-84 36-122 36h-229ZM393-392h104c32 0 52-8 59-25s11-28 11-36-4-19-11-36-28-25-62-25h-101v120ZM393-620h93c22 0 38-6 48-17s15-24 15-38-6-29-17-39-26-15-44-15h-95v109ZM80 0v-160h800v160H80Z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div ref={boldColorPickerRef} className="relative -my-0.5 -mr-0.5">
+                        <button
+                            title="เลือกสีของตัวหนา"
+                            onClick={() => setShowBoldColorPicker(!showBoldColorPicker)}
+                            className="flex h-full min-w-8 w-8 cursor-pointer items-center justify-center hover:bg-(--primary)/15 transition-color duration-300 ease-in-out"
+                        >
+                            <span
+                                className="block h-full w-full border border-(--primary)/20 text-[7px] uppercase content-center text-center font-bold leading-none"
+                                style={{ backgroundColor: boldColor }}
+                            >
+                                Pick Bold Color
+                            </span>
+                        </button>
+                        {showBoldColorPicker && (
+                            <div className="absolute top-full translate-y-[2px] -left-[3px] z-10 border border-(--primary)/25 bg-black p-3 flex flex-col gap-2 w-48">
+                                <div className="text-xs text-(--foreground)/50 uppercase">เลือกสีตัวหนา</div>
+                                <div className="custom-color-picker">
+                                    <HexColorPicker
+                                        color={boldColor.startsWith('#') ? boldColor : '#FFFFFF'}
+                                        onChange={(newColor) => setBoldColor(newColor.toUpperCase())}
+                                    />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={boldColor}
+                                    onChange={(e) => setBoldColor(e.target.value)}
+                                    className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"
+                                    placeholder="#FFFFFF"
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
+                    <div ref={colorPickerRef} className="relative">
                         <button title="สีตัวอักษร" onClick={() => setShowColorPicker(!showColorPicker)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                                 <path d="M96 0v-192h768V0H96Zm161-336 180-480h86l180 480h-83l-43-123H384l-44 123h-83Zm151-192h144l-70-194h-4l-70 194Z"/>
