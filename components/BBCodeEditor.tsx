@@ -10,6 +10,14 @@ interface Props {
 
 type YouTubeTag = 'yt' | 'ytauto' | 'hideyt';
 
+const TEXT_COLOR_STORAGE_KEY = 'zzzcode.bbcode.textColor';
+const BOLD_COLOR_STORAGE_KEY = 'zzzcode.bbcode.boldColor';
+
+const getStoredColor = (key: string, fallback: string) => {
+    if (typeof window === 'undefined') return fallback;
+    return window.localStorage.getItem(key) || fallback;
+};
+
 const extractYouTubeId = (input: string) => {
     const trimmed = input.trim();
     if (!trimmed) return '';
@@ -92,10 +100,18 @@ export default function BBCodeEditor({ value, onChange }: Props) {
     }, [value]);
 
     // Color Picker
-    const [currentColor, setCurrentColor] = useState("#000000");
+    const [currentColor, setCurrentColor] = useState(() => getStoredColor(TEXT_COLOR_STORAGE_KEY, "#000000"));
     const [showColorPicker, setShowColorPicker] = useState(false);
-    const [boldColor, setBoldColor] = useState("#ff8c00");
+    const [boldColor, setBoldColor] = useState(() => getStoredColor(BOLD_COLOR_STORAGE_KEY, "#ff8c00"));
     const [showBoldColorPicker, setShowBoldColorPicker] = useState(false);
+
+    useEffect(() => {
+        window.localStorage.setItem(TEXT_COLOR_STORAGE_KEY, currentColor);
+    }, [currentColor]);
+
+    useEffect(() => {
+        window.localStorage.setItem(BOLD_COLOR_STORAGE_KEY, boldColor);
+    }, [boldColor]);
 
     useEffect(() => {
         const handlePointerDown = (event: MouseEvent) => {
