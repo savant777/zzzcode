@@ -341,6 +341,7 @@ export default function EditorPage() {
         () => drafts.find(draft => draft.id === activeDraftId),
         [drafts, activeDraftId]
     );
+    const removedBlockEntryCacheRef = useRef<Record<string, Record<string, any>>>({});
 
     // --- 2. Computed Preview ---
     const liveHTML = useMemo(() => {
@@ -614,6 +615,10 @@ export default function EditorPage() {
         toast.success(`DRAFT_DELETED: ${activeDraft.name}`);
     };
 
+    const getRemovedBlockCacheKey = (blockName: string, parentBlockName?: string, parentEntryIndex?: number) => {
+        return [activeDraftId, parentBlockName || 'ROOT', parentEntryIndex ?? 'ROOT', blockName].join('::');
+    };
+
     const handleValueChange = (varName: string, value: any) => {
         setFieldValues(prev => ({ ...prev, [varName]: value }));
     };
@@ -682,10 +687,17 @@ export default function EditorPage() {
             const blockFields = getBlockFields(blockName);
             const childBlocks = getChildBlockFieldsMap(blockName);
             const entries = Array.isArray(prev[blockName]) ? prev[blockName] : [];
+            const cacheKey = getRemovedBlockCacheKey(blockName);
+            const cachedEntry = entries.length === 0 ? removedBlockEntryCacheRef.current[cacheKey] : undefined;
+            const nextEntry = cachedEntry
+                ? createBlockEntry(blockFields, cachedEntry, childBlocks, cachedEntry)
+                : createBlockEntry(blockFields, undefined, childBlocks);
+
+            if (cachedEntry) delete removedBlockEntryCacheRef.current[cacheKey];
 
             return {
                 ...prev,
-                [blockName]: [...entries, createBlockEntry(blockFields, undefined, childBlocks)],
+                [blockName]: [...entries, nextEntry],
             };
         });
     };
@@ -695,8 +707,30 @@ export default function EditorPage() {
             const entries = Array.isArray(prev[blockName]) && prev[blockName].length > 0
                 ? [...prev[blockName]]
                 : [];
+            const removedEntry = entries[entryIndex];
 
             entries.splice(entryIndex, 1);
+            if (entries.length === 0 && removedEntry) {
+                removedBlockEntryCacheRef.current[getRemovedBlockCacheKey(blockName)] = cloneFieldValues(removedEntry);
+            }
+
+            return { ...prev, [blockName]: entries };
+        });
+    };
+
+    const handleDuplicateBlockEntry = (blockName: string, entryIndex: number) => {
+        setFieldValues(prev => {
+            const entries = Array.isArray(prev[blockName]) && prev[blockName].length > 0
+                ? [...prev[blockName]]
+                : [];
+            const sourceEntry = entries[entryIndex];
+            if (!sourceEntry) return prev;
+
+            const blockFields = getBlockFields(blockName);
+            const childBlocks = getChildBlockFieldsMap(blockName);
+            const duplicateEntry = createBlockEntry(blockFields, cloneFieldValues(sourceEntry), childBlocks, cloneFieldValues(sourceEntry));
+
+            entries.splice(entryIndex + 1, 0, duplicateEntry);
 
             return { ...prev, [blockName]: entries };
         });
@@ -711,10 +745,17 @@ export default function EditorPage() {
                 : [createBlockEntry(parentFields)];
             const parentEntry = { ...createBlockEntry(parentFields, parentEntries[parentEntryIndex]), ...parentEntries[parentEntryIndex] };
             const childEntries = Array.isArray(parentEntry[childBlockName]) ? parentEntry[childBlockName] : [];
+            const cacheKey = getRemovedBlockCacheKey(childBlockName, parentBlockName, parentEntryIndex);
+            const cachedEntry = childEntries.length === 0 ? removedBlockEntryCacheRef.current[cacheKey] : undefined;
+            const nextChildEntry = cachedEntry
+                ? createBlockEntry(childFields, cachedEntry)
+                : createBlockEntry(childFields);
+
+            if (cachedEntry) delete removedBlockEntryCacheRef.current[cacheKey];
 
             parentEntries[parentEntryIndex] = {
                 ...parentEntry,
-                [childBlockName]: [...childEntries, createBlockEntry(childFields)],
+                [childBlockName]: [...childEntries, nextChildEntry],
             };
 
             return { ...prev, [parentBlockName]: parentEntries };
@@ -731,8 +772,37 @@ export default function EditorPage() {
             const childEntries = Array.isArray(parentEntry[childBlockName]) && parentEntry[childBlockName].length > 0
                 ? [...parentEntry[childBlockName]]
                 : [];
+            const removedEntry = childEntries[childEntryIndex];
 
             childEntries.splice(childEntryIndex, 1);
+            if (childEntries.length === 0 && removedEntry) {
+                removedBlockEntryCacheRef.current[getRemovedBlockCacheKey(childBlockName, parentBlockName, parentEntryIndex)] = cloneFieldValues(removedEntry);
+            }
+            parentEntries[parentEntryIndex] = {
+                ...parentEntry,
+                [childBlockName]: childEntries,
+            };
+
+            return { ...prev, [parentBlockName]: parentEntries };
+        });
+    };
+
+    const handleDuplicateNestedBlockEntry = (parentBlockName: string, parentEntryIndex: number, childBlockName: string, childEntryIndex: number) => {
+        setFieldValues(prev => {
+            const parentFields = getBlockFields(parentBlockName);
+            const childFields = getBlockFields(childBlockName, parentBlockName);
+            const parentEntries = Array.isArray(prev[parentBlockName]) && prev[parentBlockName].length > 0
+                ? [...prev[parentBlockName]]
+                : [createBlockEntry(parentFields)];
+            const parentEntry = { ...createBlockEntry(parentFields, parentEntries[parentEntryIndex]), ...parentEntries[parentEntryIndex] };
+            const childEntries = Array.isArray(parentEntry[childBlockName]) && parentEntry[childBlockName].length > 0
+                ? [...parentEntry[childBlockName]]
+                : [];
+            const sourceEntry = childEntries[childEntryIndex];
+            if (!sourceEntry) return prev;
+
+            const duplicateEntry = createBlockEntry(childFields, cloneFieldValues(sourceEntry));
+            childEntries.splice(childEntryIndex + 1, 0, duplicateEntry);
             parentEntries[parentEntryIndex] = {
                 ...parentEntry,
                 [childBlockName]: childEntries,
@@ -1002,6 +1072,13 @@ export default function EditorPage() {
                                                         <div className="ml-auto flex gap-1">
                                                             <button
                                                                 type="button"
+                                                                onClick={() => handleDuplicateBlockEntry(blockName, entryIndex)}
+                                                                className="cursor-pointer border border-(--primary)/30 px-2 py-1 text-[10px] uppercase text-(--primary) hover:border-(--primary) transition-colors"
+                                                            >
+                                                                Duplicate
+                                                            </button>
+                                                            <button
+                                                                type="button"
                                                                 onClick={() => handleRemoveBlockEntry(blockName, entryIndex)}
                                                                 className="cursor-pointer border border-red-500/30 px-2 py-1 text-[10px] uppercase text-red-300 hover:border-red-500 transition-colors"
                                                             >
@@ -1087,8 +1164,15 @@ export default function EditorPage() {
                                                                                     </span>
                                                                                     <button
                                                                                         type="button"
+                                                                                        onClick={() => handleDuplicateNestedBlockEntry(blockName, entryIndex, childBlock.blockName, childEntryIndex)}
+                                                                                        className="ml-auto cursor-pointer border border-(--primary)/25 px-2 py-1 text-[10px] uppercase text-(--primary)/80 hover:border-(--primary) transition-colors"
+                                                                                    >
+                                                                                        Duplicate
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
                                                                                         onClick={() => handleRemoveNestedBlockEntry(blockName, entryIndex, childBlock.blockName, childEntryIndex)}
-                                                                                        className="ml-auto cursor-pointer border border-red-500/25 px-2 py-1 text-[10px] uppercase text-red-300 hover:border-red-500 transition-colors"
+                                                                                        className="cursor-pointer border border-red-500/25 px-2 py-1 text-[10px] uppercase text-red-300 hover:border-red-500 transition-colors"
                                                                                     >
                                                                                         Remove
                                                                                     </button>
