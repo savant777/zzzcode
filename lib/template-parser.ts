@@ -191,7 +191,8 @@ const preserveTextNewlines = (html: string): string => {
     const parts = html.split(/(<[^>]+>)/g);
     const isClosingBlockSpacingTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
     const isOpeningDivSpacingTag = (part?: string) => /^<\s*div(\s|>|\/)/i.test(part || '');
-    const isSpacingTag = (part?: string) => isClosingBlockSpacingTag(part) || isOpeningDivSpacingTag(part);
+    const isHrSpacingTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
+    const isSpacingTag = (part?: string) => isClosingBlockSpacingTag(part) || isOpeningDivSpacingTag(part) || isHrSpacingTag(part);
     const brAfterClosingBlockSpacingTag = (value: string) => {
         const newlineCount = value.match(/\r?\n/g)?.length || 0;
         return '<br>'.repeat(Math.max(0, newlineCount - 1));
