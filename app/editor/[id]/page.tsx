@@ -46,6 +46,11 @@ const normalizeDraftName = (name: string | undefined, index: number) => {
     return legacyCharacterName ? `Draft ${legacyCharacterName[1]}` : name;
 };
 
+const cloneFieldValues = (values: Record<string, any>) => {
+    if (typeof structuredClone === 'function') return structuredClone(values);
+    return JSON.parse(JSON.stringify(values));
+};
+
 const useUndoableState = <T,>(initialValue: T) => {
     const [value, setValueState] = useState<T>(initialValue);
     const [past, setPast] = useState<T[]>([]);
@@ -557,6 +562,19 @@ export default function EditorPage() {
         toast.success(`DRAFT_CREATED: ${nextDraft.name}`);
     };
 
+    const handleDuplicateDraft = () => {
+        if (!activeDraft) return;
+
+        const duplicatedValues = buildInitialValues(fields, cloneFieldValues(fieldValues));
+        const nextDraft = createEditorDraft(`${activeDraft.name} Copy`, duplicatedValues);
+
+        syncActiveDraft();
+        setDrafts(prev => [...prev, nextDraft]);
+        setActiveDraftId(nextDraft.id);
+        resetFieldValues(nextDraft.fieldValues);
+        toast.success(`DRAFT_DUPLICATED: ${nextDraft.name}`);
+    };
+
     const handleRenameDraft = () => {
         if (!activeDraft) return;
 
@@ -850,7 +868,7 @@ export default function EditorPage() {
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]">
                                         <div className="relative min-w-0">
                                             <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-(--primary)">
                                                 <svg width="12" height="12" viewBox="0 0 524 524" fill="currentColor">
@@ -877,6 +895,14 @@ export default function EditorPage() {
                                             className="cursor-pointer border border-(--primary)/30 px-3 py-2 text-[10px] font-black uppercase text-(--primary) transition-colors hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25"
                                         >
                                             Rename
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={!activeDraft}
+                                            onClick={handleDuplicateDraft}
+                                            className="cursor-pointer border border-(--primary)/30 px-3 py-2 text-[10px] font-black uppercase text-(--primary) transition-colors hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25"
+                                        >
+                                            Duplicate
                                         </button>
                                         <button
                                             type="button"
