@@ -12,6 +12,7 @@ import Modal from './Modal';
 const creatorMenuItems = [
     { href: '/create', symbol: '+', label: 'Add Template' },
     { href: '/creator/tags', symbol: '#', label: 'Manage Tags' },
+    { href: '/creator/guide', symbol: '?', label: 'Guide' },
     { href: '/creator/profile', symbol: '*', label: 'Profile' },
 ];
 
