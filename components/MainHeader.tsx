@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -36,11 +36,38 @@ export default function MainHeader() {
     const [modalType, setModalType] = useState<'login' | 'logout' | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const loadCreatorSession = async () => {
-        const session = await getCurrentCreator();
-        const isCreatorSignInPage = pathname === '/creator/signin';
+    const loadCreatorSession = useCallback(async () => {
+        // The onboarding page owns the auth lifecycle while a new creator is
+        // being created. Checking access here can race with the OAuth callback
+        // and sign the user out before the profile form is submitted.
+        if (pathname === '/creator/signin') {
+            setCreatorSession(null);
+            setIsLoading(false);
+            return;
+        }
 
-        if (session.user && !session.isCreator && !isCreatorSignInPage) {
+        const session = await getCurrentCreator();
+
+        if (session.user && !session.isCreator) {
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+
+            if (authSession?.access_token) {
+                try {
+                    const cleanupResponse = await fetch('/api/creator/auth/cleanup', {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${authSession.access_token}`,
+                        },
+                    });
+
+                    if (!cleanupResponse.ok) {
+                        console.error('Unauthorized auth user cleanup failed:', cleanupResponse.status);
+                    }
+                } catch (error) {
+                    console.error('Unauthorized auth user cleanup failed:', error);
+                }
+            }
+
             await supabase.auth.signOut();
             setCreatorSession(null);
             setIsLoading(false);
@@ -51,17 +78,21 @@ export default function MainHeader() {
 
         setCreatorSession(session);
         setIsLoading(false);
-    };
+    }, [pathname, router]);
 
     useEffect(() => {
         loadCreatorSession();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-            loadCreatorSession();
+            // Supabase advises against awaiting another auth operation inside
+            // this callback. Deferring avoids locking/racing the auth client.
+            setTimeout(() => {
+                void loadCreatorSession();
+            }, 0);
         });
 
         return () => subscription.unsubscribe();
-    }, [pathname]);
+    }, [loadCreatorSession]);
 
     const isCreator = !!creatorSession?.isCreator;
 
