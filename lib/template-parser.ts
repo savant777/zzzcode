@@ -23,8 +23,9 @@ export interface FieldConfig {
         select_options?: {
             option: string;
             value: string;
-            type?: '' | 'text' | 'bbcode' | 'color' | 'slider' | 'gradient';
+            type?: '' | 'text' | 'bbcode' | 'color' | 'color-text' | 'slider' | 'gradient';
             default_value?: string;
+            secondary_default_value?: string;
             has_format?: boolean;
             format?: string;
         }[];
@@ -57,8 +58,9 @@ export interface FieldConfig {
 export type SelectOptionConfig = {
     option: string;
     value: string;
-    type?: '' | 'text' | 'bbcode' | 'color' | 'slider' | 'gradient';
+    type?: '' | 'text' | 'bbcode' | 'color' | 'color-text' | 'slider' | 'gradient';
     default_value?: string;
+    secondary_default_value?: string;
     has_format?: boolean;
     format?: string;
 };
@@ -95,6 +97,7 @@ export const getSelectOptions = (field: FieldConfig): SelectOptionConfig[] => {
             value: opt.value || '',
             type: opt.type || '',
             default_value: opt.default_value || '',
+            secondary_default_value: opt.secondary_default_value || '',
             has_format: opt.has_format || false,
             format: opt.format || ''
         }));
@@ -110,6 +113,7 @@ export const getSelectOptions = (field: FieldConfig): SelectOptionConfig[] => {
                 value: parts[1] || parts[0] || '',
                 type: (parts[2] || '') as SelectOptionConfig['type'],
                 default_value: '',
+                secondary_default_value: '',
                 has_format: false,
                 format: ''
             };
@@ -123,6 +127,12 @@ export const getSelectDefaultValue = (field: FieldConfig) => {
 
 const formatSelectOutput = (format: string, value: string, rawValue?: any, field?: FieldConfig): string => {
     let output = format.replace(/\{\{value\}\}/g, value);
+
+    if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+        output = output
+            .replace(/\{\{color\}\}/g, String(rawValue.color || ''))
+            .replace(/\{\{text\}\}/g, String(rawValue.text || ''));
+    }
 
     if (Array.isArray(rawValue)) {
         rawValue.forEach((item, index) => {

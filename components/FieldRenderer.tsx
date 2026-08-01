@@ -178,6 +178,8 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                 ? field.config?.gradient || defaultGradientValue
             : selectedOption.type === 'color'
                 ? selectedOption.default_value || '#FFFFFF'
+            : selectedOption.type === 'color-text'
+                ? { color: selectedOption.default_value || '#FFFFFF', text: selectedOption.secondary_default_value || '' }
                 : selectedOption.default_value || '';
 
         onChange(field.variable_name, {
@@ -198,6 +200,8 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                 ? field.config?.gradient || defaultGradientValue
             : selectedOption.type === 'color'
                 ? selectedOption.default_value || '#FFFFFF'
+            : selectedOption.type === 'color-text'
+                ? { color: selectedOption.default_value || '#FFFFFF', text: selectedOption.secondary_default_value || '' }
                 : selectedOption.default_value || '';
 
         return {
@@ -366,6 +370,15 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                                             </div>
                                             )}
 
+                                            {opt.type === 'color-text' && (
+                                            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                <ColorTextInput
+                                                    value={entry?.custom_value}
+                                                    onChange={(customValue) => updateMultipleEntries(selectedMultipleEntries.map((item: any) => item.option_index === index ? { ...item, custom_value: customValue } : item))}
+                                                />
+                                            </div>
+                                            )}
+
                                             {opt.type === 'slider' && (
                                             <div className="mt-2 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
                                                 {(field.config?.sliders || [{ label: 'Value', min: 0, max: 100, step: 1, unit: 'px', default_value: 0 }]).map((s, i) => {
@@ -476,6 +489,13 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                         </div>
                     )}
 
+                    {selectedSelectOption?.type === 'color-text' && (
+                        <ColorTextInput
+                            value={value?.custom_value}
+                            onChange={(customValue) => onChange(field.variable_name, { option_index: selectedSelectIndex, value: selectedSelectValue, custom_value: customValue })}
+                        />
+                    )}
+
                     {selectedSelectOption?.type === 'slider' && (
                         <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
                             {(field.config?.sliders || [{ label: 'Value', min: 0, max: 100, step: 1, unit: 'px', default_value: 0 }]).map((s, i) => {
@@ -578,6 +598,45 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                     </span>
                 </label>
             )}
+        </div>
+    );
+}
+
+function ColorTextInput({
+    value,
+    onChange,
+}: {
+    value?: { color?: string; text?: string };
+    onChange: (value: { color: string; text: string }) => void;
+}) {
+    const color = value?.color || '#FFFFFF';
+    const text = value?.text || '';
+
+    const updateColor = (nextColor: string) => onChange({ color: nextColor, text });
+
+    return (
+        <div className="contents">
+            <div className="flex gap-2">
+                <ColorPicker color={color.startsWith('#') ? color : '#FFFFFF'} onChange={(nextColor) => updateColor(nextColor.toUpperCase())} />
+                <input
+                    type="text"
+                    value={color}
+                    onChange={(e) => {
+                        let nextColor = e.target.value.toUpperCase();
+                        if (nextColor && !nextColor.startsWith('#')) nextColor = `#${nextColor}`;
+                        if (nextColor.length <= 9) updateColor(nextColor);
+                    }}
+                    className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                    placeholder="#FFFFFF"
+                />
+            </div>
+            <input
+                type="text"
+                value={text}
+                onChange={(e) => onChange({ color, text: e.target.value })}
+                className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"
+                placeholder="ข้อความ"
+            />
         </div>
     );
 }

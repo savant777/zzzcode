@@ -226,6 +226,17 @@ const getDefaultValue = (field: FieldConfig) => {
             });
         }
 
+        if (defaultOption?.type === 'color-text') {
+            return defaultEntry({
+                option_index: 0,
+                value: defaultValue,
+                custom_value: {
+                    color: defaultOption.default_value || '#FFFFFF',
+                    text: defaultOption.secondary_default_value || '',
+                },
+            });
+        }
+
         if (defaultOption?.type === 'text' || defaultOption?.type === 'bbcode') {
             return defaultEntry({
                 option_index: 0,

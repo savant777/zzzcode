@@ -45,6 +45,7 @@ export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onC
             value: opt.value,
             type: opt.type || '',
             default_value: opt.default_value || '',
+            secondary_default_value: opt.secondary_default_value || '',
             has_format: opt.has_format || false,
             format: opt.format || '',
         }));
@@ -629,6 +630,7 @@ function SelectConfig({
                                 <option value="text" className="bg-black">Text</option>
                                 <option value="bbcode" className="bg-black">BBCode</option>
                                 <option value="color" className="bg-black">Color</option>
+                                <option value="color-text" className="bg-black">Color + Text</option>
                                 <option value="slider" className="bg-black">Slider</option>
                                 <option value="gradient" className="bg-black">Gradient</option>
                             </select>
@@ -666,6 +668,20 @@ function SelectConfig({
                                     value={opt.default_value || '#FFFFFF'}
                                     onChange={(value) => updateOption(index, { default_value: value })}
                                 />
+                            )}
+                            {opt.type === 'color-text' && (
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    <SelectOptionDefaultConfig
+                                        type="color"
+                                        value={opt.default_value || '#FFFFFF'}
+                                        onChange={(value) => updateOption(index, { default_value: value })}
+                                    />
+                                    <SelectOptionDefaultConfig
+                                        type="text"
+                                        value={opt.secondary_default_value || ''}
+                                        onChange={(value) => updateOption(index, { secondary_default_value: value })}
+                                    />
+                                </div>
                             )}
                             {opt.type === 'gradient' && <GradientConfig field={field} onChange={onFieldChange} />}
                             {opt.type === 'text' && (
