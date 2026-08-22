@@ -2,7 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { getGroupSlug } from '@/lib/routes';
 
-const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'the-plastics'];
+const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'houses'];
 
 function CreatorBadge({ name }: { name: string }) {
     return (

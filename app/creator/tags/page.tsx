@@ -36,8 +36,8 @@ type TagForm = {
     is_active: boolean;
 };
 
-const GROUP_ORDER = ['category', 'css', 'style', 'activity', 'commission', 'the-plastics'];
-const OWNER_ONLY_GROUPS = ['the-plastics'];
+const GROUP_ORDER = ['category', 'css', 'style', 'activity', 'commission', 'houses'];
+const OWNER_ONLY_GROUPS = ['houses'];
 
 const emptyForm: TagForm = {
     group_id: '',

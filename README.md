@@ -189,7 +189,7 @@ Tag management rules:
 - global tags are owner-managed
 - creator-owned tags can only be managed by their creator
 - the `creators` tag group is managed by the system and is not editable from the tag manager
-- the `the-plastics` tag group is locked to the project owner
+- the `houses` tag group is locked to the project owner
 - deactivating a tag uses `is_active = false` instead of deleting the row
 
 ### 6. Creator Sign-In and Onboarding

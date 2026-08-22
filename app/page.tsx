@@ -14,7 +14,7 @@ import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import Modal from '@/components/Modal';
 
-const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'the-plastics'];
+const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'houses'];
 
 export default function Page() {
     return (
