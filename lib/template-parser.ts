@@ -203,15 +203,17 @@ const preserveTextNewlines = (html: string): string => {
     const isOpeningDivSpacingTag = (part?: string) => /^<\s*div(\s|>|\/)/i.test(part || '');
     const isBlockSpacingTag = (part?: string) => /^<\/?\s*(div|p|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|section|article|header|footer|main|aside|nav)(\s|>|\/)/i.test(part || '');
     const isHrSpacingTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
-    const isImageSpacingTag = (part?: string) => /^<\s*img(\s|>|\/)/i.test(part || '');
+    const isBBCodeImageTag = (part?: string) => /\bclass=(["'])(?:(?!\1).)*\bmycode_img\b(?:(?!\1).)*\1/i.test(part || '');
+    const isImageSpacingTag = (part?: string) => /^<\s*img(\s|>|\/)/i.test(part || '') && !isBBCodeImageTag(part);
     const isSpacingTag = (part?: string) => isClosingBlockSpacingTag(part) || isOpeningDivSpacingTag(part) || isHrSpacingTag(part);
     const brAfterClosingBlockSpacingTag = (value: string) => {
         const newlineCount = value.match(/\r?\n/g)?.length || 0;
         return '<br>'.repeat(Math.max(0, newlineCount - 1));
     };
-    const brAfterImageTag = (value: string) => {
+    const brAfterImageTag = (value: string, nextTag?: string) => {
         const newlineCount = value.match(/\r?\n/g)?.length || 0;
-        return '<br>'.repeat(newlineCount + 1);
+        const brCount = isBlockSpacingTag(nextTag) ? newlineCount : newlineCount + 1;
+        return '<br>'.repeat(brCount);
     };
 
     return parts.map((part, index) => {
@@ -221,13 +223,13 @@ const preserveTextNewlines = (html: string): string => {
 
         if (!part.trim()) {
             if (!/\r?\n/.test(part)) return part;
-            if (isImageSpacingTag(previousTag)) return isBlockSpacingTag(nextTag) ? '' : brAfterImageTag(part);
+            if (isImageSpacingTag(previousTag)) return brAfterImageTag(part, nextTag);
             return isSpacingTag(previousTag) ? brAfterClosingBlockSpacingTag(part) : '';
         }
 
-        if (isImageSpacingTag(previousTag) && !isBlockSpacingTag(nextTag)) {
+        if (isImageSpacingTag(previousTag)) {
             const leadingWhitespace = part.match(/^(?:[ \t]*\r?\n)*/)?.[0] || '';
-            return brAfterImageTag(leadingWhitespace) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
+            return brAfterImageTag(leadingWhitespace, nextTag) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
         }
 
         if (isSpacingTag(previousTag)) {
