@@ -201,6 +201,7 @@ const preserveTextNewlines = (html: string): string => {
     const parts = html.split(/(<[^>]+>)/g);
     const isClosingBlockSpacingTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
     const isOpeningDivSpacingTag = (part?: string) => /^<\s*div(\s|>|\/)/i.test(part || '');
+    const isBlockSpacingTag = (part?: string) => /^<\/?\s*(div|p|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|section|article|header|footer|main|aside|nav)(\s|>|\/)/i.test(part || '');
     const isHrSpacingTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
     const isImageSpacingTag = (part?: string) => /^<\s*img(\s|>|\/)/i.test(part || '');
     const isSpacingTag = (part?: string) => isClosingBlockSpacingTag(part) || isOpeningDivSpacingTag(part) || isHrSpacingTag(part);
@@ -216,14 +217,15 @@ const preserveTextNewlines = (html: string): string => {
     return parts.map((part, index) => {
         if (part.startsWith('<') && part.endsWith('>')) return part;
         const previousTag = [...parts.slice(0, index)].reverse().find(item => item.startsWith('<') && item.endsWith('>'));
+        const nextTag = parts.slice(index + 1).find(item => item.startsWith('<') && item.endsWith('>'));
 
         if (!part.trim()) {
             if (!/\r?\n/.test(part)) return part;
-            if (isImageSpacingTag(previousTag)) return brAfterImageTag(part);
+            if (isImageSpacingTag(previousTag)) return isBlockSpacingTag(nextTag) ? '' : brAfterImageTag(part);
             return isSpacingTag(previousTag) ? brAfterClosingBlockSpacingTag(part) : '';
         }
 
-        if (isImageSpacingTag(previousTag)) {
+        if (isImageSpacingTag(previousTag) && !isBlockSpacingTag(nextTag)) {
             const leadingWhitespace = part.match(/^(?:[ \t]*\r?\n)*/)?.[0] || '';
             return brAfterImageTag(leadingWhitespace) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
         }
@@ -366,6 +368,7 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
         html = html.replace(/\r?\n/g, '<br>')
                    .replace(/<\/div><br>/g, '</div>')
                    .replace(/(<hr\b[^>]*>)<br>/gi, '$1')
+                   .replace(/(<img\b[^>]*>)<br>([ \t]*)(?=<\/?\s*(div|p|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|section|article|header|footer|main|aside|nav)(\s|>|\/))/gi, '$1$2')
                    .replace(/<\/ul><br>/g, '</ul>')
                    .replace(/<\/ol><br>/g, '</ol>')
                    .replace(/<li><br>/g, '<li>')
@@ -627,7 +630,7 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
             }
 
             if (field.type === 'bbcode' && isExport) {
-                val = parseBBCode(val);
+                val = parseBBCode(val, false);
             }
 
             const variablePattern = new RegExp(`\\{\\{${safeVarName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}`, 'g');
