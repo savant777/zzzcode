@@ -202,10 +202,15 @@ const preserveTextNewlines = (html: string): string => {
     const isClosingBlockSpacingTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
     const isOpeningDivSpacingTag = (part?: string) => /^<\s*div(\s|>|\/)/i.test(part || '');
     const isHrSpacingTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
+    const isImageSpacingTag = (part?: string) => /^<\s*img(\s|>|\/)/i.test(part || '');
     const isSpacingTag = (part?: string) => isClosingBlockSpacingTag(part) || isOpeningDivSpacingTag(part) || isHrSpacingTag(part);
     const brAfterClosingBlockSpacingTag = (value: string) => {
         const newlineCount = value.match(/\r?\n/g)?.length || 0;
         return '<br>'.repeat(Math.max(0, newlineCount - 1));
+    };
+    const brAfterImageTag = (value: string) => {
+        const newlineCount = value.match(/\r?\n/g)?.length || 0;
+        return '<br>'.repeat(newlineCount + 1);
     };
 
     return parts.map((part, index) => {
@@ -214,7 +219,13 @@ const preserveTextNewlines = (html: string): string => {
 
         if (!part.trim()) {
             if (!/\r?\n/.test(part)) return part;
+            if (isImageSpacingTag(previousTag)) return brAfterImageTag(part);
             return isSpacingTag(previousTag) ? brAfterClosingBlockSpacingTag(part) : '';
+        }
+
+        if (isImageSpacingTag(previousTag)) {
+            const leadingWhitespace = part.match(/^(?:[ \t]*\r?\n)*/)?.[0] || '';
+            return brAfterImageTag(leadingWhitespace) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
         }
 
         if (isSpacingTag(previousTag)) {
@@ -352,8 +363,9 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
     html = parseList(html);
 
     if (convertNewlines) {
-        html = html.replace(/\n/g, '<br>')
+        html = html.replace(/\r?\n/g, '<br>')
                    .replace(/<\/div><br>/g, '</div>')
+                   .replace(/(<hr\b[^>]*>)<br>/gi, '$1')
                    .replace(/<\/ul><br>/g, '</ul>')
                    .replace(/<\/ol><br>/g, '</ol>')
                    .replace(/<li><br>/g, '<li>')
