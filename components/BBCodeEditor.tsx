@@ -596,7 +596,7 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                         value={detailsData.summary}
                         onChange={(e) => setDetailsData(prev => ({ ...prev, summary: e.target.value }))}
                         className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
-                        placeholder="เธซเธฑเธงเธเนเธญ"
+                        placeholder="หัวข้อ"
                     />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -606,7 +606,7 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                         value={detailsData.details}
                         onChange={(e) => setDetailsData(prev => ({ ...prev, details: e.target.value }))}
                         className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300 resize-y"
-                        placeholder="เน€เธเธทเนเธญเธซเธฒ"
+                        placeholder="เนื้อหา"
                     />
                 </div>
                 <div className="flex gap-2 pt-2">

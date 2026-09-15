@@ -197,50 +197,24 @@ export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
     return nextField;
 };
 
+// Match HTML tokens without treating quoted attributes or raw-text content as prose.
 const preserveTextNewlines = (html: string): string => {
-    const parts = html.split(/(<[^>]+>)/g);
-    const isClosingBlockSpacingTag = (part?: string) => /^<\/\s*(div|p)\s*>/i.test(part || '');
-    const isOpeningDivSpacingTag = (part?: string) => /^<\s*div(\s|>|\/)/i.test(part || '');
-    const isBlockSpacingTag = (part?: string) => /^<\/?\s*(div|p|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|section|article|header|footer|main|aside|nav)(\s|>|\/)/i.test(part || '');
-    const isHrSpacingTag = (part?: string) => /^<\s*hr(\s|>|\/)/i.test(part || '');
-    const isBBCodeImageTag = (part?: string) => /\bclass=(["'])(?:(?!\1).)*\bmycode_img\b(?:(?!\1).)*\1/i.test(part || '');
-    const isImageSpacingTag = (part?: string) => /^<\s*img(\s|>|\/)/i.test(part || '') && !isBBCodeImageTag(part);
-    const isSpacingTag = (part?: string) => isClosingBlockSpacingTag(part) || isOpeningDivSpacingTag(part) || isHrSpacingTag(part);
-    const brAfterClosingBlockSpacingTag = (value: string) => {
-        const newlineCount = value.match(/\r?\n/g)?.length || 0;
-        return '<br>'.repeat(Math.max(0, newlineCount - 1));
+    const tokenPattern = /<!--[^]*?-->|<(style|script|textarea)\b[^>]*>[^]*?<\/\1\s*>|<[^>"']*(?:"[^"]*"[^>"']*|'[^']*'[^>"']*)*>/gi;
+    let result = '';
+    let cursor = 0;
+    let previousTag = '';
+    const convert = (text: string) => {
+        const consumesNewline = /^<\/?(?:div|p|ul|ol|li|table|thead|tbody|tfoot|tr|td|th)\b[^>]*>$|^<hr\b[^>]*>$/i.test(previousTag);
+        if (consumesNewline) text = text.replace(/^([ \t]*)\r?\n/, '$1');
+        return text.replace(/\r?\n/g, '<br>');
     };
-    const brAfterImageTag = (value: string, nextTag?: string) => {
-        const newlineCount = value.match(/\r?\n/g)?.length || 0;
-        const brCount = isBlockSpacingTag(nextTag) ? newlineCount : newlineCount + 1;
-        return '<br>'.repeat(brCount);
-    };
-
-    return parts.map((part, index) => {
-        if (part.startsWith('<') && part.endsWith('>')) return part;
-        const previousTag = [...parts.slice(0, index)].reverse().find(item => item.startsWith('<') && item.endsWith('>'));
-        const nextTag = parts.slice(index + 1).find(item => item.startsWith('<') && item.endsWith('>'));
-
-        if (!part.trim()) {
-            if (!/\r?\n/.test(part)) return part;
-            if (isImageSpacingTag(previousTag)) return brAfterImageTag(part, nextTag);
-            return isSpacingTag(previousTag) ? brAfterClosingBlockSpacingTag(part) : '';
-        }
-
-        if (isImageSpacingTag(previousTag)) {
-            const leadingWhitespace = part.match(/^(?:[ \t]*\r?\n)*/)?.[0] || '';
-            return brAfterImageTag(leadingWhitespace, nextTag) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
-        }
-
-        if (isSpacingTag(previousTag)) {
-            const leadingWhitespace = part.match(/^(?:[ \t]*\r?\n)+/)?.[0] || '';
-            if (leadingWhitespace) {
-                return brAfterClosingBlockSpacingTag(leadingWhitespace) + part.slice(leadingWhitespace.length).replace(/\r?\n/g, '<br>');
-            }
-        }
-
-        return part.replace(/\r?\n/g, '<br>');
-    }).join('');
+    for (const match of html.matchAll(tokenPattern)) {
+        result += convert(html.slice(cursor, match.index));
+        result += match[0];
+        previousTag = match[0];
+        cursor = match.index! + match[0].length;
+    }
+    return result + convert(html.slice(cursor));
 };
 
 const escapeRegExp = (value: string): string => {
@@ -309,12 +283,17 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
                     const parsedContent = parseList(content);
                     const items = parsedContent.split('[*]')
                         .slice(1)
-                        .map((item: string) => item.trim())
-                        .filter((item: string) => item !== '')
                         .map((item: string) => `<li>${item}</li>`)
                         .join('');
 
                     const tag = isOrdered ? 'ol type="1"' : 'ul';
+                    // The destination consumes one preceding newline for bullets;
+                    // numbered lists retain it and insert one when written inline.
+                    if (isOrdered) {
+                        if (!/\n[ \t]*$/.test(result)) result += '\n';
+                    } else {
+                        result = result.replace(/\r?\n[ \t]*$/, '');
+                    }
                     result += `<${tag} class="mycode_list">${items}</${isOrdered ? 'ol' : 'ul'}>`;
                     i = closeIdx + '[/list]'.length;
                 } else {
@@ -349,7 +328,7 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
             return videoId ? `<iframe style="display:none;" width="0" height="0" src="https://www.youtube.com/embed/${videoId}?autoplay=1&loop=1&playlist=${videoId}" frameborder="0" allow="autoplay"></iframe>` : '';
         })
         .replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, (_match, content) => `<div style="margin-top:5px"><div class="quotetitle"><input class="button2 btnlite" type="button" value="View Spoiler" style="text-align:center;width:115px;margin:0px;padding: 5px;background-color: #e7e7e7;color: black;border: 0;" onclick="if (this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display != '') { this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display = '';      this.innerText = ''; this.value = 'Hide Spoiler'; } else { this.parentNode.parentNode.getElementsByTagName('div')[1].getElementsByTagName('div')[0].style.display = 'none'; this.innerText = ''; this.value = 'View Spoiler'; }"></div><div class="quotecontent" style="margin: 5px 0px;padding: 15px;background: #202020;font-size: 13px;color: #fff;"><div style="display: none;">${content}</div></div></div>`)
-        .replace(/\[hide\]([\s\S]*?)\[\/hide\]/gi, '<div class="hidden-content"><div class="hidden-content-title"><strong>เนื้อหาที่ถูกซ่อน</strong></div><div class="hidden-content-body">$1</div></div>')
+        .replace(/\[hide\]([\s\S]*?)\[\/hide\]/gi, '<div class="hidden-content"><div class="hidden-content-title"><strong>เนื้อหาที่ถูกซ่อน</strong><br></div><div class="hidden-content-body">\n$1\n</div></div>')
         .replace(/\[hr\]/gi, '<hr class="mycode_hr">')
         .replace(/\[img=(\d+)x(\d+)\]([\s\S]*?)\[\/img\]/gi, (match, w, h, url) => {
             const fileName = url.split('/').pop() || "image";
@@ -366,16 +345,7 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
     
     html = parseList(html);
 
-    if (convertNewlines) {
-        html = html.replace(/\r?\n/g, '<br>')
-                   .replace(/<\/div><br>/g, '</div>')
-                   .replace(/(<hr\b[^>]*>)<br>/gi, '$1')
-                   .replace(/(<img\b[^>]*>)<br>([ \t]*)(?=<\/?\s*(div|p|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|section|article|header|footer|main|aside|nav)(\s|>|\/))/gi, '$1$2')
-                   .replace(/<\/ul><br>/g, '</ul>')
-                   .replace(/<\/ol><br>/g, '</ol>')
-                   .replace(/<li><br>/g, '<li>')
-                   .replace(/<br><\/li>/g, '</li>');
-    }
+    if (convertNewlines) html = preserveTextNewlines(html);
 
     return html;
 };
@@ -631,9 +601,6 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
                 val = formatGradientValue(val || field.config?.gradient);
             }
 
-            if (field.type === 'bbcode' && isExport) {
-                val = parseBBCode(val, false);
-            }
 
             const variablePattern = new RegExp(`\\{\\{${safeVarName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}`, 'g');
             
