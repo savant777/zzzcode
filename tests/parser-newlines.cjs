@@ -80,4 +80,14 @@ for (const n of [1, 2]) {
 }
 assert.equal(generateFinalHTML('{{body}}', { body: 'before\n[list][*]one\n[/list]' }, [field], true), generateFinalHTML('before\n[list][*]one\n[/list]', {}, [], true));
 assert.equal(generateFinalHTML('{{body}}', { body: '[b]text[/b]\nnext' }, [field], false), '[b]text[/b]\nnext');
+for (const literal of ['$&', '$$', '$`', "$'", '$1', '[b]$& $$[/b]']) {
+    for (const isExport of [false, true]) {
+        assert.equal(
+            generateFinalHTML('before {{body}} after {{body}}', { body: literal }, [field], isExport),
+            generateFinalHTML(`before ${literal} after ${literal}`, {}, [], isExport),
+            `literal replacement: ${literal}, export: ${isExport}`,
+        );
+        count++;
+    }
+}
 console.log(`${count + 2} parser regression cases passed`);

@@ -611,7 +611,8 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
                 const emptyLinePattern = new RegExp(`^\\s*\\{\\{${safeVarName}(?::[^}]+)?(?:\\[GROUP:[^\\]]+\\])?\\}\\}\\s*\\n?`, 'gm');
                 result = result.replace(emptyLinePattern, "").replace(variablePattern, "");
             } else {
-                result = result.replace(variablePattern, String(val));
+                // A callback keeps user text such as $& and $$ literal.
+                result = result.replace(variablePattern, () => String(val));
             }
         });
 
