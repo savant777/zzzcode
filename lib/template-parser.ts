@@ -309,6 +309,7 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
     };
 
     let html = text
+        .replace(/\[size=(xx-small|x-small|small|medium|large|x-large|xx-large)\]([\s\S]*?)\[\/size\]/gi, '<span style="font-size: $1;" class="mycode_size">$2</span>')
         .replace(/\[b\]([\s\S]*?)\[\/b\]/g, '<span style="font-weight: bold;" class="mycode_b">$1</span>')
         .replace(/\[i\]([\s\S]*?)\[\/i\]/g, '<span style="font-style: italic;" class="mycode_i">$1</span>')
         .replace(/\[u\]([\s\S]*?)\[\/u\]/g, '<span style="text-decoration: underline;" class="mycode_u">$1</span>')

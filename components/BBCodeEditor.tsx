@@ -9,6 +9,7 @@ interface Props {
 }
 
 type YouTubeTag = 'yt' | 'ytauto' | 'hideyt';
+const FONT_SIZES = ['xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large'] as const;
 
 const TEXT_COLOR_STORAGE_KEY = 'zzzcode.bbcode.textColor';
 const BOLD_COLOR_STORAGE_KEY = 'zzzcode.bbcode.boldColor';
@@ -40,6 +41,27 @@ const extractYouTubeId = (input: string) => {
 export default function BBCodeEditor({ value, onChange }: Props) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const colorPickerRef = useRef<HTMLDivElement>(null);
+    const sizePickerRef = useRef<HTMLDivElement>(null);
+    const [showSizePicker, setShowSizePicker] = useState(false);
+
+    useEffect(() => {
+        if (!showSizePicker) return;
+        const closeOutside = (event: PointerEvent) => {
+            if (!sizePickerRef.current?.contains(event.target as Node)) setShowSizePicker(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setShowSizePicker(false);
+                sizePickerRef.current?.querySelector('button')?.focus();
+            }
+        };
+        document.addEventListener('pointerdown', closeOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [showSizePicker]);
     const boldColorPickerRef = useRef<HTMLDivElement>(null);
 
     const insertTag = (open: string, close: string, forcedContent?: string) => {
@@ -369,6 +391,40 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                                 >
                                     use
                                 </button>
+                            </div>
+                        )}
+                    </div>
+                    <div ref={sizePickerRef} className="relative flex">
+                        <button
+                            type="button"
+                            title="ขนาดตัวอักษร"
+                            aria-label="ขนาดตัวอักษร"
+                            aria-expanded={showSizePicker}
+                            onClick={() => setShowSizePicker(open => !open)}
+                            className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor" aria-hidden="true">
+                                <path d="M560-160v-520H360v-120h520v120H680v520H560Zm-360 0v-320H80v-120h360v120H320v320H200Z"/>
+                            </svg>
+                        </button>
+                        {showSizePicker && (
+                            <div className="absolute top-full translate-y-[2px] -left-[3px] z-20 min-w-14 border border-(--primary)/25 bg-black p-1" role="group" aria-label="เลือกขนาดตัวอักษร">
+                                {FONT_SIZES.map((size, index) => (
+                                    <button
+                                        key={size}
+                                        type="button"
+                                        title={`${index + 1}: ${size}`}
+                                        aria-label={`ขนาด ${index + 1} (${size})`}
+                                        style={{ fontSize: size }}
+                                        className="block w-full px-3 py-1 text-left leading-normal cursor-pointer hover:bg-(--primary)/15 focus-visible:bg-(--primary)/15 focus-visible:outline focus-visible:outline-2 transition-colors duration-300 ease-in-out"
+                                        onClick={() => {
+                                            insertTag(`[size=${size}]`, '[/size]');
+                                            setShowSizePicker(false);
+                                        }}
+                                    >
+                                        {index + 1}
+                                    </button>
+                                ))}
                             </div>
                         )}
                     </div>

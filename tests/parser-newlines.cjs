@@ -55,6 +55,11 @@ for (const n of [0, 1, 2]) {
     check(`before${nl}${stylesheet}${nl}after`, `before${'<br>'.repeat(n)}${stylesheet}${after}after`);
 }
 const field = { variable_name: 'body', type: 'bbcode', default_value: '' };
+for (const size of ['xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large']) {
+    check(`[size=${size}]text[/size]\nnext`, `<span style="font-size: ${size};" class="mycode_size">text</span><br>next`);
+    check(`[size=${size}]\n[b]bold[/b]\n\ntext\n[/size]`, `<span style="font-size: ${size};" class="mycode_size"><br><span style="font-weight: bold;" class="mycode_b">bold</span><br><br>text<br></span>`);
+}
+check('[size=invalid]text[/size]', '[size=invalid]text[/size]');
 for (const tag of ['yt', 'ytauto', 'hideyt', 'img', 'spoiler']) {
     for (const n of [0, 1, 2]) {
         const nl = '\n'.repeat(n);
