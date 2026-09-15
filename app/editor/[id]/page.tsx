@@ -189,8 +189,8 @@ const getDefaultValue = (field: FieldConfig) => {
     }
 
     if (field.type === 'checkbox') {
-        const trueValue = field.config?.true_value || 'true';
-        const falseValue = field.config?.false_value || 'false';
+        const trueValue = field.config?.true_value ?? 'true';
+        const falseValue = field.config?.false_value ?? 'false';
 
         return field.default_value === trueValue ? trueValue : falseValue;
     }

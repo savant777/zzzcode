@@ -587,14 +587,14 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                     <input
                         type="checkbox"
                         className="hidden"
-                        checked={value === (field.config?.true_value || 'true')}
-                        onChange={(e) => onChange(field.variable_name, e.target.checked ? (field.config?.true_value || 'true') : (field.config?.false_value || 'false'))}
+                        checked={value === (field.config?.true_value ?? 'true')}
+                        onChange={(e) => onChange(field.variable_name, e.target.checked ? (field.config?.true_value ?? 'true') : (field.config?.false_value ?? 'false'))}
                     />
-                    <div className={`w-8 h-5 relative border border-(--primary)/50 flex items-center p-1 transition-all duration-500 ease-in-out ${value === (field.config?.true_value || 'true') ? 'bg-(--primary)' : 'bg-transparent'}`}>
-                        <div className={`w-2.5 h-2.5 absolute transition-all duration-500 ease-in-out ${value === (field.config?.true_value || 'true') ? 'bg-black left-4' : 'bg-(--primary) left-1'}`} />
+                    <div className={`w-8 h-5 relative border border-(--primary)/50 flex items-center p-1 transition-all duration-500 ease-in-out ${value === (field.config?.true_value ?? 'true') ? 'bg-(--primary)' : 'bg-transparent'}`}>
+                        <div className={`w-2.5 h-2.5 absolute transition-all duration-500 ease-in-out ${value === (field.config?.true_value ?? 'true') ? 'bg-black left-4' : 'bg-(--primary) left-1'}`} />
                     </div>
                     <span className="font-Google-Sans text-[10px] uppercase tracking-tighter">
-                        {value === (field.config?.true_value || 'true') ? field.config?.true_label || 'ON' : field.config?.false_label || 'OFF'}
+                        {value === (field.config?.true_value ?? 'true') ? field.config?.true_label || 'ON' : field.config?.false_label || 'OFF'}
                     </span>
                 </label>
             )}
