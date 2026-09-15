@@ -204,7 +204,7 @@ const preserveTextNewlines = (html: string): string => {
     let cursor = 0;
     let previousTag = '';
     const convert = (text: string) => {
-        const consumesNewline = /^<\/?(?:div|p|ul|ol|li|table|thead|tbody|tfoot|tr|td|th)\b[^>]*>$|^<hr\b[^>]*>$/i.test(previousTag);
+        const consumesNewline = /^<\/?(?:div|p|ul|ol|li|table|thead|tbody|tfoot|tr|td|th)\b[^>]*>$|^<(?:hr|link)\b[^>]*>$/i.test(previousTag);
         if (consumesNewline) text = text.replace(/^([ \t]*)\r?\n/, '$1');
         return text.replace(/\r?\n/g, '<br>');
     };

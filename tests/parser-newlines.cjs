@@ -46,6 +46,14 @@ for (const align of ['left','center','right','justify']) check(`[align=${align}]
 check('before\n[hr]\n\nafter', 'before<br><hr class="mycode_hr"><br>after');
 check('<style>p {\n color: red;\n}</style>\ntext', '<style>p {\n color: red;\n}</style><br>text');
 check('<a title="a > b\nc">text</a>\nafter', '<a title="a > b\nc">text</a><br>after');
+// LK1–LK6: stylesheet links consume only the first following newline.
+const stylesheet = '<link href="https://savant777.github.io/zoecode/elysian-curse2026.css" rel="stylesheet">';
+for (const n of [0, 1, 2]) {
+    const nl = '\n'.repeat(n);
+    const after = '<br>'.repeat(Math.max(0, n - 1));
+    check(`${stylesheet}${nl}<div>text</div>`, `${stylesheet}${after}<div>text</div>`);
+    check(`before${nl}${stylesheet}${nl}after`, `before${'<br>'.repeat(n)}${stylesheet}${after}after`);
+}
 const field = { variable_name: 'body', type: 'bbcode', default_value: '' };
 for (const tag of ['yt', 'ytauto', 'hideyt', 'img', 'spoiler']) {
     for (const n of [0, 1, 2]) {
