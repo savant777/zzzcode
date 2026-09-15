@@ -55,6 +55,11 @@ for (const n of [0, 1, 2]) {
     check(`before${nl}${stylesheet}${nl}after`, `before${'<br>'.repeat(n)}${stylesheet}${after}after`);
 }
 const field = { variable_name: 'body', type: 'bbcode', default_value: '' };
+check('[paper]ย่อหน้าแรก\n\nย่อหน้าสอง[/paper]\n\n[bpaper]ย่อหน้าแรก\n\nย่อหน้าสอง[/bpaper]', '<div class="paper">ย่อหน้าแรก<br><br>ย่อหน้าสอง</div><br><div class="bpaper">ย่อหน้าแรก<br><br>ย่อหน้าสอง</div>');
+for (const paper of ['paper', 'bpaper']) {
+    check(`[${paper}][b]หัวข้อ[/b]\n[color=#aaaaaa]เนื้อหา[/color][/${paper}]`, `<div class="${paper}"><span style="font-weight: bold;" class="mycode_b">หัวข้อ</span><br><span style="color: #aaaaaa;" class="mycode_color">เนื้อหา</span></div>`);
+    assert.equal(generateFinalHTML('{{body}}', { body: `[${paper}]เนื้อหา[/${paper}]` }, [field], false), `[${paper}]เนื้อหา[/${paper}]`);
+}
 for (const size of ['xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large']) {
     check(`[size=${size}]text[/size]\nnext`, `<span style="font-size: ${size};" class="mycode_size">text</span><br>next`);
     check(`[size=${size}]\n[b]bold[/b]\n\ntext\n[/size]`, `<span style="font-size: ${size};" class="mycode_size"><br><span style="font-weight: bold;" class="mycode_b">bold</span><br><br>text<br></span>`);

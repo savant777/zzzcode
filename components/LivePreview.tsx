@@ -211,7 +211,7 @@ export default function LivePreview({ html }: { html: string }) {
         <link rel="stylesheet" href="https://cdn-uicons.flaticon.com/2.4.0/uicons-solid-rounded/css/uicons-solid-rounded.css">
         <link rel="stylesheet" href="https://cdn-uicons.flaticon.com/uicons-regular-rounded/css/uicons-regular-rounded.css">
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Noto+Sans+Thai:wght@100..900&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Noto+Sans+Thai:wght@100..900&family=Sarabun:ital,wght@0,400;0,700;1,400;1,700&display=swap');
             
             html,
             body {
@@ -247,6 +247,29 @@ export default function LivePreview({ html }: { html: string }) {
             hr { color: #fff; background-color: #303030; height: 1px; border: 0px; }
             a { color: rgb(43, 120, 255); text-decoration: none; transition: .3s; }
             a:hover { text-decoration: none; }
+            .paper,
+            .bpaper {
+                max-width: 1200px;
+                font-family: 'Sarabun', sans-serif;
+                box-sizing: border-box;
+                margin: auto;
+                padding: 100px;
+                text-shadow: none;
+                font-style: normal;
+                line-height: 1.8;
+                font-size: 17px;
+                text-align: justify;
+                border-radius: 5px;
+            }
+            .paper {
+                background: #f0f0f0;
+                color: #000;
+            }
+            .bpaper {
+                background: #0d0d0d;
+                color: #f0f0f0;
+            }
+
             .hidden-content-title {
                 margin-top: 10px;
                 font-size: 22px;
