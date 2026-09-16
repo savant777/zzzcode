@@ -199,7 +199,9 @@ export const normalizeFieldConfig = (field: FieldConfig): FieldConfig => {
 
 // Match HTML tokens without treating quoted attributes or raw-text content as prose.
 const preserveTextNewlines = (html: string): string => {
-    const tokenPattern = /<!--[^]*?-->|<(style|script|textarea)\b[^>]*>[^]*?<\/\1\s*>|<[^>"']*(?:"[^"]*"[^>"']*|'[^']*'[^>"']*)*>/gi;
+    // Require a tag name and never swallow a second '<' outside quotes.
+    // Otherwise prose such as '><' consumes all newlines up to the next tag.
+    const tokenPattern = /<!--[^]*?-->|<(style|script|textarea)\b[^>]*>[^]*?<\/\1\s*>|<\/?[a-z][a-z0-9:-]*(?=[\s/>])[^<>"']*(?:"[^"]*"[^<>"']*|'[^']*'[^<>"']*)*>/gi;
     let result = '';
     let cursor = 0;
     let previousTag = '';

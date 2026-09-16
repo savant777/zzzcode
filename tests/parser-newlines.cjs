@@ -90,4 +90,7 @@ for (const literal of ['$&', '$$', '$`', "$'", '$1', '[b]$& $$[/b]']) {
         count++;
     }
 }
+for (const emoticon of ['><', '> <', '<3', '1 < 2', '<test']) {
+    check(`[bpaper]ย่อหน้าแรก\n\nย่อหน้าสอง ${emoticon} ข้อความ\n\nย่อหน้าสาม\n\nย่อหน้าสี่\n\nย่อหน้าห้า[/bpaper]`, `<div class="bpaper">ย่อหน้าแรก<br><br>ย่อหน้าสอง ${emoticon} ข้อความ<br><br>ย่อหน้าสาม<br><br>ย่อหน้าสี่<br><br>ย่อหน้าห้า</div>`);
+}
 console.log(`${count + 2} parser regression cases passed`);
