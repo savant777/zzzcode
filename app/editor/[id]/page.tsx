@@ -10,6 +10,8 @@ import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FieldRenderer from '@/components/FieldRenderer';
 import LivePreview from '@/components/LivePreview';
+import { localCopyKey, readLocalCopy, saveLocalCopy, type LocalDraftCopy } from '@/lib/editor-local-copy';
+import { backupLink, backupOpenAction, BackupRequestError, createBackup, loadBackup, parseBackupLink, persistConnection, readConnection, sameBackupContent, updateBackup, type BackupConnection, type BackupPayload } from '@/lib/editor-backup-client';
 
 type GroupedFields = Record<string, FieldConfig[]>;
 type HistoryUpdater<T> = T | ((previous: T) => T);
@@ -324,7 +326,23 @@ export default function EditorPage() {
     const breadcrumbPath = `${fromGroup}:${fromTag}`;
 
     // --- 1. States ---
-    const [modalType, setModalType] = useState<'clear_draft' | 'clear_current_draft' | 'delete_draft' | 'rename_draft' | null>(null);
+    const [modalType, setModalType] = useState<'clear_draft' | 'clear_current_draft' | 'delete_draft' | 'rename_draft' | 'backup_link' | 'backup_conflict' | 'backup_open' | 'backup_unavailable' | null>(null);
+    const [pendingRemoteBackup, setPendingRemoteBackup] = useState<BackupConnection | null>(null);
+    const [localCopiesOpen, setLocalCopiesOpen] = useState(false);
+    const [localCopy, setLocalCopy] = useState<LocalDraftCopy | null>(null);
+    const previewLocalCopyTime = localCopy?.templateId === String(templateId)
+        ? new Date(localCopy.savedAt).toLocaleString('en-GB', { hour12: false }) : null;
+    const [previewBackupLink, setPreviewBackupLink] = useState('');
+    const [backupConnection, setBackupConnection] = useState<BackupConnection | null>(null);
+    const [backupSaving, setBackupSaving] = useState(false);
+    const [backupFailed, setBackupFailed] = useState(false);
+    const [backupReady, setBackupReady] = useState(false);
+    const [conflictRevision, setConflictRevision] = useState<number | null>(null);
+    const backupBusyRef = useRef(false);
+    const templatePasswordRef = useRef<string | undefined>(undefined);
+    const currentTemplateRef = useRef(templateId);
+    currentTemplateRef.current = templateId;
+    const [backupLinkCopied, setBackupLinkCopied] = useState(false);
     const [loading, setLoading] = useState(true);
     const [renameDraftName, setRenameDraftName] = useState('');
 
@@ -353,6 +371,16 @@ export default function EditorPage() {
         [drafts, activeDraftId]
     );
     const removedBlockEntryCacheRef = useRef<Record<string, Record<string, any>>>({});
+
+    const currentBackupPayload = useMemo<BackupPayload>(() => ({
+        activeDraftId,
+        drafts: drafts.map(draft => draft.id === activeDraftId ? { ...draft, fieldValues } : draft),
+    }), [drafts, activeDraftId, fieldValues]);
+    const currentBackupPayloadRef = useRef(currentBackupPayload);
+    currentBackupPayloadRef.current = currentBackupPayload;
+    const backupStatus = backupSaving ? 'Saving…' : backupFailed ? 'Save failed' : backupConnection
+        ? `Saved: ${new Date(backupConnection.updatedAt).toLocaleString('en-GB', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '')}${sameBackupContent(currentBackupPayload, backupConnection.savedPayload) ? '' : ' · Unsaved changes'}`
+        : 'Local only';
 
     // --- 2. Computed Preview ---
     const liveHTML = useMemo(() => {
@@ -405,15 +433,64 @@ export default function EditorPage() {
     // --- 3. Effects ---
 
     useEffect(() => {
+        currentTemplateRef.current = templateId;
+        setLocalCopiesOpen(false);
+        setModalType(null);
+        setBackupReady(false);
+        setBackupConnection(null);
+        setPreviewBackupLink('');
+        setBackupFailed(false);
+        setConflictRevision(null);
+        try {
+            const connection = readConnection(localStorage, String(templateId));
+            setBackupConnection(connection);
+            setPreviewBackupLink(connection ? backupLink(window.location.origin, connection) : '');
+            setLocalCopy(readLocalCopy(localStorage, String(templateId), connection?.id || null));
+            setBackupReady(true);
+        } catch {
+            setLocalCopy(null);
+            toast.error('CRITICAL_ERROR: Failed to read backup settings or local copy');
+        }
+        return () => { currentTemplateRef.current = ''; };
+    }, [templateId]);
+
+    useEffect(() => {
+        let cancelled = false;
         const initEditorPage = async () => {
             setLoading(true);
             if (templateId) {
                 const { data: template } = await supabase.from('templates').select('*').eq('id', templateId).single();
+                if (cancelled) return;
 
                 if (template) {
+                    let remote: BackupConnection | null = null;
+                    let storedConnection: BackupConnection | null = null;
+                    let linkFailed = false;
+                    const hasLink = /(?:^#|&)backup=|(?:^#|&)token=/.test(window.location.hash);
+                    try {
+                        storedConnection = readConnection(localStorage, String(templateId));
+                        const requested = parseBackupLink(window.location.hash, String(templateId)) || storedConnection;
+                        if (requested) {
+                            const result = await loadBackup(requested);
+                            if (cancelled) return;
+                            remote = { ...requested, templateId: String(templateId), revision: result.revision,
+                                updatedAt: result.updatedAt, savedPayload: result.payload };
+                        }
+                    } catch {
+                        if (cancelled) return;
+                        if (hasLink) {
+                            linkFailed = true;
+                            setBackupReady(false);
+                            setModalType('backup_unavailable');
+                        } else {
+                            toast.error('BACKUP_ERROR: โหลดออนไลน์ไม่สำเร็จ กำลังใช้งานที่เก็บในเครื่อง');
+                        }
+                    }
+                    templatePasswordRef.current = template.is_personal ? template.password : undefined;
                     if (template.is_personal) {
                         const isUnlocked = sessionStorage.getItem(`unlocked_${templateId}`);
-                        if (!isUnlocked) {
+                        if (remote) sessionStorage.setItem(`unlocked_${templateId}`, 'true');
+                        if (!isUnlocked && !remote) {
                             toast.error("ERROR_ACCESS_DENIED: AUTHENTICATION_REQUIRED", {
                                 duration: 4000,
                                 style: {
@@ -457,6 +534,7 @@ export default function EditorPage() {
                     setDrafts([initialDraft]);
                     setActiveDraftId(initialDraft.id);
                     resetFieldValues(defaults);
+                    let localPayload: BackupPayload | null = null;
 
                     // Check Local Draft
                     const savedDraft = localStorage.getItem(STORAGE_KEY);
@@ -483,8 +561,34 @@ export default function EditorPage() {
                                 setDrafts(migratedDrafts);
                                 setActiveDraftId(nextActiveDraft.id);
                                 resetFieldValues(nextActiveDraft.fieldValues);
+                                localPayload = { drafts: migratedDrafts, activeDraftId: nextActiveDraft.id };
                             }
                         } catch (e) { console.error(e); }
+                    }
+                    if (remote && !linkFailed) {
+                        const action = backupOpenAction(!!savedDraft, localPayload, storedConnection, remote);
+                        if (action === 'load') {
+                            const nextDrafts = remote.savedPayload.drafts.map(draft => ({ ...draft, fieldValues: buildInitialValues(initialFields, draft.fieldValues) }));
+                            const nextActive = nextDrafts.find(draft => draft.id === remote.savedPayload.activeDraftId) || nextDrafts[0];
+                            try {
+                                localStorage.setItem(STORAGE_KEY, JSON.stringify({ templateId, drafts: nextDrafts, activeDraftId: nextActive.id }));
+                                setDrafts(nextDrafts);
+                                setActiveDraftId(nextActive.id);
+                                resetFieldValues(nextActive.fieldValues);
+                                storeBackupConnection(remote);
+                                setBackupReady(true);
+                            } catch {
+                                setPendingRemoteBackup(remote);
+                                setBackupReady(false);
+                                setModalType('backup_open');
+                                toast.error('BACKUP_ERROR: เก็บข้อมูลในเครื่องไม่สำเร็จ งานเดิมยังอยู่');
+                            }
+                        } else if (action === 'confirm') {
+                            setPendingRemoteBackup(remote);
+                            setBackupReady(false);
+                            setModalType('backup_open');
+                        }
+                        // Same revision with unsaved local work: retain it, do not auto-replace.
                     }
                 }
             }
@@ -492,7 +596,7 @@ export default function EditorPage() {
         };
         initEditorPage();
 
-        return undefined;
+        return () => { cancelled = true; };
     }, [templateId, router]);
 
     useEffect(() => {
@@ -824,8 +928,24 @@ export default function EditorPage() {
     };
 
     const handleClearDraft = () => {
-        localStorage.removeItem(STORAGE_KEY);
-        window.location.reload();
+        if (loading || backupBusyRef.current) return;
+        const defaults = buildInitialValues(fields);
+        const initialDraft = createEditorDraft('Draft 1', defaults);
+        try {
+            // Keep an explicit default draft. Removing storage and reloading would
+            // make initialization treat this device as new and fetch the backup again.
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                templateId, activeDraftId: initialDraft.id, drafts: [initialDraft],
+            }));
+            setDrafts([initialDraft]);
+            setActiveDraftId(initialDraft.id);
+            resetFieldValues(defaults);
+            removedBlockEntryCacheRef.current = {};
+            setModalType(null);
+            toast.success('SYSTEM: DRAFTS_RESET_TO_DEFAULT');
+        } catch {
+            toast.error('CRITICAL_ERROR: Failed to clear drafts');
+        }
     };
 
     const handleClearCurrentDraft = () => {
@@ -839,6 +959,204 @@ export default function EditorPage() {
         ));
         setModalType(null);
         toast.success(`DRAFT_CLEARED: ${activeDraft.name}`);
+    };
+
+    const openBackupLinkPreview = () => {
+        setBackupLinkCopied(false);
+        setModalType('backup_link');
+    };
+
+    const handleCopyBackupLink = async () => {
+        try {
+            await navigator.clipboard.writeText(previewBackupLink);
+            setBackupLinkCopied(true);
+            toast.success('SYSTEM: LINK_COPIED_TO_CLIPBOARD');
+        } catch {
+            toast.error('CRITICAL_ERROR: Failed to copy');
+        }
+    };
+
+    const storeBackupConnection = (connection: BackupConnection) => {
+        setBackupConnection(connection);
+        setPreviewBackupLink(backupLink(window.location.origin, connection));
+        try {
+            // Adopt pre-link copies without discarding them when the first backup is created.
+            const oldCopy = readLocalCopy(localStorage, String(templateId));
+            if (oldCopy && !readLocalCopy(localStorage, String(templateId), connection.id)) {
+                const migrated = { ...oldCopy, backupId: connection.id };
+                localStorage.setItem(localCopyKey(String(templateId), connection.id), JSON.stringify(migrated));
+            }
+            persistConnection(localStorage, connection);
+            setLocalCopy(readLocalCopy(localStorage, String(templateId), connection.id));
+            if (oldCopy) localStorage.removeItem(localCopyKey(String(templateId)));
+        } catch {
+            toast.error('บันทึกออนไลน์แล้ว แต่จำลิงก์ในเครื่องไม่สำเร็จ กรุณาคัดลอกลิงก์เก็บไว้');
+        }
+    };
+
+    const saveOnlineBackup = async (overwrite = false) => {
+        if (backupBusyRef.current || loading || !backupReady || !activeDraftId) return;
+        const savingTemplate = templateId;
+        backupBusyRef.current = true;
+        setBackupSaving(true);
+        setBackupFailed(false);
+        const payload = JSON.parse(JSON.stringify(currentBackupPayload)) as BackupPayload;
+        try {
+            let connection: BackupConnection;
+            if (!backupConnection) {
+                const result = await createBackup(localStorage, String(templateId), payload, templatePasswordRef.current);
+                connection = { id: result.id, token: result.token, templateId: String(templateId), revision: result.revision,
+                    updatedAt: result.updatedAt, savedPayload: result.payload };
+            } else {
+                const result = await updateBackup(backupConnection, payload, overwrite ? conflictRevision ?? backupConnection.revision : undefined);
+                connection = { ...backupConnection, revision: result.revision, updatedAt: result.updatedAt, savedPayload: payload, requiresOverwriteConfirmation: false };
+            }
+            if (currentTemplateRef.current !== savingTemplate) {
+                persistConnection(localStorage, connection);
+                return;
+            }
+            storeBackupConnection(connection);
+            if (overwrite) {
+                try {
+                    localStorage.removeItem(localCopyKey(String(templateId), connection.id));
+                    setLocalCopy(null);
+                } catch { toast.error('บันทึกออนไลน์แล้ว แต่ลบสำเนาในเครื่องไม่สำเร็จ'); }
+            }
+            setConflictRevision(null);
+            setBackupLinkCopied(false);
+            setModalType('backup_link');
+            toast.success(overwrite ? 'SYSTEM: BACKUP_OVERWRITTEN' : 'SYSTEM: BACKUP_SAVED');
+        } catch (error) {
+            if (currentTemplateRef.current !== savingTemplate) return;
+            if (error instanceof BackupRequestError && error.status === 409 && error.revision) {
+                setConflictRevision(error.revision);
+                setBackupLinkCopied(false);
+                setModalType('backup_conflict');
+            } else {
+                setBackupFailed(true);
+                toast.error(error instanceof BackupRequestError && error.status === 429
+                    ? `ใช้งานถี่เกินไป กรุณารอประมาณ ${Math.ceil((error.retryAfter || 60) / 60)} นาทีแล้วลองใหม่ งานในเครื่องยังอยู่`
+                    : error instanceof BackupRequestError ? `BACKUP_ERROR: ${error.message}` : 'BACKUP_ERROR: Save failed. Please retry.');
+            }
+        } finally {
+            backupBusyRef.current = false;
+            setBackupSaving(false);
+        }
+    };
+
+    const previewBackupDecision = async (decision: 'keep' | 'overwrite') => {
+        if (decision === 'overwrite') { await saveOnlineBackup(true); return; }
+        if (!backupConnection || backupBusyRef.current) return;
+        const savingTemplate = templateId;
+        backupBusyRef.current = true;
+        setBackupSaving(true);
+        const beforeLoad = JSON.parse(JSON.stringify(currentBackupPayload)) as BackupPayload;
+        try {
+            setLocalCopy(saveLocalCopy(localStorage, String(templateId), backupConnection.id, drafts, activeDraftId, fieldValues));
+            const result = await loadBackup(backupConnection);
+            if (currentTemplateRef.current !== savingTemplate) return;
+            if (!sameBackupContent(beforeLoad, currentBackupPayloadRef.current)) {
+                toast.info('งานในเครื่องเปลี่ยนระหว่างโหลด กรุณากด KEEP & LOAD อีกครั้ง');
+                return;
+            }
+            const restoredDrafts = result.payload.drafts.map(draft => ({ ...draft, fieldValues: buildInitialValues(fields, draft.fieldValues) }));
+            const restoredActive = restoredDrafts.find(draft => draft.id === result.payload.activeDraftId) || restoredDrafts[0];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ templateId, drafts: restoredDrafts, activeDraftId: restoredActive.id }));
+            setDrafts(restoredDrafts);
+            setActiveDraftId(restoredActive.id);
+            resetFieldValues(restoredActive.fieldValues);
+            removedBlockEntryCacheRef.current = {};
+            storeBackupConnection({ ...backupConnection, revision: result.revision, updatedAt: result.updatedAt, savedPayload: result.payload, requiresOverwriteConfirmation: false });
+            setBackupFailed(false);
+            setConflictRevision(null);
+            setModalType(null);
+            toast.success('SYSTEM: LOCAL_COPY_SAVED_AND_BACKUP_LOADED');
+        } catch {
+            toast.error('BACKUP_ERROR: Failed to keep and load. Current work was not replaced.');
+        } finally {
+            backupBusyRef.current = false;
+            setBackupSaving(false);
+        }
+    };
+
+    const handleLoadLocalCopy = () => {
+        if (loading) return;
+        try {
+            // Re-read storage in case another tab replaced the copy after this page loaded.
+            const saved = readLocalCopy(localStorage, String(templateId), backupConnection?.id || null);
+            if (!saved) {
+                setLocalCopy(null);
+                setLocalCopiesOpen(false);
+                toast.error('CRITICAL_ERROR: Local copy not found');
+                return;
+            }
+            if (!localCopy || JSON.stringify(saved) !== JSON.stringify(localCopy)) {
+                setLocalCopy(saved);
+                toast.info('SYSTEM: LOCAL_COPY_CHANGED — Please confirm again');
+                return;
+            }
+            const restoredDrafts = saved.drafts.map(draft => ({
+                ...draft, fieldValues: buildInitialValues(fields, draft.fieldValues),
+            }));
+            const restoredActive = restoredDrafts.find(draft => draft.id === saved.activeDraftId)!;
+            // Persist before replacing the visible work; a quota error leaves it intact.
+            if (backupConnection) {
+                const restoredConnection = { ...backupConnection, requiresOverwriteConfirmation: true };
+                persistConnection(localStorage, restoredConnection);
+                setBackupConnection(restoredConnection);
+            }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ templateId, activeDraftId: saved.activeDraftId, drafts: restoredDrafts }));
+            setDrafts(restoredDrafts);
+            setActiveDraftId(saved.activeDraftId);
+            resetFieldValues(restoredActive.fieldValues);
+            removedBlockEntryCacheRef.current = {};
+            setLocalCopiesOpen(false);
+            toast.success('SYSTEM: LOCAL_COPY_LOADED');
+        } catch {
+            toast.error('CRITICAL_ERROR: Failed to load local copy');
+        }
+    };
+
+    const cancelRemoteOpen = () => {
+        setPendingRemoteBackup(null);
+        setModalType(null);
+        setBackupReady(true);
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+    };
+
+    const confirmRemoteOpen = async () => {
+        if (!pendingRemoteBackup || backupBusyRef.current) return;
+        const openingTemplate = templateId;
+        const beforeLoad = JSON.parse(JSON.stringify(currentBackupPayload)) as BackupPayload;
+        backupBusyRef.current = true;
+        setBackupSaving(true);
+        try {
+            // Fetch first, but retain current local work before replacing anything.
+            const remote = await loadBackup(pendingRemoteBackup);
+            if (currentTemplateRef.current !== openingTemplate) return;
+            if (!sameBackupContent(beforeLoad, currentBackupPayloadRef.current)) {
+                toast.info('งานในเครื่องเปลี่ยนระหว่างโหลด กรุณายืนยันอีกครั้ง');
+                return;
+            }
+            setLocalCopy(saveLocalCopy(localStorage, String(templateId), pendingRemoteBackup.id, drafts, activeDraftId, fieldValues));
+            const nextDrafts = remote.payload.drafts.map(draft => ({ ...draft, fieldValues: buildInitialValues(fields, draft.fieldValues) }));
+            const nextActive = nextDrafts.find(draft => draft.id === remote.payload.activeDraftId) || nextDrafts[0];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ templateId, drafts: nextDrafts, activeDraftId: nextActive.id }));
+            setDrafts(nextDrafts);
+            setActiveDraftId(nextActive.id);
+            resetFieldValues(nextActive.fieldValues);
+            removedBlockEntryCacheRef.current = {};
+            storeBackupConnection({ ...pendingRemoteBackup, revision: remote.revision, updatedAt: remote.updatedAt, savedPayload: remote.payload, requiresOverwriteConfirmation: false });
+            setPendingRemoteBackup(null);
+            setBackupReady(true);
+            setModalType(null);
+            toast.success('SYSTEM: LOCAL_COPY_SAVED_AND_BACKUP_LOADED');
+        } catch {
+            toast.error('BACKUP_ERROR: โหลดไม่สำเร็จ กรุณาลองใหม่');
+        } finally {
+            backupBusyRef.current = false;
+            setBackupSaving(false);
+        }
     };
 
     const handleCopy = async () => {
@@ -892,37 +1210,59 @@ export default function EditorPage() {
                         <div className="bg-(--background) pb-4 z-5">
                             <div className="flex justify-between items-center border-b border-(--primary)/75 pb-2">
                                 <h3 className="text-xl text-(--primary) uppercase">Input_Fields</h3>
-                                <div className="flex-1 flex justify-end gap-1">
+                                <div className="flex-1 flex items-center justify-end gap-1">
                                     <button
                                         type="button"
                                         disabled={!canUndo}
                                         onClick={undo}
-                                        className="border border-(--primary)/30 px-2 py-0.5 text-[10px] uppercase text-(--primary) hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25 cursor-pointer transition-colors"
+                                        className="flex items-center justify-center border border-(--primary)/30 px-2 py-[3px] text-[10px] leading-4 uppercase text-(--primary) hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25 cursor-pointer transition-colors"
                                         title="Undo (Ctrl+Z)"
+                                        aria-label="Undo"
                                     >
-                                        Undo
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true" focusable="false">
+                                            <path d="M280-200v-80h284q63 0 109.5-40T720-420q0-60-46.5-100T564-560H312l104 104-56 56-200-200 200-200 56 56-104 104h252q97 0 166.5 63T800-420q0 94-69.5 157T564-200H280Z" />
+                                        </svg>
                                     </button>
                                     <button
                                         type="button"
                                         disabled={!canRedo}
                                         onClick={redo}
-                                        className="border border-(--primary)/30 px-2 py-0.5 text-[10px] uppercase text-(--primary) hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25 cursor-pointer transition-colors"
+                                        className="flex items-center justify-center border border-(--primary)/30 px-2 py-[3px] text-[10px] leading-4 uppercase text-(--primary) hover:border-(--primary) disabled:cursor-not-allowed disabled:opacity-25 cursor-pointer transition-colors"
                                         title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+                                        aria-label="Redo"
                                     >
-                                        Redo
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true" focusable="false">
+                                            <path d="M396-200q-97 0-166.5-63T160-420q0-94 69.5-157T396-640h252L544-744l56-56 200 200-200 200-56-56 104-104H396q-63 0-109.5 40T240-420q0 60 46.5 100T396-280h284v80H396Z" />
+                                        </svg>
                                     </button>
                                     <button 
                                         type="button"
                                         onClick={() => setModalType('clear_draft')}
-                                        className="text-[10px] opacity-30 hover:opacity-100 uppercase cursor-pointer flex gap-1"
+                                        aria-label="Clear all drafts"
+                                        title="Clear all drafts"
+                                        className="flex items-center justify-center border border-(--foreground)/50 px-2 py-[3px] text-xs leading-4 opacity-30 hover:opacity-100 uppercase cursor-pointer lg:border-0 lg:px-0 lg:py-1"
                                     >
                                         <span className="hidden lg:inline content-center">[Clear_Draft]</span>
-                                        <span className="lg:hidden content-center border border-white/50 px-2 py-0.5 mt-px">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <span className="lg:hidden">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
                                                 <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                                             </svg>
                                         </span>
                                     </button>
+                                        {previewLocalCopyTime && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setLocalCopiesOpen(true)}
+                                            aria-label="สำเนาในเครื่อง"
+                                            title="Local copies — สำเนาในเครื่อง"
+                                            className="flex items-center justify-center border border-(--primary)/40 px-2 py-[3px] text-xs leading-4 font-black uppercase text-(--primary) hover:bg-(--primary)/10 cursor-pointer lg:px-3"
+                                        >
+                                            <span className="hidden lg:inline">Local_Copies</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 -960 960 960" width="16" fill="currentColor" className="lg:hidden" aria-hidden="true" focusable="false">
+                                                <path d="M480-120q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-480q0-75 28.5-140.5t77-114q48.5-48.5 114-77T480-840q82 0 155.5 35T760-706v-94h80v240H600v-80h110q-41-56-101-88t-129-32q-117 0-198.5 81.5T200-480q0 117 81.5 198.5T480-200q105 0 183.5-68T756-440h82q-15 137-117.5 228.5T480-120Zm112-192L440-464v-216h80v184l128 128-56 56Z" />
+                                            </svg>
+                                        </button>
+                                        )}
                                 </div>
                             </div>
                         </div>
@@ -940,13 +1280,21 @@ export default function EditorPage() {
                                                 {activeDraft ? `Editing: ${activeDraft.name}` : 'No active draft'}
                                             </p>
                                         </div>
+                                        <div className="flex shrink-0 items-center gap-2">
+
                                         <button
                                             type="button"
                                             onClick={handleAddDraft}
-                                            className="cursor-pointer bg-(--primary) px-3 py-1 text-[10px] font-black uppercase text-(--background) transition-all hover:brightness-110"
+                                            aria-label="เพิ่ม draft"
+                                            title="Add draft — เพิ่ม draft"
+                                            className="flex items-center justify-center cursor-pointer bg-(--primary) px-1.5 py-1 text-[10px] font-black uppercase text-(--background) transition-all hover:brightness-110 lg:px-3"
                                         >
-                                            Add_Draft
+                                            <span className="hidden lg:inline">Add_Draft</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 -960 960 960" width="16" fill="currentColor" className="lg:hidden" aria-hidden="true" focusable="false">
+                                                <path d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z" />
+                                            </svg>
                                         </button>
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]">
@@ -1239,8 +1587,32 @@ export default function EditorPage() {
                     {/* Live Previews */}
                     <div className="max-lg:row-[1/2] max-lg:sticky max-lg:top-0 max-lg:z-10 max-lg:max-h-[40vh] flex flex-col h-full overflow-hidden border border-(--primary) bg-(--background) text-(--foreground) p-4">
                         <div className="bg-(--background) pb-4 z-5">
-                            <div className="flex justify-between items-center border-b border-(--primary)/75 pb-2">
-                                <h3 className="text-xl text-(--primary) uppercase">Live_Preview</h3>
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 border-b border-(--primary)/75 pb-2 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:gap-x-3">
+                                <h3 className="text-xl text-(--primary) uppercase whitespace-nowrap">Live_Preview</h3>
+                                <p className="col-span-2 row-start-2 min-w-0 text-[11px] text-(--foreground)/35 my-0 lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:truncate" title={backupStatus} role="status">
+                                    {backupStatus}
+                                </p>
+                                <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-2 pt-[2px] lg:col-start-3">
+                                {previewBackupLink && (
+                                    <button type="button" onClick={openBackupLinkPreview} aria-label="เปิดลิงก์ Backup" title="เปิดลิงก์ Backup" className="flex items-center justify-center px-1 py-1 text-(--foreground)/60 hover:text-(--foreground) cursor-pointer">
+                                        <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 -960 960 960" width="16" fill="currentColor" aria-hidden="true" focusable="false">
+                                            <path d="M440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm200 160v-80h160q50 0 85-35t35-85q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480q0 83-58.5 141.5T680-280H520Z" />
+                                        </svg>
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => saveOnlineBackup()}
+                                    disabled={loading || !backupReady || backupSaving}
+                                    aria-label="บันทึกออนไลน์"
+                                    title="บันทึกออนไลน์"
+                                    className="flex items-center justify-center border border-(--primary) px-2 py-[3px] text-xs font-black text-(--primary) uppercase hover:bg-(--primary)/10 cursor-pointer disabled:opacity-50 disabled:cursor-wait lg:px-4"
+                                >
+                                    <span className="hidden lg:inline">Save</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 -960 960 960" width="16" fill="currentColor" className="lg:hidden" aria-hidden="true" focusable="false">
+                                        <path d="M260-160q-91 0-155.5-63T40-377q0-78 47-139t123-78q25-92 100-149t170-57q117 0 198.5 81.5T760-520q69 8 114.5 59.5T920-340q0 75-52.5 127.5T740-160H520q-33 0-56.5-23.5T440-240v-206l-64 62-56-56 160-160 160 160-56 56-64-62v206h220q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-80q0-83-58.5-141.5T480-720q-83 0-141.5 58.5T280-520h-20q-58 0-99 41t-41 99q0 58 41 99t99 41h100v80H260Zm220-280Z" />
+                                    </svg>
+                                </button>
                                 <button 
                                     type="button" 
                                     disabled={loading || !liveHTML}
@@ -1249,6 +1621,7 @@ export default function EditorPage() {
                                 >
                                     Copy
                                 </button>
+                                </div>
                             </div>
                         </div>
                         
@@ -1260,11 +1633,117 @@ export default function EditorPage() {
                 </div>
             </div>
 
+            <Modal isOpen={localCopiesOpen} onClose={() => setLocalCopiesOpen(false)} title="Load Local Copy">
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 text-amber-400 mb-2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0" aria-hidden="true">
+                            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                            <path d="M12 9v4m0 3v1" />
+                        </svg>
+                        <span className="text-xs uppercase font-black tracking-[0.2em]">Restore_Local_Copy</span>
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-xs leading-relaxed text-(--foreground)/60">
+                            โหลดสำเนาที่เก็บไว้เมื่อ <span className="font-bold text-amber-300">{previewLocalCopyTime}</span> แทนงานในเครื่องตอนนี้?
+                        </p>
+                        <p className="text-[10px] uppercase leading-tight text-(--foreground)/40">Warning: This replaces all current local drafts. Your online backup will stay unchanged.</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => setLocalCopiesOpen(false)} className="flex-1 border border-(--primary)/20 px-3 py-2 text-xs font-bold text-(--foreground) hover:bg-(--foreground)/5 cursor-pointer">CANCEL</button>
+                        <button type="button" disabled={loading || backupSaving || !previewLocalCopyTime} onClick={handleLoadLocalCopy} className="flex-1 bg-(--primary) px-3 py-2 text-xs font-bold text-(--background) hover:brightness-110 disabled:opacity-50 cursor-pointer">LOAD COPY</button>
+                    </div>
+                </div>
+            </Modal>
+
             <Modal 
                 isOpen={modalType !== null} 
-                onClose={() => setModalType(null)} 
-                title={modalType === 'clear_draft' ? 'Clear All Drafts' : modalType === 'clear_current_draft' ? 'Clear Current Draft' : modalType === 'delete_draft' ? 'Delete Draft' : modalType === 'rename_draft' ? 'Rename Draft' : ''}
+                onClose={() => { if (backupSaving) return; if (modalType === 'backup_open' || modalType === 'backup_unavailable') cancelRemoteOpen(); else setModalType(null); }}
+                title={modalType === 'clear_draft' ? 'Clear All Drafts' : modalType === 'clear_current_draft' ? 'Clear Current Draft' : modalType === 'delete_draft' ? 'Delete Draft' : modalType === 'rename_draft' ? 'Rename Draft' : modalType === 'backup_link' ? 'Backup Link' : modalType === 'backup_conflict' ? 'Backup Conflict' : modalType === 'backup_open' ? 'Open Backup' : modalType === 'backup_unavailable' ? 'Backup Unavailable' : ''}
             >
+                {(modalType === 'backup_open' || modalType === 'backup_unavailable') && (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-2 text-amber-400">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><path d="M12 9v4m0 3v1" /></svg>
+                            <span className="text-xs uppercase font-black tracking-[0.2em]">{modalType === 'backup_open' ? 'Local_Work_Found' : 'Link_Unavailable'}</span>
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-xs text-(--foreground)/60 leading-relaxed">{modalType === 'backup_open' ? 'มีงานในเครื่องที่ต่างจากฉบับออนไลน์ เก็บเป็นสำเนาแล้วโหลดชุดออนไลน์แทนไหม?' : 'เปิด backup ไม่สำเร็จ ลิงก์อาจไม่ถูกต้อง หรือการเชื่อมต่อมีปัญหา งานในเครื่องยังอยู่'}</p>
+                            <p className="text-[10px] uppercase text-(--foreground)/40 leading-tight">{modalType === 'backup_open' ? 'Keep & Load replaces the current draft set after keeping one local copy. Your online backup stays unchanged.' : 'Check the link and connection, then reopen it to retry. Continue Local keeps your current work.'}</p>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <button type="button" disabled={backupSaving} onClick={cancelRemoteOpen} className="flex-1 border border-(--primary)/20 px-3 py-2 text-xs font-bold cursor-pointer disabled:opacity-50">{modalType === 'backup_open' ? 'CANCEL' : 'CONTINUE LOCAL'}</button>
+                            {modalType === 'backup_open' && <button type="button" disabled={backupSaving} onClick={confirmRemoteOpen} className="flex-1 bg-(--primary) text-(--background) px-3 py-2 text-xs font-bold cursor-pointer disabled:opacity-50">KEEP &amp; LOAD</button>}
+                        </div>
+                    </div>
+                )}
+                {(modalType === 'backup_link' || modalType === 'backup_conflict') && (
+                    <div className="space-y-6">
+                        {modalType === 'backup_conflict' ? (
+                            <>
+                                <div className="flex items-center gap-2 text-amber-400 mb-2">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0" aria-hidden="true">
+                                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                                        <path d="M12 9v4m0 3v1" />
+                                    </svg>
+                                    <span className="text-xs uppercase font-black tracking-[0.2em]">{backupConnection?.requiresOverwriteConfirmation ? 'Local_Copy_Restored' : 'Newer_Backup_Found'}</span>
+                                </div>
+                                <div className="space-y-2">
+                                    <p className="text-(--foreground)/60 text-xs leading-relaxed">
+                                        {backupConnection?.requiresOverwriteConfirmation ? <>คุณกำลังใช้ <span className="text-amber-300 font-bold">สำเนาในเครื่อง</span> ยืนยันบันทึกทับฉบับออนไลน์ หรือเก็บงานนี้แล้วโหลดฉบับออนไลน์ล่าสุด</> : <>พบ <span className="text-amber-300 font-bold">การแก้ไขใหม่</span> เลือกเก็บดราฟต์นี้เป็นสำเนาแล้วโหลดดราฟต์ล่าสุด หรือบันทึกทับฉบับออนไลน์ (สามารถดึงสำเนาได้ที่ปุ่ม LOCAL_DRAFT หรือไอคอน svg)</>}
+                                    </p>
+                                    <p className="text-[10px] text-(--foreground)/40 uppercase leading-tight">
+                                        Warning: Overwrite replaces this online backup and deletes its temporary local copy. Keep &amp; Load keeps one copy, then loads the latest version.
+                                    </p>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                        <div className="flex items-center gap-2 text-green-500 mb-2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9" />
+                                <path d="m8 12 3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            <span className="text-xs uppercase font-black tracking-[0.2em]">Backup_Ready</span>
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-(--foreground)/60 text-xs leading-relaxed">
+                                ใช้ลิงก์นี้เพื่อแก้ไข <span className="text-green-400 font-bold">draft ทั้งหมดของเทมเพลตนี้</span> บนเครื่องอื่น
+                            </p>
+                            <p className="text-[10px] text-(--foreground)/40 uppercase leading-tight">
+                                Warning: Anyone with this link can view and edit all drafts in this backup. Keep this link private.
+                            </p>
+                        </div>
+                            </>
+                        )}
+                        <div>
+                            <label htmlFor="backup-link-preview" className="mb-2 block text-xs text-(--foreground)/60">BACKUP LINK</label>
+                            <div className="flex min-w-0 items-stretch gap-2">
+                                <input id="backup-link-preview" type="text" readOnly value={previewBackupLink} onFocus={(event) => event.currentTarget.select()} className="min-w-0 flex-1 border border-(--primary)/40 bg-(--background) px-3 py-2 text-xs text-(--foreground) outline-none focus:border-(--primary)" />
+                                <button type="button" onClick={handleCopyBackupLink} className="shrink-0 bg-(--primary) px-3 py-2 text-xs font-black text-(--background) hover:brightness-110 cursor-pointer">
+                                    {backupLinkCopied ? 'COPIED' : 'COPY'}
+                                </button>
+                            </div>
+                            <p className="mt-2 text-[10px] text-(--foreground)/40 uppercase leading-tight" role="status">
+                                {backupLinkCopied ? 'Link copied.' : (
+                                    <>
+                                        Reopen this link using the link icon{' '}
+                                        <svg xmlns="http://www.w3.org/2000/svg" height="14" viewBox="0 -960 960 960" width="14" fill="currentColor" className="inline-block align-middle" aria-hidden="true" focusable="false">
+                                            <path d="M440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm200 160v-80h160q50 0 85-35t35-85q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480q0 83-58.5 141.5T680-280H520Z" />
+                                        </svg>{' '}
+                                        next to SAVE.
+                                    </>
+                                )}
+                            </p>
+                        </div>
+                        {modalType === 'backup_conflict' && (
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                <button type="button" onClick={() => setModalType(null)} className="flex-1 border border-(--primary)/20 px-3 py-2 text-xs font-bold text-(--foreground) hover:bg-(--foreground)/5 cursor-pointer">CANCEL</button>
+                                <button type="button" disabled={backupSaving} onClick={() => previewBackupDecision('keep')} className="flex-1 border border-(--primary) px-3 py-2 text-xs font-bold text-(--primary) whitespace-nowrap hover:bg-(--primary)/10 cursor-pointer disabled:opacity-50">KEEP &amp; LOAD</button>
+                                <button type="button" disabled={backupSaving} onClick={() => previewBackupDecision('overwrite')} className="flex-1 bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-500 cursor-pointer disabled:opacity-50">OVERWRITE</button>
+                            </div>
+                        )}
+                    </div>
+                )}
                 {modalType === 'clear_draft' && (
                     <div className="space-y-6">
                         <div className="flex items-center gap-2 text-red-500 mb-2">
@@ -1281,8 +1760,8 @@ export default function EditorPage() {
                                 คุณแน่ใจหรือไม่ที่จะล้าง <span className="text-red-400 font-bold">"ข้อมูลดราฟต์ทั้งหมด"</span>?
                             </p>
                             <p className="text-[10px] text-white/40 uppercase leading-tight">
-                                Warning: This will permanently delete all unsaved progress in this session. 
-                                Local cache will be purged and the module will reset.
+                                Warning: This replaces all current local drafts with template defaults.
+                                Your online backup and saved local copy stay unchanged.
                             </p>
                         </div>
 
