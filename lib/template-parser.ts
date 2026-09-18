@@ -251,6 +251,16 @@ const extractYouTubeId = (input: string): string => {
 export const parseBBCode = (text: string, convertNewlines: boolean = true): string => {
     if (!text) return "";
 
+    // Protect literal code before any BBCode replacements, including list parsing.
+    const codeBlocks: string[] = [];
+    let codePrefix = '\u0000BBCODE_CODE_';
+    while (text.includes(codePrefix)) codePrefix += '_';
+    text = text.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, (_match, content: string) => {
+        const escaped = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const index = codeBlocks.push(`<div class="codeblock"><div class="title">โค้ด:</div><div class="body" dir="ltr"><code>${escaped.replace(/\r?\n/g, '<br>')}</code></div></div>`) - 1;
+        return `${codePrefix}${index}\u0000`;
+    });
+
     const parseList = (input: string): string => {
         const findMatchingClose = (str: string, startIdx: number): number => {
             let depth = 1;
@@ -350,6 +360,9 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
     
     html = parseList(html);
 
+    codeBlocks.forEach((block, index) => {
+        html = html.replace(`${codePrefix}${index}\u0000`, () => block);
+    });
     if (convertNewlines) html = preserveTextNewlines(html);
 
     return html;

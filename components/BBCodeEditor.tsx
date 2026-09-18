@@ -1,9 +1,11 @@
 ﻿"use client";
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useId } from 'react';
 import { HexColorPicker } from "react-colorful";
 import Modal from './Modal';
+import { createPortal } from 'react-dom';
 
 interface Props {
+    toolbarToggleTarget?: HTMLElement | null;
     value: string;
     onChange: (val: string) => void;
 }
@@ -38,7 +40,35 @@ const extractYouTubeId = (input: string) => {
     return trimmed.replace(/^[^A-Za-z0-9_-]+|[^A-Za-z0-9_-]+$/g, '').split(/[?&#]/)[0];
 };
 
-export default function BBCodeEditor({ value, onChange }: Props) {
+export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: Props) {
+    const [toolbarExpanded, setToolbarExpanded] = useState(true);
+    const toolbarId = useId();
+    const [toolbarHeight, setToolbarHeight] = useState<number>();
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const toolbar = toolbarRef.current;
+        if (!toolbar) return;
+        const updateRows = () => {
+            const groups = Array.from(toolbar.children) as HTMLElement[];
+            const first = groups[0];
+            if (!first) return;
+            const firstTop = first.offsetTop;
+            groups.forEach(group => {
+                const hidden = !toolbarExpanded && group.offsetTop > firstTop;
+                group.style.transition = 'opacity 300ms ease, visibility 300ms ease';
+                group.style.opacity = hidden ? '0' : '1';
+                group.style.visibility = hidden ? 'hidden' : '';
+                group.style.pointerEvents = hidden ? 'none' : '';
+                group.inert = hidden;
+            });
+            const lastBottom = Math.max(...groups.map(group => group.offsetTop + group.offsetHeight));
+            setToolbarHeight(toolbarExpanded ? lastBottom + 8 : first.offsetHeight + 16);
+        };
+        updateRows();
+        const observer = new ResizeObserver(updateRows);
+        observer.observe(toolbar);
+        return () => observer.disconnect();
+    }, [toolbarExpanded]);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const colorPickerRef = useRef<HTMLDivElement>(null);
     const sizePickerRef = useRef<HTMLDivElement>(null);
@@ -260,11 +290,30 @@ export default function BBCodeEditor({ value, onChange }: Props) {
         setDetailsData({ summary: '', details: '' });
     };
 
+    const toolbarToggle = (<button
+                type="button"
+                aria-label={toolbarExpanded ? 'พับแถบเครื่องมือ' : 'ขยายแถบเครื่องมือ'}
+                title={toolbarExpanded ? 'พับแถบเครื่องมือ' : 'ขยายแถบเครื่องมือ'}
+                aria-expanded={toolbarExpanded}
+                aria-controls={toolbarId}
+                onClick={() => {
+                    setToolbarExpanded(expanded => !expanded);
+                    setShowSizePicker(false);
+                    setShowColorPicker(false);
+                    setShowBoldColorPicker(false);
+                }}
+                className="text-[10px] text-(--primary) hover:underline cursor-pointer uppercase whitespace-nowrap"
+            >
+                [{toolbarExpanded ? 'Collapse' : 'Expand'}]
+            </button>);
+
     return (
         <>
+        {toolbarToggleTarget ? createPortal(toolbarToggle, toolbarToggleTarget) : <div className="flex justify-end">{toolbarToggle}</div>}
         <div className="font-Google-Sans bg-black/40 border border-(--primary)/40 text-sm outline-none focus:border-(--primary) transition-all overflow-hidden">
             {/* Toolbar */}
-            <div className="flex flex-wrap border-b border-(--primary)/40 p-2 gap-2">
+            <div className="relative border-b border-(--primary)/40 transition-[height] duration-300 ease-in-out motion-reduce:transition-none" style={{ height: toolbarHeight }}>
+            <div ref={toolbarRef} id={toolbarId} className="relative flex flex-wrap items-start content-start p-2 gap-2">
                 {/* กลุ่มสไตล์ */}
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
                     <button title="ตัวหนา" onClick={() => insertTag('[b]', '[/b]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
@@ -482,6 +531,15 @@ export default function BBCodeEditor({ value, onChange }: Props) {
                 </div>
 
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
+                    <button type="button" title="Code" aria-label="Code" onClick={() => insertTag('[code]', '[/code]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-colors duration-300 ease-in-out">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M320-240 80-480l240-240 57 57-184 184 183 183-56 56Zm320 0-57-57 184-184-183-183 56-56 240 240-240 240Z" /></svg>
+                    </button>
+                    <button type="button" title="Blockquote" aria-label="Blockquote" onClick={() => insertTag('<blockquote>', '</blockquote>')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-colors duration-300 ease-in-out">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="m228-240 92-160q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 23-5.5 42.5T458-480L320-240h-92Zm360 0 92-160q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 23-5.5 42.5T818-480L680-240h-92ZM362.5-517.5Q380-535 380-560t-17.5-42.5Q345-620 320-620t-42.5 17.5Q260-585 260-560t17.5 42.5Q295-500 320-500t42.5-17.5Zm360 0Q740-535 740-560t-17.5-42.5Q705-620 680-620t-42.5 17.5Q620-585 620-560t17.5 42.5Q655-500 680-500t42.5-17.5ZM680-560Zm-360 0Z" /></svg>
+                    </button>
+                </div>
+
+                <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
                     <button title="รายการจุด" onClick={() => insertTag('[list]', '[/list]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M360-240v-72h456v72H360Zm0-204v-72h456v72H360Zm0-204v-72h456v72H360ZM215.79-204Q186-204 165-225.21t-21-51Q144-306 165.21-327t51-21Q246-348 267-326.79t21 51Q288-246 266.79-225t-51 21Zm0-204Q186-408 165-429.21t-21-51Q144-510 165.21-531t51-21Q246-552 267-530.79t21 51Q288-450 266.79-429t-51 21ZM165-633.21q-21-21.21-21-51T165.21-735q21.21-21 51-21T267-734.79q21 21.21 21 51T266.79-633q-21.21 21-51 21T165-633.21Z"/>
@@ -496,6 +554,7 @@ export default function BBCodeEditor({ value, onChange }: Props) {
             </div>
             
 
+            </div>
             <textarea
                 ref={textareaRef}
                 className="w-full p-3 h-64 focus:outline-none font-sans text-sm leading-relaxed"

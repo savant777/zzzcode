@@ -93,4 +93,17 @@ for (const literal of ['$&', '$$', '$`', "$'", '$1', '[b]$& $$[/b]']) {
 for (const emoticon of ['><', '> <', '<3', '1 < 2', '<test']) {
     check(`[bpaper]ย่อหน้าแรก\n\nย่อหน้าสอง ${emoticon} ข้อความ\n\nย่อหน้าสาม\n\nย่อหน้าสี่\n\nย่อหน้าห้า[/bpaper]`, `<div class="bpaper">ย่อหน้าแรก<br><br>ย่อหน้าสอง ${emoticon} ข้อความ<br><br>ย่อหน้าสาม<br><br>ย่อหน้าสี่<br><br>ย่อหน้าห้า</div>`);
 }
+const spacedText = '  ข้อความ   เว้นวรรค  \n\nย่อหน้า  ถัดไป  ';
+check(spacedText, '  ข้อความ   เว้นวรรค  <br><br>ย่อหน้า  ถัดไป  ');
+assert.equal(generateFinalHTML('{{body}}', { body: spacedText }, [field], false), spacedText);
+count++;
+const codeBlock = (body) => `<div class="codeblock"><div class="title">โค้ด:</div><div class="body" dir="ltr"><code>${body}</code></div></div>`;
+check('[code]<div>text</div>\n\n[b]bold[/b] & &lt;[/code]', codeBlock('&lt;div&gt;text&lt;/div&gt;<br><br>[b]bold[/b] &amp; &amp;lt;'));
+check('[code][list][*]item[/list]\n[img]image[/img][/code]', codeBlock('[list][*]item[/list]<br>[img]image[/img]'));
+check('[code]one[/code]\n\n[code]two[/code]', codeBlock('one') + '<br>' + codeBlock('two'));
+check('[code]\nline\n[/code]', codeBlock('<br>line<br>'));
+check('[code]$& $$[/code]', codeBlock('$&amp; $$'));
+check('<blockquote>\n[b]quote[/b]\n</blockquote>\nafter', '<blockquote><br><span style="font-weight: bold;" class="mycode_b">quote</span><br></blockquote><br>after');
+assert.equal(generateFinalHTML('{{body}}', { body: '[code]<div>text</div>[/code]' }, [field], false), '[code]<div>text</div>[/code]');
+count++;
 console.log(`${count + 2} parser regression cases passed`);

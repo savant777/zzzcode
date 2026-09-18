@@ -247,6 +247,33 @@ export default function LivePreview({ html }: { html: string }) {
             hr { color: #fff; background-color: #303030; height: 1px; border: 0px; }
             a { color: rgb(43, 120, 255); text-decoration: none; transition: .3s; }
             a:hover { text-decoration: none; }
+            .codeblock {
+                color: rgb(255, 255, 255);
+                font-size: 12px;
+                background: rgb(32, 32, 32);
+                margin: 10px 0;
+                padding: 20px;
+                border-radius: 6px !important;
+            }
+            .codeblock .title { display: none; }
+            [dir="ltr" i] { unicode-bidi: isolate; }
+            .codeblock code {
+                height: auto;
+                max-height: 200px;
+                font-size: 13px;
+                font-style: italic;
+                text-align: justify;
+                word-break: break-all;
+            }
+            blockquote {
+                color: rgb(255, 255, 255);
+                background: rgb(32, 32, 32);
+                margin: 10px 0;
+                padding: 20px;
+                border-left: 6px solid rgb(79, 79, 79);
+                border-radius: 6px !important;
+            }
+
             .paper,
             .bpaper {
                 max-width: 1200px;

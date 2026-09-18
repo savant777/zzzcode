@@ -124,6 +124,7 @@ function WordCount({ value }: { value: string }) {
 }
 
 export default function FieldRenderer({ field, value, onChange, className }: FieldRendererProps) {
+    const [toolbarToggleTarget, setToolbarToggleTarget] = useState<HTMLDivElement | null>(null);
     const [showDescription, setShowDescription] = useState(false);
     const selectOptions = field.type === 'select' ? getSelectOptions(field) : [];
     const isSelectMultiple = field.type === 'select' && field.config?.select_multiple;
@@ -234,6 +235,7 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                         i
                     </button>
                 )}
+                {field.type === 'bbcode' && <div ref={setToolbarToggleTarget} className="ml-auto shrink-0" />}
             </div>
             {field.description && showDescription && (
                 <p className="font-Google-Sans text-[10px] leading-relaxed text-(--foreground)/45">
@@ -255,7 +257,8 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
             {/* --- TYPE: BBCODE --- */}
             {field.type === 'bbcode' && (
                 <>
-                    <BBCodeEditor 
+                    <BBCodeEditor
+                        toolbarToggleTarget={toolbarToggleTarget}
                         value={value || ''} 
                         onChange={(val) => onChange(field.variable_name, val)}
                     />
