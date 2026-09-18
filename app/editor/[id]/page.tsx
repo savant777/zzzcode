@@ -927,11 +927,20 @@ export default function EditorPage() {
         });
     };
 
+    const requireConfirmationAfterClear = () => {
+        if (!backupConnection) return;
+        const connection: BackupConnection = { ...backupConnection,
+            requiresOverwriteConfirmation: true, overwriteConfirmationReason: 'clear' };
+        persistConnection(localStorage, connection);
+        setBackupConnection(connection);
+    };
+
     const handleClearDraft = () => {
         if (loading || backupBusyRef.current) return;
         const defaults = buildInitialValues(fields);
         const initialDraft = createEditorDraft('Draft 1', defaults);
         try {
+            requireConfirmationAfterClear();
             // Keep an explicit default draft. Removing storage and reloading would
             // make initialization treat this device as new and fetch the backup again.
             localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -949,16 +958,24 @@ export default function EditorPage() {
     };
 
     const handleClearCurrentDraft = () => {
-        if (!activeDraft) return;
+        if (!activeDraft || loading || backupBusyRef.current) return;
 
         const defaults = buildInitialValues(fields);
-        resetFieldValues(defaults);
-        setDrafts(prev => prev.map(draft => draft.id === activeDraft.id
+        const clearedDrafts = drafts.map(draft => draft.id === activeDraft.id
             ? { ...draft, fieldValues: defaults, updatedAt: new Date().toISOString() }
             : draft
-        ));
-        setModalType(null);
-        toast.success(`DRAFT_CLEARED: ${activeDraft.name}`);
+        );
+        try {
+            requireConfirmationAfterClear();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ templateId, activeDraftId, drafts: clearedDrafts }));
+            resetFieldValues(defaults);
+            setDrafts(clearedDrafts);
+            removedBlockEntryCacheRef.current = {};
+            setModalType(null);
+            toast.success(`DRAFT_CLEARED: ${activeDraft.name}`);
+        } catch {
+            toast.error('CRITICAL_ERROR: Failed to clear draft');
+        }
     };
 
     const openBackupLinkPreview = () => {
@@ -1101,7 +1118,7 @@ export default function EditorPage() {
             const restoredActive = restoredDrafts.find(draft => draft.id === saved.activeDraftId)!;
             // Persist before replacing the visible work; a quota error leaves it intact.
             if (backupConnection) {
-                const restoredConnection = { ...backupConnection, requiresOverwriteConfirmation: true };
+                const restoredConnection: BackupConnection = { ...backupConnection, requiresOverwriteConfirmation: true, overwriteConfirmationReason: 'restore' };
                 persistConnection(localStorage, restoredConnection);
                 setBackupConnection(restoredConnection);
             }
@@ -1685,11 +1702,11 @@ export default function EditorPage() {
                                         <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
                                         <path d="M12 9v4m0 3v1" />
                                     </svg>
-                                    <span className="text-xs uppercase font-black tracking-[0.2em]">{backupConnection?.requiresOverwriteConfirmation ? 'Local_Copy_Restored' : 'Newer_Backup_Found'}</span>
+                                    <span className="text-xs uppercase font-black tracking-[0.2em]">{backupConnection?.requiresOverwriteConfirmation ? (backupConnection.overwriteConfirmationReason === 'clear' ? 'Draft_Cleared' : 'Local_Copy_Restored') : 'Newer_Backup_Found'}</span>
                                 </div>
                                 <div className="space-y-2">
                                     <p className="text-(--foreground)/60 text-xs leading-relaxed">
-                                        {backupConnection?.requiresOverwriteConfirmation ? <>คุณกำลังใช้ <span className="text-amber-300 font-bold">สำเนาในเครื่อง</span> ยืนยันบันทึกทับฉบับออนไลน์ หรือเก็บงานนี้แล้วโหลดฉบับออนไลน์ล่าสุด</> : <>พบ <span className="text-amber-300 font-bold">การแก้ไขใหม่</span> เลือกเก็บดราฟต์นี้เป็นสำเนาแล้วโหลดดราฟต์ล่าสุด หรือบันทึกทับฉบับออนไลน์ (สามารถดึงสำเนาได้ที่ปุ่ม LOCAL_DRAFT หรือไอคอน svg)</>}
+                                        {backupConnection?.requiresOverwriteConfirmation ? <>{backupConnection.overwriteConfirmationReason === 'clear' ? <>คุณได้ <span className="text-amber-300 font-bold">ล้าง draft ในเครื่อง</span></> : <>คุณกำลังใช้ <span className="text-amber-300 font-bold">สำเนาในเครื่อง</span></>} ยืนยันบันทึกทับฉบับออนไลน์ หรือเก็บงานนี้แล้วโหลดฉบับออนไลน์ล่าสุด</> : <>พบ <span className="text-amber-300 font-bold">การแก้ไขใหม่</span> เลือกเก็บดราฟต์นี้เป็นสำเนาแล้วโหลดดราฟต์ล่าสุด หรือบันทึกทับฉบับออนไลน์ (สามารถดึงสำเนาได้ที่ปุ่ม LOCAL_DRAFT หรือไอคอน svg)</>}
                                     </p>
                                     <p className="text-[10px] text-(--foreground)/40 uppercase leading-tight">
                                         Warning: Overwrite replaces this online backup and deletes its temporary local copy. Keep &amp; Load keeps one copy, then loads the latest version.

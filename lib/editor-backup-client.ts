@@ -5,6 +5,7 @@ export type BackupConnection = {
     id: string; token: string; templateId: string; revision: number;
     updatedAt: string; savedPayload: BackupPayload;
     requiresOverwriteConfirmation?: boolean;
+    overwriteConfirmationReason?: 'clear' | 'restore';
 };
 export type BackupResult = { id: string; templateId: string; revision: number; updatedAt: string; payload: BackupPayload; token?: string };
 export class BackupRequestError extends Error {
