@@ -229,3 +229,22 @@ input[type=number] {
     width: 16px;
     height: 16px;
 }
+
+/* Compact color-name suggestions, with a theme-colored scrollbar. */
+.color-name-suggestions {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--primary) 40%, transparent) transparent;
+}
+.color-name-suggestions::-webkit-scrollbar {
+    width: 4px;
+}
+.color-name-suggestions::-webkit-scrollbar-track {
+    background: transparent;
+}
+.color-name-suggestions::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--primary) 40%, transparent);
+    border-radius: 4px;
+}
+.color-name-suggestions::-webkit-scrollbar-button {
+    display: none;
+}

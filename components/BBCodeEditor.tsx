@@ -1,5 +1,7 @@
 ﻿"use client";
 import { useRef, useState, useEffect, useId } from 'react';
+import ColorNameInput from './ColorNameInput';
+import { isBBCodeColor, parseColor, formatColor } from '@/lib/colors';
 import { HexColorPicker } from "react-colorful";
 import Modal from './Modal';
 import { createPortal } from 'react-dom';
@@ -183,11 +185,13 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
     }, [showColorPicker, showBoldColorPicker]);
 
     const applyColor = () => {
+        if (!isBBCodeColor(currentColor)) return;
         insertTag(`[color=${currentColor}]`, "[/color]");
         setShowColorPicker(false);
     };
 
     const applyBoldColor = () => {
+        if (!isBBCodeColor(boldColor)) return;
         insertTag(`[b][color=${boldColor}]`, "[/color][/b]");
     };
 
@@ -310,7 +314,7 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
     return (
         <>
         {toolbarToggleTarget ? createPortal(toolbarToggle, toolbarToggleTarget) : <div className="flex justify-end">{toolbarToggle}</div>}
-        <div className="font-Google-Sans bg-black/40 border border-(--primary)/40 text-sm outline-none focus:border-(--primary) transition-all overflow-hidden">
+        <div className={`font-Google-Sans bg-black/40 border border-(--primary)/40 text-sm outline-none focus:border-(--primary) transition-all ${showColorPicker || showBoldColorPicker ? 'relative z-30 overflow-visible' : 'overflow-hidden'}`}>
             {/* Toolbar */}
             <div className="relative border-b border-(--primary)/40 transition-[height] duration-300 ease-in-out motion-reduce:transition-none" style={{ height: toolbarHeight }}>
             <div ref={toolbarRef} id={toolbarId} className="relative flex flex-wrap items-start content-start p-2 gap-2">
@@ -395,17 +399,11 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
                                 <div className="text-xs text-(--foreground)/50 uppercase">เลือกสีตัวหนา</div>
                                 <div className="custom-color-picker">
                                     <HexColorPicker
-                                        color={boldColor.startsWith('#') ? boldColor : '#FFFFFF'}
+                                        color={formatColor(parseColor(boldColor) || { r: 255, g: 255, b: 255, a: 1 }, 'HEX')}
                                         onChange={(newColor) => setBoldColor(newColor.toUpperCase())}
                                     />
                                 </div>
-                                <input
-                                    type="text"
-                                    value={boldColor}
-                                    onChange={(e) => setBoldColor(e.target.value)}
-                                    className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"
-                                    placeholder="#FFFFFF"
-                                />
+                                <ColorNameInput value={boldColor} onChange={setBoldColor} />
                             </div>
                         )}
                     </div>
@@ -420,20 +418,14 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
                         </button>
                         {showColorPicker && (
                             <div className="absolute top-full translate-y-[2px] -left-[3px] z-10 border border-(--primary)/25 bg-black p-3 flex flex-col gap-2 w-48">
-                                <div className="text-xs text-(--foreground)/50 uppercase">เลือกสี (HEX/RGB)</div>
+                                <div className="text-xs text-(--foreground)/50 uppercase">เลือกสี (HEX / ชื่อสี)</div>
                                 <div className="custom-color-picker">
                                     <HexColorPicker 
-                                        color={currentColor.startsWith('#') ? currentColor : '#FFFFFF'} 
+                                        color={formatColor(parseColor(currentColor) || { r: 255, g: 255, b: 255, a: 1 }, 'HEX')}
                                         onChange={(newColor) => setCurrentColor(newColor.toUpperCase())} 
                                     />
                                 </div>
-                                <input 
-                                    type="text" 
-                                    value={currentColor}
-                                    onChange={(e) => setCurrentColor(e.target.value)}
-                                    className="font-Google-Sans bg-black/40 border border-(--primary)/40 p-2 text-sm outline-none focus:border-(--primary) transition-all"
-                                    placeholder="#FFFFFF"
-                                />
+                                <ColorNameInput value={currentColor} onChange={setCurrentColor} />
                                 <button 
                                     onClick={applyColor}
                                     className="bg-(--primary) text-(--background) px-4 py-1 text-xs font-black uppercase hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"

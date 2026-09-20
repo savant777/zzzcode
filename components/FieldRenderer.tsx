@@ -125,6 +125,7 @@ function WordCount({ value }: { value: string }) {
 
 export default function FieldRenderer({ field, value, onChange, className }: FieldRendererProps) {
     const [toolbarToggleTarget, setToolbarToggleTarget] = useState<HTMLDivElement | null>(null);
+    const [colorModeTarget, setColorModeTarget] = useState<HTMLDivElement | null>(null);
     const [showDescription, setShowDescription] = useState(false);
     const selectOptions = field.type === 'select' ? getSelectOptions(field) : [];
     const isSelectMultiple = field.type === 'select' && field.config?.select_multiple;
@@ -235,6 +236,7 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                         i
                     </button>
                 )}
+                {field.type === 'color' && <div ref={setColorModeTarget} className="ml-auto shrink-0" />}
                 {field.type === 'bbcode' && <div ref={setToolbarToggleTarget} className="ml-auto shrink-0" />}
             </div>
             {field.description && showDescription && (
@@ -269,22 +271,12 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
             {/* --- TYPE: COLOR --- */}
             {field.type === 'color' && (
                 <div className="flex gap-2">
-                    <ColorPicker 
-                        color={value?.startsWith('#') ? value : '#FFFFFF'} 
+                    <ColorPicker
+                        modeTarget={colorModeTarget}
+                        color={value || ''}
                         onChange={(newColor) => {
-                            onChange(field.variable_name, newColor.toUpperCase());
+                            onChange(field.variable_name, newColor);
                         }} 
-                    />
-                    <input
-                        type="text"
-                        value={value || ''}
-                        onChange={(e) => {
-                            let val = e.target.value.toUpperCase();
-                            if (val && !val.startsWith('#')) { val = '#' + val; }
-                            if (val.length <= 9) { onChange(field.variable_name, val); }
-                        }}
-                        className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
-                        placeholder="#FFFFFF"
                     />
                 </div>
             )}
@@ -356,19 +348,8 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                                             {opt.type === 'color' && (
                                             <div className="mt-2 flex gap-2">
                                                 <ColorPicker
-                                                    color={entry?.custom_value?.startsWith('#') ? entry.custom_value : '#FFFFFF'}
-                                                    onChange={(newColor) => updateMultipleEntries(selectedMultipleEntries.map((item: any) => item.option_index === index ? { ...item, custom_value: newColor.toUpperCase() } : item))}
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={entry?.custom_value || ''}
-                                                    onChange={(e) => {
-                                                        let val = e.target.value.toUpperCase();
-                                                        if (val && !val.startsWith('#')) { val = '#' + val; }
-                                                        if (val.length <= 9) updateMultipleEntries(selectedMultipleEntries.map((item: any) => item.option_index === index ? { ...item, custom_value: val } : item));
-                                                    }}
-                                                    className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
-                                                    placeholder="#FFFFFF"
+                                                    color={entry?.custom_value || ''}
+                                                    onChange={(newColor) => updateMultipleEntries(selectedMultipleEntries.map((item: any) => item.option_index === index ? { ...item, custom_value: newColor } : item))}
                                                 />
                                             </div>
                                             )}
@@ -475,19 +456,8 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
                     {selectedSelectOption?.type === 'color' && (
                         <div className="flex gap-2">
                             <ColorPicker
-                                color={value?.custom_value?.startsWith('#') ? value.custom_value : '#FFFFFF'}
-                                onChange={(newColor) => onChange(field.variable_name, { option_index: selectedSelectIndex, value: selectedSelectValue, custom_value: newColor.toUpperCase() })}
-                            />
-                            <input
-                                type="text"
-                                value={value?.custom_value || ''}
-                                onChange={(e) => {
-                                    let val = e.target.value.toUpperCase();
-                                    if (val && !val.startsWith('#')) { val = '#' + val; }
-                                    if (val.length <= 9) { onChange(field.variable_name, { option_index: selectedSelectIndex, value: selectedSelectValue, custom_value: val }); }
-                                }}
-                                className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
-                                placeholder="#FFFFFF"
+                                color={value?.custom_value || ''}
+                                onChange={(newColor) => onChange(field.variable_name, { option_index: selectedSelectIndex, value: selectedSelectValue, custom_value: newColor })}
                             />
                         </div>
                     )}
@@ -620,18 +590,7 @@ function ColorTextInput({
     return (
         <div className="contents">
             <div className="flex gap-2">
-                <ColorPicker color={color.startsWith('#') ? color : '#FFFFFF'} onChange={(nextColor) => updateColor(nextColor.toUpperCase())} />
-                <input
-                    type="text"
-                    value={color}
-                    onChange={(e) => {
-                        let nextColor = e.target.value.toUpperCase();
-                        if (nextColor && !nextColor.startsWith('#')) nextColor = `#${nextColor}`;
-                        if (nextColor.length <= 9) updateColor(nextColor);
-                    }}
-                    className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
-                    placeholder="#FFFFFF"
-                />
+                <ColorPicker color={color || ''} onChange={(nextColor) => updateColor(nextColor)} />
             </div>
             <input
                 type="text"
@@ -670,7 +629,7 @@ function GradientInput({
 
     const updateColor = (index: number, color: string) => {
         const nextColors = [...gradient.colors];
-        nextColors[index] = color.toUpperCase();
+        nextColors[index] = color;
         updateGradient({ colors: nextColors });
     };
 
@@ -701,18 +660,7 @@ function GradientInput({
 
             {gradient.colors.map((color, index) => (
                 <div key={index} className="flex gap-2">
-                    <ColorPicker color={color?.startsWith('#') ? color : '#FFFFFF'} onChange={(newColor) => updateColor(index, newColor)} />
-                    <input
-                        type="text"
-                        value={color || ''}
-                        onChange={(e) => {
-                            let val = e.target.value.toUpperCase();
-                            if (val && !val.startsWith('#')) val = '#' + val;
-                            if (val.length <= 9) updateColor(index, val);
-                        }}
-                        className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
-                        placeholder="#FFFFFF"
-                    />
+                    <ColorPicker color={color || ''} onChange={(newColor) => updateColor(index, newColor)} />
                     <button
                         type="button"
                         disabled={gradient.colors.length <= 2}

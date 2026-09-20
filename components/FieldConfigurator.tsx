@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { FieldConfig, GradientValue, SelectOptionConfig, defaultGradientValue, getSelectDefaultValue, getSelectOptions } from '@/lib/template-parser';
+import { parseColor } from '@/lib/colors';
 import ColorPicker from '@/components/ColorPicker';
 
 interface ConfiguratorProps {
@@ -23,7 +24,6 @@ const imageSizeSliders = [
 
 const inputClass = "font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300";
 const compactInputClass = "bg-black/40 border border-(--primary)/30 p-1 text-xs outline-none focus:border-(--primary)";
-const isHexColor = (value?: string) => /^#[0-9A-F]{3,8}$/i.test(value || '');
 const cssDeclarationFormat = (cssVariable: string) => {
     const trimmed = cssVariable.trim();
     return trimmed ? `${trimmed}: {{value}};` : '{{value}}';
@@ -83,7 +83,7 @@ export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onC
                             onChange={(e) => {
                                 const nextType = e.target.value as FieldConfig['type'];
 
-                                if (nextType === 'color' && !isHexColor(tempField.default_value)) {
+                                if (nextType === 'color' && !parseColor(tempField.default_value)) {
                                     updateField({
                                         type: nextType,
                                         default_value: defaultColor,
@@ -220,7 +220,7 @@ function GradientConfig({ field, onChange }: { field: FieldConfig; onChange: (fi
 
     const updateColor = (index: number, color: string) => {
         const nextColors = [...gradient.colors];
-        nextColors[index] = color.toUpperCase();
+        nextColors[index] = color;
         updateGradient({ colors: nextColors });
     };
 
@@ -267,18 +267,7 @@ function GradientConfig({ field, onChange }: { field: FieldConfig; onChange: (fi
                         <div className="flex flex-col gap-1 flex-1">
                             <label className="text-[8px] opacity-40 uppercase">Color_{index + 1}</label>
                             <div className="flex gap-2">
-                                <ColorPicker color={color.startsWith('#') ? color : '#FFFFFF'} onChange={(newColor) => updateColor(index, newColor)} />
-                                <input
-                                    type="text"
-                                    value={color}
-                                    onChange={(e) => {
-                                        let val = e.target.value.toUpperCase();
-                                        if (val && !val.startsWith('#')) val = '#' + val;
-                                        if (val.length <= 9) updateColor(index, val);
-                                    }}
-                                    className={`${compactInputClass} flex-1`}
-                                    placeholder="#FFFFFF"
-                                />
+                                <ColorPicker color={color || ''} onChange={(newColor) => updateColor(index, newColor)} />
                             </div>
                         </div>
                         <button
@@ -367,28 +356,14 @@ function DefaultValueConfig({ field, onChange }: { field: FieldConfig; onChange:
 function ColorConfig({ field, onChange }: { field: FieldConfig; onChange: (field: FieldConfig) => void }) {
     return (
         <div className="flex flex-col gap-1 animate-in slide-in-from-bottom-2">
-            <label className="text-[10px] uppercase text-(--primary) font-bold">Initial_Color_Value (HEX)</label>
+            <label className="text-[10px] uppercase text-(--primary) font-bold">Initial_Color_Value (HEX / RGB)</label>
             <div className="flex gap-2">
                     <ColorPicker
-                        color={field.default_value.startsWith('#') ? field.default_value : defaultColor}
+                        color={field.default_value || ''}
                     onChange={(newColor) => {
-                        const upperColor = newColor.toUpperCase();
+                        const upperColor = newColor;
                         onChange({ ...field, default_value: upperColor, placeholder: field.config?.separate_placeholder ? field.placeholder : upperColor });
                     }}
-                />
-                <input
-                    type="text"
-                    placeholder={defaultColor}
-                    value={field.default_value}
-                    onChange={(e) => {
-                        let val = e.target.value.toUpperCase();
-                        if (val && !val.startsWith('#')) val = '#' + val;
-                        if (val.length <= 9) onChange({ ...field, default_value: val, placeholder: field.config?.separate_placeholder ? field.placeholder : val });
-                    }}
-                    onBlur={() => {
-                        if (field.default_value === '#') onChange({ ...field, default_value: '', placeholder: field.config?.separate_placeholder ? field.placeholder : '' });
-                    }}
-                    className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
                 />
             </div>
         </div>
@@ -747,19 +722,8 @@ function SelectOptionDefaultConfig({
                 <label className="text-[8px] opacity-40 uppercase">Default_Color</label>
                 <div className="flex gap-2">
                     <ColorPicker
-                        color={value.startsWith('#') ? value : '#FFFFFF'}
-                        onChange={(newColor) => onChange(newColor.toUpperCase())}
-                    />
-                    <input
-                        type="text"
-                        placeholder="#FFFFFF"
-                        value={value}
-                        onChange={(e) => {
-                            let val = e.target.value.toUpperCase();
-                            if (val && !val.startsWith('#')) val = '#' + val;
-                            if (val.length <= 9) onChange(val);
-                        }}
-                        className="font-Google-Sans flex-1 min-w-0 bg-black/20 border border-(--primary)/50 p-2 outline-none text-sm focus:border-(--primary)/75 transition-all duration-300"
+                        color={value || ''}
+                        onChange={(newColor) => onChange(newColor)}
                     />
                 </div>
             </div>

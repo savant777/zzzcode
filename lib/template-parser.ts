@@ -1,3 +1,4 @@
+import { isBBCodeColor } from './colors';
 export interface FieldConfig {
     id: string;
     variable_name: string;
@@ -329,7 +330,7 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
         .replace(/\[u\]([\s\S]*?)\[\/u\]/g, '<span style="text-decoration: underline;" class="mycode_u">$1</span>')
         .replace(/\[s\]([\s\S]*?)\[\/s\]/g, '<span style="text-decoration: line-through;" class="mycode_s">$1</span>')
         .replace(/\[align=(left|center|right|justify)\]([\s\S]*?)\[\/align\]/g, '<div style="text-align: $1;" class="mycode_align">$2</div>')
-        .replace(/\[color=(#?[a-fA-F0-9]{3,6})\]([\s\S]*?)\[\/color\]/g, '<span style="color: $1;" class="mycode_color">$2</span>')
+        .replace(/\[color=([^\]\r\n]+)\]([\s\S]*?)\[\/color\]/gi, (match, color, content) => isBBCodeColor(color) ? `<span style="color: ${color};" class="mycode_color">${content}</span>` : match)
         .replace(/\[yt=([^\]]+)\]\[\/yt\]/gi, (_match, input) => {
             const videoId = extractYouTubeId(input);
             return videoId ? `<iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen="" style="aspect-ratio: 16 / 9;width: 100%;"></iframe>` : '';
