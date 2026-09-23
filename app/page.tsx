@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { CreatorSession, canManageTemplate, getCurrentCreator } from '@/lib/creator';
 import { getGroupSlug } from '@/lib/routes';
+import { templateRoute, visibleTemplateTags } from '@/lib/template-tags';
 import { toast } from 'sonner';
 
 // Components
@@ -14,7 +15,6 @@ import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import Modal from '@/components/Modal';
 
-const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'houses'];
 
 export default function Page() {
     return (
@@ -37,7 +37,7 @@ function Dashboard() {
     // UI Controls
     const [isOpen, setIsOpen] = useState(true);
     const activeFilter = useMemo(() => {
-        const group = searchParams.get('group')?.toLowerCase() || 'category';
+        const group = getGroupSlug(searchParams.get('group')) || 'category';
         const tag = searchParams.get('tag')?.toLowerCase() || 'all';
         return `${group}:${tag}`;
     }, [searchParams]);
@@ -73,7 +73,10 @@ function Dashboard() {
                     .eq('is_active', true)
             ]);
 
-            if (data) setTemplates(data);
+            if (data) setTemplates(data.map(item => ({
+                ...item,
+                template_tags: visibleTemplateTags(item.template_tags),
+            })));
             if (creators) {
                 setCreatorNames(creators.reduce((acc: Record<string, string>, creator: any) => {
                     acc[creator.user_id] = creator.display_name;
@@ -165,13 +168,7 @@ function Dashboard() {
         e.preventDefault();
         const toastId = toast.loading("SYSTEM: Verifying_Access_Key...");
 
-        const primaryTagEntry = selectedItem.template_tags?.find((t: any) => 
-            PRIMARY_ROUTE_GROUPS.includes(getGroupSlug(t.tags.tag_groups.name))
-        ) || selectedItem.template_tags?.[0];
-
-        const group = getGroupSlug(primaryTagEntry?.tags.tag_groups.name) || 'category';
-        const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
-        const routeQuery = new URLSearchParams({ group, tag: tagSlug }).toString();
+        const routeQuery = new URLSearchParams(templateRoute(selectedItem.template_tags, activeFilter)).toString();
         
         if (password === selectedItem?.password) {
             sessionStorage.setItem(`unlocked_${selectedItem.id}`, 'true');
@@ -308,6 +305,7 @@ function Dashboard() {
                                     <TemplateCard 
                                         key={item.id} 
                                         item={item}
+                                        activeFilter={activeFilter}
                                         viewMode={viewMode}
                                         canManage={canManageTemplate(creatorSession || {
                                             user: null,

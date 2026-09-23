@@ -1,5 +1,6 @@
 "use client";
 import Link from 'next/link';
+import { getGroupSlug } from '@/lib/routes';
 
 interface BreadcrumbsProps {
     path?: string;
@@ -8,7 +9,9 @@ interface BreadcrumbsProps {
 }
 
 export default function Breadcrumbs({ path, currentFile, editorMode }: BreadcrumbsProps) {
-    const [group, value] = path ? path.split(':') : [null, null];
+    const [rawGroup, rawValue] = path ? path.split(':') : ['', ''];
+    const group = getGroupSlug(rawGroup);
+    const value = (rawValue || '').toLowerCase();
 
     const isDashboard = path && !currentFile && !editorMode;
 
@@ -29,11 +32,15 @@ export default function Breadcrumbs({ path, currentFile, editorMode }: Breadcrum
             {/* --- Dashboard / Edit / Editor) --- */}
             {group && value && (
                 <>
-                    {/* TAG GROUP (only in Dashboard) */}
                     {isDashboard && (
                         <>
                             <span className="text-(--foreground)/25">/</span>
-                            <span className="text-(--foreground)/75">{group.replace(/-/g, '_').toUpperCase()}</span>
+                            <Link
+                                href={`/?${new URLSearchParams({ group, tag: 'all' })}`}
+                                className="text-(--foreground)/75 hover:text-(--primary) transition-colors"
+                            >
+                                {group.replace(/-/g, '_').toUpperCase()}
+                            </Link>
                         </>
                     )}
 
@@ -42,7 +49,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode }: Breadcrum
                     {/* in Editor Page */}
                     {!isDashboard ? (
                         <Link 
-                            href={`/?group=${group.toLowerCase()}&tag=${value.toLowerCase()}`}
+                            href={`/?${new URLSearchParams({ group, tag: value })}`}
                             className="text-(--foreground)/75 hover:text-(--primary) transition-colors"
                         >
                             {value.replace(/-/g, '_').toUpperCase()}

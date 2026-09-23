@@ -8,6 +8,7 @@ import { FieldConfig, defaultGradientValue, generateFinalHTML, getSelectDefaultV
 
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { templateRoute } from '@/lib/template-tags';
 import FieldRenderer from '@/components/FieldRenderer';
 import LivePreview from '@/components/LivePreview';
 import { localCopyKey, readLocalCopy, saveLocalCopy, type LocalDraftCopy } from '@/lib/editor-local-copy';
@@ -323,7 +324,9 @@ export default function EditorPage() {
     const STORAGE_KEY = `zzzcode_draft_editor_${templateId}`;
     const fromGroup = searchParams.get('group') || 'category';
     const fromTag = searchParams.get('tag') || 'all';
-    const breadcrumbPath = `${fromGroup}:${fromTag}`;
+    const [breadcrumbTags, setBreadcrumbTags] = useState<any[]>([]);
+    const breadcrumbRoute = templateRoute(breadcrumbTags, `${fromGroup}:${fromTag}`);
+    const breadcrumbPath = `${breadcrumbRoute.group}:${breadcrumbRoute.tag}`;
 
     // --- 1. States ---
     const [modalType, setModalType] = useState<'clear_draft' | 'clear_current_draft' | 'delete_draft' | 'rename_draft' | 'backup_link' | 'backup_conflict' | 'backup_open' | 'backup_unavailable' | null>(null);
@@ -459,10 +462,11 @@ export default function EditorPage() {
         const initEditorPage = async () => {
             setLoading(true);
             if (templateId) {
-                const { data: template } = await supabase.from('templates').select('*').eq('id', templateId).single();
+                const { data: template } = await supabase.from('templates').select('*, template_tags(tags(slug, is_active, tag_groups(name)))').eq('id', templateId).single();
                 if (cancelled) return;
 
                 if (template) {
+                    setBreadcrumbTags(template.template_tags || []);
                     let remote: BackupConnection | null = null;
                     let storedConnection: BackupConnection | null = null;
                     let linkFailed = false;

@@ -36,8 +36,7 @@ type TagForm = {
     is_active: boolean;
 };
 
-const GROUP_ORDER = ['category', 'css', 'style', 'activity', 'commission', 'houses'];
-const OWNER_ONLY_GROUPS = ['houses'];
+const GROUP_ORDER = ['category', 'css', 'style', 'activity', 'human-party', 'houses', 'shops', 'commission'];
 
 const emptyForm: TagForm = {
     group_id: '',
@@ -193,14 +192,10 @@ export default function ManageTagsPage() {
     const canManageTag = (tag: ManagedTag) => {
         if (!creatorSession?.user || !creatorSession.isCreator) return false;
         if (creatorSession.isOwner) return true;
-        if (OWNER_ONLY_GROUPS.includes(getGroupSlug(getTagGroup(tag)))) return false;
         return tag.user_id === creatorSession.user.id;
     };
 
-    const availableTagGroups = useMemo(() => {
-        if (creatorSession?.isOwner) return tagGroups;
-        return tagGroups.filter(group => !OWNER_ONLY_GROUPS.includes(getGroupSlug(group.name)));
-    }, [tagGroups, creatorSession?.isOwner]);
+    const availableTagGroups = tagGroups;
 
     const handleSort = (nextKey: SortKey) => {
         if (sortKey === nextKey) {
@@ -343,12 +338,6 @@ export default function ManageTagsPage() {
             return;
         }
 
-        const nextGroup = tagGroups.find(group => group.id === nextTag.group_id);
-        if (!creatorSession.isOwner && OWNER_ONLY_GROUPS.includes(getGroupSlug(nextGroup?.name))) {
-            toast.error("TAG_GROUP_LOCKED: OWNER_ONLY");
-            return;
-        }
-
         setSaving(true);
         const toastId = toast.loading(modalType === 'add' ? "SYSTEM: Creating_Tag..." : "SYSTEM: Updating_Tag...");
 
@@ -378,7 +367,9 @@ export default function ManageTagsPage() {
                             user_id: form.is_global ? null : creatorSession.user.id,
                         } : {}),
                     })
-                    .eq('id', selectedTag.id);
+                    .eq('id', selectedTag.id)
+                    .select('id')
+                    .single();
 
                 if (error) throw error;
                 toast.success("TAG_UPDATED", { id: toastId });
@@ -403,7 +394,9 @@ export default function ManageTagsPage() {
             const { error } = await supabase
                 .from('tags')
                 .update({ is_active: false })
-                .eq('id', selectedTag.id);
+                .eq('id', selectedTag.id)
+                .select('id')
+                .single();
 
             if (error) throw error;
 

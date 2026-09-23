@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { templateRoute, templateTagChanges } from '@/lib/template-tags';
 import { toast } from 'sonner';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -57,7 +58,9 @@ export default function EditTemplatePage() {
 
     const fromGroup = searchParams.get('group') || 'category';
     const fromTag = searchParams.get('tag') || 'all';
-    const breadcrumbPath = `${fromGroup.toUpperCase()}:${fromTag.toUpperCase()}`;
+    const [breadcrumbTags, setBreadcrumbTags] = useState<any[]>([]);
+    const breadcrumbRoute = templateRoute(breadcrumbTags, `${fromGroup}:${fromTag}`);
+    const breadcrumbPath = `${breadcrumbRoute.group}:${breadcrumbRoute.tag}`;
 
     // --- 1. States ---
 
@@ -164,7 +167,7 @@ export default function EditTemplatePage() {
             }
 
             if (templateId) {
-                const { data: template, error } = await supabase.from('templates').select(`*, template_tags(tags_id)`).eq('id', templateId).single();
+                const { data: template, error } = await supabase.from('templates').select(`*, template_tags(tags_id, tags(slug, is_active, tag_groups(name)))`).eq('id', templateId).single();
 
                 if (template) {
                     if (!canManageTemplate(session, template.user_id)) {
@@ -174,6 +177,7 @@ export default function EditTemplatePage() {
                     }
 
                     setTemplateOwnerId(template.user_id);
+                    setBreadcrumbTags(template.template_tags || []);
                     setFormData({
                         title: template.title,
                         description: template.description,
@@ -324,10 +328,34 @@ export default function EditTemplatePage() {
 
             if (updateError) throw updateError;
 
-            await supabase.from('template_tags').delete().eq('template_id', templateId);
-            
-            if (selectedTags.length > 0) {
-                const tagEntries = Array.from(new Set(selectedTags.map(String))).map(tagId => ({
+            const { data: currentLinks, error: linksError } = await supabase
+                .from('template_tags').select('tags_id').eq('template_id', templateId);
+            if (linksError) throw linksError;
+
+            // Refresh active IDs in case a tag was disabled while this form was open.
+            let activeTagsQuery = supabase
+                .from('tags').select('id').eq('is_active', true);
+            if (!creatorSession.isOwner) {
+                activeTagsQuery = activeTagsQuery.or(`user_id.is.null,user_id.eq.${creatorSession.user!.id}`);
+            }
+            const { data: activeTags, error: activeTagsError } = await activeTagsQuery;
+            if (activeTagsError) throw activeTagsError;
+            const activeIds = new Set((activeTags || []).map(tag => String(tag.id)));
+            const selectableIds = availableTags.map(tag => String(tag.id)).filter(id => activeIds.has(id));
+            const changes = templateTagChanges(
+                (currentLinks || []).map(link => String(link.tags_id)),
+                selectedTags.map(String),
+                selectableIds,
+            );
+
+            if (changes.remove.length > 0) {
+                const { error: deleteError } = await supabase.from('template_tags')
+                    .delete().eq('template_id', templateId).in('tags_id', changes.remove);
+                if (deleteError) throw deleteError;
+            }
+
+            if (changes.add.length > 0) {
+                const tagEntries = changes.add.map(tagId => ({
                     template_id: templateId,
                     tags_id: tagId
                 }));

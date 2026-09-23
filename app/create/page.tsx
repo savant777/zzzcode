@@ -12,6 +12,7 @@ import AutoResizeTextarea from '@/components/AutoResizeTextarea';
 import BlueprintGuide from '@/components/BlueprintGuide';
 import TemplateBlockContainer from '@/components/TemplateBlockContainer';
 import { CreatorSession, requireCreator } from '@/lib/creator';
+import { getGroupSlug, PRIMARY_ROUTE_GROUPS } from '@/lib/routes';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
 
 const groupFieldsByGroup = (fieldList: FieldConfig[]) => {
@@ -171,7 +172,7 @@ export default function AddTemplatePage() {
                 try {
                     const parsed = JSON.parse(savedDraft);
                     if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData }));
-                    if (parsed.selectedTags) setSelectedTags(parsed.selectedTags);
+                    if (parsed.selectedTags) setSelectedTags(parsed.selectedTags.map(String));
                     if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
                 } catch (e) { console.error("Draft load error", e); }
             }
@@ -252,6 +253,26 @@ export default function AddTemplatePage() {
             if (!creatorSession?.user || !creatorSession.isCreator) {
                 throw new Error("CREATOR_SESSION_REQUIRED");
             }
+
+            // Validate saved selections before creating a template. A stale draft
+            // must not leave a new template behind after its tag insert fails.
+            const { data: currentTags, error: currentTagsError } = await supabase
+                .from('tags')
+                .select('id, slug, tag_groups(name)')
+                .eq('is_active', true)
+                .or(`user_id.is.null,user_id.eq.${creatorSession.user.id}`)
+                .returns<{ id: number; slug: string | null; tag_groups: { name: string } | null }[]>();
+            if (currentTagsError) throw currentTagsError;
+            const activeTagIds = new Set((currentTags || []).map(tag => String(tag.id)));
+            const templateTagIds = Array.from(new Set([
+                ...selectedTags.map(String),
+                ...(creatorTagId ? [creatorTagId] : []),
+            ]));
+            if (templateTagIds.some(id => !activeTagIds.has(id))) {
+                setSelectedTags(prev => prev.filter(id => activeTagIds.has(String(id))));
+                if (creatorTagId && !activeTagIds.has(creatorTagId)) setCreatorTagId(null);
+                throw new Error('บางแท็กถูกปิดใช้งาน ลบ หรือเปลี่ยนสิทธิ์แล้ว กรุณาตรวจแท็กและบันทึกอีกครั้ง');
+            }
             
             const { data: templateData, error: templateError } = await supabase
                 .from('templates')
@@ -266,11 +287,6 @@ export default function AddTemplatePage() {
 
             if (templateError) throw templateError;
             
-            const templateTagIds = Array.from(new Set([
-                ...selectedTags.map(String),
-                ...(creatorTagId ? [creatorTagId] : [])
-            ]));
-
             if (templateTagIds.length > 0 && templateData) {
                 const { error: tagError } = await supabase
                     .from('template_tags')
@@ -281,21 +297,21 @@ export default function AddTemplatePage() {
                 if (tagError) throw tagError;
             }
 
-            const primaryTag = availableTags
-                .filter(t => selectedTags.includes(t.id))
-                .find(t => ['activity', 'commission'].includes(t.tag_groups?.name?.toLowerCase() || ''));
+            const primaryTag = (currentTags || [])
+                .filter(t => selectedTags.includes(String(t.id)) && t.slug)
+                .find(t => PRIMARY_ROUTE_GROUPS.includes(getGroupSlug(t.tag_groups?.name)));
 
             let targetGroup = 'category';
             let targetTag = 'all';
 
             if (primaryTag) {
-                targetGroup = primaryTag.tag_groups.name.toLowerCase();
-                targetTag = primaryTag.slug.toLowerCase();
+                targetGroup = getGroupSlug(primaryTag.tag_groups?.name);
+                targetTag = primaryTag.slug!.toLowerCase();
             } else {
-                const categoryTag = availableTags.find(t => selectedTags.includes(t.id) && t.tag_groups.name.toLowerCase() === 'category');
+                const categoryTag = (currentTags || []).find(t => selectedTags.includes(String(t.id)) && t.slug && getGroupSlug(t.tag_groups?.name) === 'category');
                 if (categoryTag) {
                     targetGroup = 'category';
-                    targetTag = categoryTag.slug.toLowerCase();
+                    targetTag = categoryTag.slug!.toLowerCase();
                 }
             }
 
@@ -422,11 +438,11 @@ export default function AddTemplatePage() {
                                             type="button"
                                             onClick={() => {
                                                 setSelectedTags(prev => 
-                                                    prev.includes(tag.id) ? prev.filter(id => id !== tag.id) : [...prev, tag.id]
+                                                    prev.includes(String(tag.id)) ? prev.filter(id => id !== String(tag.id)) : [...prev, String(tag.id)]
                                                 );
                                             }}
                                             className={`px-2 py-1 text-xs font-bold border transition-all cursor-pointer uppercase
-                                                ${selectedTags.includes(tag.id) 
+                                                ${selectedTags.includes(String(tag.id))
                                                     ? 'bg-(--primary) text-(--background) border-(--primary)' 
                                                     : 'text-(--foreground)/75 bg-(--background) border-(--foreground)/25 hover:text-(--background) hover:bg-(--foreground)'}
                                             `}

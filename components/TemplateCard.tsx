@@ -1,8 +1,7 @@
 "use client";
 import { useRouter } from 'next/navigation';
 import { getGroupSlug } from '@/lib/routes';
-
-const PRIMARY_ROUTE_GROUPS = ['activity', 'commission', 'houses'];
+import { templateRoute, visibleTemplateTags } from '@/lib/template-tags';
 
 function CreatorBadge({ name }: { name: string }) {
     return (
@@ -16,16 +15,11 @@ function CreatorBadge({ name }: { name: string }) {
     );
 }
 
-export default function TemplateCard({ item, viewMode, canManage, creatorName, onTagClick, onDelete, onOpenPrivateModal }: any) {
+export default function TemplateCard({ item, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onOpenPrivateModal }: any) {
     const router = useRouter();
+    const visibleTags = visibleTemplateTags(item.template_tags);
 
-    const primaryTagEntry = item.template_tags?.find((t: any) => 
-        PRIMARY_ROUTE_GROUPS.includes(getGroupSlug(t.tags.tag_groups.name))
-    ) || item.template_tags?.[0];
-
-    const group = getGroupSlug(primaryTagEntry?.tags.tag_groups.name) || 'category';
-    const tagSlug = primaryTagEntry?.tags.slug.toLowerCase() || 'all';
-    const routeQuery = new URLSearchParams({ group, tag: tagSlug }).toString();
+    const routeQuery = new URLSearchParams(templateRoute(visibleTags, activeFilter)).toString();
 
     const handleUseTemplate = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -71,7 +65,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, o
 
                     {/* Tags */}
                     <div className="hidden md:flex flex-wrap gap-1 items-stretch">
-                        {item.template_tags.map((t: any) => (
+                        {visibleTags.map((t: any) => (
                             <button 
                                 key={t.tags.slug}
                                 onClick={(e) => {
@@ -167,7 +161,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, o
 
             {/* Tags */}
             <div className="flex flex-wrap gap-1 items-stretch">
-                {item.template_tags?.slice(0, 2).map((t: any) => (
+                {visibleTags.slice(0, 2).map((t: any) => (
                     <button 
                         key={t.tags.slug}
                         onClick={(e) => {
@@ -182,7 +176,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, o
                     </button>
                 ))}
 
-                {item.template_tags?.length > 2 && (
+                {visibleTags.length > 2 && (
                     <div className="zzzcode-tooltip group/tooltip flex relative">
                         <button className="zzzcode-tooltip-btn border border-(--foreground) bg-(--background) text-(--foreground) px-1.5 py-0.5 text-xs font-bold hover:bg-(--foreground) hover:text-(--background) transition-all duration-300 ease-in-out cursor-help">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -195,7 +189,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, o
                         <div className="zzzcode-tooltip-window invisible group-hover/tooltip:visible group-focus/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 group-focus/tooltip:opacity-100 absolute bottom-full left-0 mb-2 p-2 bg-(--background) border border-(--primary) z-50 min-w-[120px] transition-all duration-200">
                             <div className="text-[10px] uppercase opacity-50 mb-1 border-b border-(--primary)/20 pb-1">Additional Tags</div>
                             <div className="flex flex-wrap gap-1">
-                                {item.template_tags?.slice(2).map((t: any) => (
+                                {visibleTags.slice(2).map((t: any) => (
                                     <button 
                                         key={t.tags.slug}
                                         onClick={(e) => {

@@ -161,7 +161,6 @@ TO authenticated
 WITH CHECK (
   user_id = auth.uid()
   AND public.is_active_creator(auth.uid())
-  AND NOT public.is_tag_group_slug(group_id, 'houses')
 );
 
 DROP POLICY IF EXISTS "Allow creators update own tags" ON public.tags;
@@ -172,12 +171,10 @@ TO authenticated
 USING (
   user_id = auth.uid()
   AND public.is_active_creator(auth.uid())
-  AND NOT public.is_tag_group_slug(group_id, 'houses')
 )
 WITH CHECK (
   user_id = auth.uid()
   AND public.is_active_creator(auth.uid())
-  AND NOT public.is_tag_group_slug(group_id, 'houses')
 );
 
 DROP POLICY IF EXISTS "Allow creators delete own tags" ON public.tags;
@@ -188,7 +185,6 @@ TO authenticated
 USING (
   user_id = auth.uid()
   AND public.is_active_creator(auth.uid())
-  AND NOT public.is_tag_group_slug(group_id, 'houses')
 );
 
 -- ==========================================
