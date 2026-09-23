@@ -3,9 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase';
 import SkeletonNav from '@/components/SkeletonNav';
-import { getGroupSlug } from '@/lib/routes';
-
-const GROUP_ORDER = ['creators', 'category', 'css', 'style', 'activity', 'human-party', 'houses', 'shops', 'commission'];
+import { getGroupSlug, TAG_GROUP_ORDER as GROUP_ORDER } from '@/lib/routes';
 
 export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
     const [isLoading, setIsLoading] = useState(true);

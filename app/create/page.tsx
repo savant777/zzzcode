@@ -12,7 +12,8 @@ import AutoResizeTextarea from '@/components/AutoResizeTextarea';
 import BlueprintGuide from '@/components/BlueprintGuide';
 import TemplateBlockContainer from '@/components/TemplateBlockContainer';
 import { CreatorSession, requireCreator } from '@/lib/creator';
-import { getGroupSlug, PRIMARY_ROUTE_GROUPS } from '@/lib/routes';
+import { getGroupSlug, PRIMARY_ROUTE_GROUPS, sortTagsByGroup } from '@/lib/routes';
+import { tagsWithCreatorCredit } from '@/lib/creator-credit';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
 
 const groupFieldsByGroup = (fieldList: FieldConfig[]) => {
@@ -44,6 +45,8 @@ export default function AddTemplatePage() {
     const [availableTags, setAvailableTags] = useState<any[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [creatorTagId, setCreatorTagId] = useState<string | null>(null);
+    const [creditOptions, setCreditOptions] = useState<{ id: string; name: string }[]>([]);
+    const [creditOverride, setCreditOverride] = useState('');
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
     const [fields, setFields] = useState<FieldConfig[]>([]);
     const [modalType, setModalType] = useState<'clear_draft' | 'blueprint_guide' | null>(null);
@@ -165,7 +168,10 @@ export default function AddTemplatePage() {
             }
 
             if (creatorTag) setCreatorTagId(String(creatorTag.id));
-            setAvailableTags(nextTags.filter((tag: any) => tag.tag_groups?.name?.toLowerCase() !== 'creators'));
+            setCreditOptions(nextTags.filter((tag: any) => tag.user_id === null
+                && getGroupSlug(tag.tag_groups?.name) === 'creators')
+                .map((tag: any) => ({ id: String(tag.id), name: tag.name })));
+            setAvailableTags(sortTagsByGroup(nextTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators')));
 
             const savedDraft = localStorage.getItem(STORAGE_KEY);
             if (savedDraft) {
@@ -173,6 +179,7 @@ export default function AddTemplatePage() {
                     const parsed = JSON.parse(savedDraft);
                     if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData }));
                     if (parsed.selectedTags) setSelectedTags(parsed.selectedTags.map(String));
+                    if (typeof parsed.creditOverride === 'string') setCreditOverride(parsed.creditOverride);
                     if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
                 } catch (e) { console.error("Draft load error", e); }
             }
@@ -199,11 +206,11 @@ export default function AddTemplatePage() {
             if (skipDraftSaveRef.current) return;
 
             if (formData.title || formData.html_blueprint) {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ formData, fields, selectedTags }));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ formData, fields, selectedTags, creditOverride }));
             }
         }, 2000);
         return () => clearTimeout(timer);
-    }, [formData, fields, selectedTags]);
+    }, [formData, fields, selectedTags, creditOverride]);
 
     // --- 4. Handlers ---
 
@@ -258,21 +265,21 @@ export default function AddTemplatePage() {
             // must not leave a new template behind after its tag insert fails.
             const { data: currentTags, error: currentTagsError } = await supabase
                 .from('tags')
-                .select('id, slug, tag_groups(name)')
+                .select('id, slug, user_id, tag_groups(name)')
                 .eq('is_active', true)
                 .or(`user_id.is.null,user_id.eq.${creatorSession.user.id}`)
-                .returns<{ id: number; slug: string | null; tag_groups: { name: string } | null }[]>();
+                .returns<{ id: number; slug: string | null; user_id: string | null; tag_groups: { name: string } | null }[]>();
             if (currentTagsError) throw currentTagsError;
             const activeTagIds = new Set((currentTags || []).map(tag => String(tag.id)));
-            const templateTagIds = Array.from(new Set([
-                ...selectedTags.map(String),
-                ...(creatorTagId ? [creatorTagId] : []),
-            ]));
+            const chosenCreditId = creditOverride || creatorTagId || '';
+            let templateTagIds = [...selectedTags.map(String), chosenCreditId];
             if (templateTagIds.some(id => !activeTagIds.has(id))) {
                 setSelectedTags(prev => prev.filter(id => activeTagIds.has(String(id))));
                 if (creatorTagId && !activeTagIds.has(creatorTagId)) setCreatorTagId(null);
                 throw new Error('บางแท็กถูกปิดใช้งาน ลบ หรือเปลี่ยนสิทธิ์แล้ว กรุณาตรวจแท็กและบันทึกอีกครั้ง');
             }
+            templateTagIds = tagsWithCreatorCredit(currentTags || [], selectedTags.map(String),
+                chosenCreditId, creatorSession.user.id);
             
             const { data: templateData, error: templateError } = await supabase
                 .from('templates')
@@ -415,6 +422,17 @@ export default function AddTemplatePage() {
                                     className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75 transition-all duration-300 resize-none"
                                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                                 />
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label htmlFor="creator-credit" className="text-sm uppercase opacity-70">Creator_Credit</label>
+                                <select id="creator-credit" value={creditOverride} onChange={event => setCreditOverride(event.target.value)}
+                                    className="w-full border border-(--primary)/50 bg-(--background) p-2 text-sm outline-none focus:outline-none">
+                                    <option value="">{creatorSession?.creator?.display_name || 'ตัวฉันเอง'} (ของฉัน)</option>
+                                    {creditOverride && !creditOptions.some(tag => tag.id === creditOverride) && <option value={creditOverride} disabled>แท็กเดิมใช้ไม่ได้แล้ว — กรุณาเลือกใหม่</option>}
+                                    {creditOptions.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+                                </select>
+                                <p className="text-xs text-(--foreground)/60">เลือกครีเอเตอร์ที่ต้องการให้เครดิต หากอัปแทนคนอื่นจะใช้แท็กนี้แทนแท็กของคุณ คุณยังเป็นผู้จัดการเทมเพลตนี้</p>
                             </div>
 
                             <div className="flex flex-col gap-1">

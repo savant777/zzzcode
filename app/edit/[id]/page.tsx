@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { templateRoute, templateTagChanges } from '@/lib/template-tags';
+import { getGroupSlug, sortTagsByGroup } from '@/lib/routes';
+import { creatorCreditChanges } from '@/lib/creator-credit';
 import { toast } from 'sonner';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -72,6 +74,9 @@ export default function EditTemplatePage() {
     const [templateOwnerId, setTemplateOwnerId] = useState<string | null>(null);
     const [availableTags, setAvailableTags] = useState<any[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [creditOptions, setCreditOptions] = useState<{ id: string; name: string }[]>([]);
+    const [currentCredit, setCurrentCredit] = useState<{ id: string; name: string } | null>(null);
+    const [creditOverride, setCreditOverride] = useState<string | null>(null);
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
     const [fields, setFields] = useState<FieldConfig[]>([]);
     const [modalType, setModalType] = useState<'clear_draft' | 'blueprint_guide' | null>(null);
@@ -163,11 +168,11 @@ export default function EditTemplatePage() {
                     .or(`user_id.is.null,user_id.eq.${session.user.id}`);
 
             if (allTags) {
-                setAvailableTags(allTags.filter((tag: any) => tag.tag_groups?.name?.toLowerCase() !== 'creators'));
+                setAvailableTags(sortTagsByGroup(allTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators')));
             }
 
             if (templateId) {
-                const { data: template, error } = await supabase.from('templates').select(`*, template_tags(tags_id, tags(slug, is_active, tag_groups(name)))`).eq('id', templateId).single();
+                const { data: template, error } = await supabase.from('templates').select(`*, template_tags(tags_id, tags(name, slug, is_active, tag_groups(name)))`).eq('id', templateId).single();
 
                 if (template) {
                     if (!canManageTemplate(session, template.user_id)) {
@@ -177,6 +182,11 @@ export default function EditTemplatePage() {
                     }
 
                     setTemplateOwnerId(template.user_id);
+                    setCreditOptions((allTags || []).filter((tag: any) => getGroupSlug(tag.tag_groups?.name) === 'creators'
+                        && (tag.user_id === null || tag.user_id === template.user_id))
+                        .map((tag: any) => ({ id: String(tag.id), name: tag.name })));
+                    const creditLink = template.template_tags?.find((link: any) => getGroupSlug(link.tags?.tag_groups?.name) === 'creators');
+                    setCurrentCredit(creditLink ? { id: String(creditLink.tags_id), name: creditLink.tags?.name || 'เครดิตเดิม' } : null);
                     setBreadcrumbTags(template.template_tags || []);
                     setFormData({
                         title: template.title,
@@ -201,6 +211,7 @@ export default function EditTemplatePage() {
                     if (parsed.templateId === templateId) {
                         if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData }));
                         if (parsed.selectedTags) setSelectedTags(parsed.selectedTags.map(String));
+                        if (typeof parsed.creditOverride === 'string') setCreditOverride(parsed.creditOverride);
                         if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
                     } else {
                         localStorage.removeItem(STORAGE_KEY);
@@ -228,11 +239,11 @@ export default function EditTemplatePage() {
     useEffect(() => {
         const timer = setTimeout(() => {
             if (formData.title || formData.html_blueprint) {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ templateId, formData, fields, selectedTags }));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ templateId, formData, fields, selectedTags, creditOverride }));
             }
         }, 2000);
         return () => clearTimeout(timer);
-    }, [formData, fields, selectedTags]);
+    }, [formData, fields, selectedTags, creditOverride]);
 
     const getFirstValue = (optionsString: string) => {
         const firstOption = optionsString.split('/')[0]?.trim();
@@ -329,12 +340,12 @@ export default function EditTemplatePage() {
             if (updateError) throw updateError;
 
             const { data: currentLinks, error: linksError } = await supabase
-                .from('template_tags').select('tags_id').eq('template_id', templateId);
+                .from('template_tags').select('tags_id, tags(tag_groups(name))').eq('template_id', templateId);
             if (linksError) throw linksError;
 
             // Refresh active IDs in case a tag was disabled while this form was open.
             let activeTagsQuery = supabase
-                .from('tags').select('id').eq('is_active', true);
+                .from('tags').select('id, user_id, tag_groups(name)').eq('is_active', true);
             if (!creatorSession.isOwner) {
                 activeTagsQuery = activeTagsQuery.or(`user_id.is.null,user_id.eq.${creatorSession.user!.id}`);
             }
@@ -347,6 +358,16 @@ export default function EditTemplatePage() {
                 selectedTags.map(String),
                 selectableIds,
             );
+            if (creditOverride !== null) {
+                const existingCredits = (currentLinks || [])
+                    .filter((link: any) => getGroupSlug(link.tags?.tag_groups?.name) === 'creators')
+                    .map(link => String(link.tags_id));
+                const creditChanges = creatorCreditChanges((activeTags || []).map((tag: any) => ({
+                    id: tag.id, user_id: tag.user_id, tag_groups: tag.tag_groups,
+                })), existingCredits, creditOverride, templateOwnerId || '');
+                changes.remove.push(...creditChanges.remove);
+                changes.add.push(...creditChanges.add);
+            }
 
             if (changes.remove.length > 0) {
                 const { error: deleteError } = await supabase.from('template_tags')
@@ -464,6 +485,21 @@ export default function EditTemplatePage() {
                                     className="font-Google-Sans bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75 transition-all duration-300 resize-none"
                                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                                 />
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label htmlFor="creator-credit" className="text-sm uppercase opacity-70">Creator_Credit</label>
+                                <select id="creator-credit" value={creditOverride ?? currentCredit?.id ?? ''}
+                                    onChange={event => setCreditOverride(event.target.value === currentCredit?.id ? null : event.target.value)}
+                                    className="w-full border border-(--primary)/50 bg-(--background) p-2 text-sm outline-none focus:outline-none">
+                                    {!currentCredit && <option value="" disabled>เลือกครีเอเตอร์</option>}
+                                    {currentCredit && !creditOptions.some(tag => tag.id === currentCredit.id)
+                                        && <option value={currentCredit.id}>{currentCredit.name} (เครดิตเดิม)</option>}
+                                    {creditOverride && creditOverride !== currentCredit?.id && !creditOptions.some(tag => tag.id === creditOverride)
+                                        && <option value={creditOverride} disabled>แท็กเดิมใช้ไม่ได้แล้ว — กรุณาเลือกใหม่</option>}
+                                    {creditOptions.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+                                </select>
+                                <p className="text-xs text-(--foreground)/60">เลือกแท็กครีเอเตอร์หนึ่งคน การเปลี่ยนเครดิตไม่เปลี่ยนเจ้าของหรือสิทธิ์จัดการเทมเพลต</p>
                             </div>
 
                             <div className="flex flex-col gap-1">
