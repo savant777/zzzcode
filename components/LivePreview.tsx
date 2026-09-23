@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
+import { previewViewport } from '@/lib/preview-viewport';
 
 const stylesheetLinkRegex = /<link\b(?=[^>]*\brel=(["'])stylesheet\1)(?=[^>]*\bhref=(["'])(.*?)\2)[^>]*>/gi;
 
@@ -17,30 +18,22 @@ export default function LivePreview({ html }: { html: string }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const latestHtmlRef = useRef(html);
-    const observerRef = useRef<MutationObserver | null>(null);
-    const resizeObserverRef = useRef<ResizeObserver | null>(null);
-    const heightFrameRef = useRef<number | null>(null);
-    const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [scale, setScale] = useState(1);
     const [iframeHeight, setIframeHeight] = useState(500);
     const [viewportWidth, setViewportWidth] = useState(1440);
     const [postBodyWidth, setPostBodyWidth] = useState(961);
-    const [containerWidth, setContainerWidth] = useState(0);
 
     useEffect(() => {
         const updateScale = () => {
             if (containerRef.current) {
                 const availableWidth = containerRef.current.offsetWidth;
-                const realViewportWidth = Math.max(window.innerWidth, 1);
-                const nextPostBodyWidth = realViewportWidth < 990 ? 605 : 961;
-                const nextViewportWidth = Math.max(realViewportWidth, nextPostBodyWidth);
-
-                setContainerWidth(availableWidth);
-                setViewportWidth(nextViewportWidth);
-                setPostBodyWidth(nextPostBodyWidth);
-
-                const newScale = Math.min(availableWidth / nextPostBodyWidth, 1);
-                setScale(newScale);
+                const availableHeight = containerRef.current.clientHeight;
+                if (availableWidth <= 0 || availableHeight <= 0) return;
+                const next = previewViewport(window.innerWidth, window.innerHeight, availableWidth, availableHeight);
+                setViewportWidth(next.viewportWidth);
+                setPostBodyWidth(next.postBodyWidth);
+                setScale(next.scale);
+                setIframeHeight(next.iframeHeight);
             }
         };
 
@@ -55,80 +48,6 @@ export default function LivePreview({ html }: { html: string }) {
             window.removeEventListener('resize', updateScale);
         };
     }, []);
-
-    const measureIframeHeight = (doc: Document) => {
-        const body = doc.body;
-        const postBody = doc.querySelector<HTMLElement>('.post_body');
-
-        if (body && postBody) {
-            const bodyStyle = doc.defaultView?.getComputedStyle(body);
-            const bodyPaddingBottom = Number.parseFloat(bodyStyle?.paddingBottom || '0') || 0;
-
-            return Math.ceil(Math.max(
-                postBody.offsetTop + postBody.scrollHeight + bodyPaddingBottom,
-                postBody.offsetTop + postBody.offsetHeight + bodyPaddingBottom,
-                1
-            ));
-        }
-
-        const root = doc.documentElement;
-        return Math.ceil(Math.max(
-            body?.scrollHeight || 0,
-            body?.offsetHeight || 0,
-            root?.scrollHeight || 0,
-            root?.offsetHeight || 0,
-            postBody ? postBody.offsetTop + postBody.scrollHeight : 0,
-            postBody ? postBody.offsetTop + postBody.offsetHeight : 0,
-            1
-        ));
-    };
-
-    const updateIframeHeight = (doc: Document) => {
-        if (heightFrameRef.current) cancelAnimationFrame(heightFrameRef.current);
-
-        heightFrameRef.current = requestAnimationFrame(() => {
-            if (doc.body && doc.documentElement) {
-                setIframeHeight(measureIframeHeight(doc));
-            }
-        });
-    };
-
-    const scheduleHeightRetries = (doc: Document) => {
-        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-
-        const delays = [50, 150, 350, 700, 1200];
-        let index = 0;
-
-        const run = () => {
-            updateIframeHeight(doc);
-            index += 1;
-            if (index < delays.length) {
-                retryTimerRef.current = setTimeout(run, delays[index]);
-            }
-        };
-
-        retryTimerRef.current = setTimeout(run, delays[index]);
-    };
-
-    const watchLateLoadingAssets = (doc: Document) => {
-        const update = () => {
-            updateIframeHeight(doc);
-            scheduleHeightRetries(doc);
-        };
-
-        doc.querySelectorAll<HTMLImageElement>('img').forEach(img => {
-            if (img.complete) return;
-            img.addEventListener('load', update, { once: true });
-            img.addEventListener('error', update, { once: true });
-        });
-
-        doc.head.querySelectorAll<HTMLLinkElement>('link[data-live-preview-stylesheet="true"]').forEach(link => {
-            link.addEventListener('load', update, { once: true });
-            link.addEventListener('error', update, { once: true });
-        });
-
-        doc.fonts?.ready.then(update).catch(() => undefined);
-    };
 
     const updatePreviewHtml = () => {
         const iframe = iframeRef.current;
@@ -158,49 +77,17 @@ export default function LivePreview({ html }: { html: string }) {
         });
 
         postBody.innerHTML = bodyHtml;
-        updateIframeHeight(doc);
-        watchLateLoadingAssets(doc);
-        scheduleHeightRetries(doc);
     };
 
     useEffect(() => {
         const iframe = iframeRef.current;
         if (!iframe) return;
 
-        const handleIframeLoad = () => {
-            const doc = iframe.contentDocument || iframe.contentWindow?.document;
-
-            observerRef.current?.disconnect();
-
-            if (!doc?.body) return;
-
-            resizeObserverRef.current?.disconnect();
-            resizeObserverRef.current = new ResizeObserver(() => updateIframeHeight(doc));
-            resizeObserverRef.current.observe(doc.body);
-            if (doc.documentElement) resizeObserverRef.current.observe(doc.documentElement);
-
-            observerRef.current = new MutationObserver(() => updateIframeHeight(doc));
-            observerRef.current.observe(doc.body, {
-                childList: true,
-                subtree: true,
-                attributes: true
-            });
-
-            updatePreviewHtml();
-        };
-
+        const handleIframeLoad = () => updatePreviewHtml();
         iframe.addEventListener('load', handleIframeLoad);
         handleIframeLoad();
-        
-        return () => {
-            iframe.removeEventListener('load', handleIframeLoad);
-            observerRef.current?.disconnect();
-            resizeObserverRef.current?.disconnect();
-            if (heightFrameRef.current) cancelAnimationFrame(heightFrameRef.current);
-            if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-        };
+        return () => iframe.removeEventListener('load', handleIframeLoad);
     }, []);
-
     useEffect(() => {
         latestHtmlRef.current = html;
         updatePreviewHtml();
@@ -219,6 +106,8 @@ export default function LivePreview({ html }: { html: string }) {
                 min-width: ${viewportWidth}px;
                 margin: 0;
             }
+
+            html { overflow-y: auto; overflow-x: hidden; }
 
             body { 
                 background: #131313;
@@ -319,14 +208,13 @@ export default function LivePreview({ html }: { html: string }) {
     const scaledHeight = iframeHeight * scale;
 
     return (
-        <div ref={containerRef} className="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hide">
+        <div ref={containerRef} className="w-full h-full min-h-0 flex-1 overflow-hidden">
             <div 
                 style={{
                     width: `${scaledWidth}px`,
                     height: `${scaledHeight}px`,
                     margin: '0 auto',
-                    overflow: 'visible',
-                    transition: 'width 0.2s ease-out, height 0.2s ease-out',
+                    overflow: 'hidden',
                 }}
             >
                 <div
@@ -336,16 +224,17 @@ export default function LivePreview({ html }: { html: string }) {
                         overflow: 'hidden',
                         transform: `scale(${scale})`,
                         transformOrigin: 'top left',
-                        transition: 'transform 0.2s ease-out',
                     }}
                 >
                     <iframe
+                        title="Live preview"
                         ref={iframeRef}
                         srcDoc={`<!DOCTYPE html><html><head>${styles}</head><body><div class="post_body scaleimages"></div></body></html>`}
                         style={{
                             width: `${viewportWidth}px`,
                             height: `${iframeHeight}px`,
                             border: 'none',
+                            display: 'block',
                             marginLeft: `-${cropOffset}px`,
                         }}
                     />
