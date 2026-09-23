@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { previewViewport } from '@/lib/preview-viewport';
 
 const stylesheetLinkRegex = /<link\b(?=[^>]*\brel=(["'])stylesheet\1)(?=[^>]*\bhref=(["'])(.*?)\2)[^>]*>/gi;
@@ -23,7 +23,7 @@ export default function LivePreview({ html }: { html: string }) {
     const [viewportWidth, setViewportWidth] = useState(1440);
     const [postBodyWidth, setPostBodyWidth] = useState(961);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const updateScale = () => {
             if (containerRef.current) {
                 const availableWidth = containerRef.current.offsetWidth;
@@ -41,13 +41,24 @@ export default function LivePreview({ html }: { html: string }) {
         if (containerRef.current) observer.observe(containerRef.current);
         
         window.addEventListener('resize', updateScale);
+        window.visualViewport?.addEventListener('resize', updateScale);
+        window.addEventListener('pageshow', updateScale);
         updateScale();
 
         return () => {
             observer.disconnect();
             window.removeEventListener('resize', updateScale);
+            window.visualViewport?.removeEventListener('resize', updateScale);
+            window.removeEventListener('pageshow', updateScale);
         };
     }, []);
+
+    // Keep srcDoc stable while resizing: reloading it races with mobile viewport changes.
+    const postBodyWidthRef = useRef(postBodyWidth);
+    useLayoutEffect(() => {
+        postBodyWidthRef.current = postBodyWidth;
+        iframeRef.current?.contentDocument?.documentElement.style.setProperty('--preview-post-width', postBodyWidth + 'px');
+    }, [postBodyWidth]);
 
     const updatePreviewHtml = () => {
         const iframe = iframeRef.current;
@@ -55,6 +66,7 @@ export default function LivePreview({ html }: { html: string }) {
         const postBody = doc?.querySelector('.post_body');
 
         if (!doc || !postBody) return;
+        doc.documentElement.style.setProperty('--preview-post-width', postBodyWidthRef.current + 'px');
 
         const { bodyHtml, hrefs } = extractStylesheetLinks(latestHtmlRef.current);
         const existingLinks = Array.from(doc.head.querySelectorAll<HTMLLinkElement>('link[data-live-preview-stylesheet="true"]'));
@@ -102,8 +114,8 @@ export default function LivePreview({ html }: { html: string }) {
             
             html,
             body {
-                width: ${viewportWidth}px;
-                min-width: ${viewportWidth}px;
+                width: 100%;
+                min-width: 100%;
                 margin: 0;
             }
 
@@ -119,7 +131,7 @@ export default function LivePreview({ html }: { html: string }) {
             }
 
             .post_body { 
-                width: ${postBodyWidth}px;
+                width: var(--preview-post-width, 605px);
                 padding: 12px 0; 
                 line-height: 1.8; 
                 font-size: 17px; 
@@ -214,31 +226,26 @@ export default function LivePreview({ html }: { html: string }) {
                     width: `${scaledWidth}px`,
                     height: `${scaledHeight}px`,
                     margin: '0 auto',
+                    position: 'relative',
                     overflow: 'hidden',
                 }}
             >
-                <div
+                <iframe
+                    title="Live preview"
+                    ref={iframeRef}
+                    srcDoc={`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${styles}</head><body><div class="post_body scaleimages"></div></body></html>`}
                     style={{
-                        width: `${postBodyWidth}px`,
+                        position: 'absolute',
+                        top: 0,
+                        left: `-${cropOffset * scale}px`,
+                        width: `${viewportWidth}px`,
                         height: `${iframeHeight}px`,
-                        overflow: 'hidden',
+                        border: 'none',
+                        display: 'block',
                         transform: `scale(${scale})`,
                         transformOrigin: 'top left',
                     }}
-                >
-                    <iframe
-                        title="Live preview"
-                        ref={iframeRef}
-                        srcDoc={`<!DOCTYPE html><html><head>${styles}</head><body><div class="post_body scaleimages"></div></body></html>`}
-                        style={{
-                            width: `${viewportWidth}px`,
-                            height: `${iframeHeight}px`,
-                            border: 'none',
-                            display: 'block',
-                            marginLeft: `-${cropOffset}px`,
-                        }}
-                    />
-                </div>
+                />
             </div>
         </div>
     );
