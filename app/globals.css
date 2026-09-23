@@ -83,9 +83,24 @@ h1, h2, h3 {
     }
 }
 
-.zzzcode-card-item:hover .zzzcode-card-image img,
-.zzzcode-list-item:hover .zzzcode-list-image img { 
+.zzzcode-card-item:not([data-inactive="true"]):hover .zzzcode-card-image img,
+.zzzcode-list-item:not([data-inactive="true"]):hover .zzzcode-list-image img {
     scale: 1.05;
+}
+
+.zzzcode-card-item[data-inactive="true"],
+.zzzcode-list-item[data-inactive="true"] {
+    border-color: rgb(128 128 128 / 50%);
+}
+
+[data-inactive="true"] [data-template-actions] button {
+    opacity: 0.5;
+    transition: opacity 150ms, color 150ms, background-color 150ms;
+}
+
+[data-inactive="true"] [data-template-actions] button:not(:disabled):hover,
+[data-inactive="true"] [data-template-actions] button:not(:disabled):focus-visible {
+    opacity: 1;
 }
 
 .zzzcode-tag-btn:hover {

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase';
 import SkeletonNav from '@/components/SkeletonNav';
 import { getGroupSlug } from '@/lib/routes';
@@ -10,9 +10,14 @@ const GROUP_ORDER = ['creators', 'category', 'css', 'style', 'activity', 'human-
 export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
     const [isLoading, setIsLoading] = useState(true);
     const [menuData, setMenuData] = useState<any[]>([]);
-    const [expandedGroup, setExpandedGroup] = useState<string | null>('CATEGORY');
+    const activeGroup = (getGroupSlug(activeFilter?.split(':')[0]) || 'category').toUpperCase();
+    const [expandedGroup, setExpandedGroup] = useState<string | null>(activeGroup);
     
     const router = useRouter();
+
+    useEffect(() => {
+        setExpandedGroup(activeGroup);
+    }, [activeFilter, activeGroup]);
 
     useEffect(() => {
         const fetchMenu = async () => {

@@ -15,9 +15,19 @@ function CreatorBadge({ name }: { name: string }) {
     );
 }
 
-export default function TemplateCard({ item, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onOpenPrivateModal }: any) {
+export default function TemplateCard({ item, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onOpenPrivateModal, onActivate, isActivating }: any) {
     const router = useRouter();
     const visibleTags = visibleTemplateTags(item.template_tags);
+    const inactive = item.is_active === false;
+    if (inactive && !canManage) return null;
+    const contentTone = inactive ? 'grayscale opacity-50' : '';
+    const activateButton = <button type="button" title="Activate Template" aria-label="Activate Template" aria-busy={!!isActivating} disabled={isActivating}
+        onClick={(event) => { event.stopPropagation(); onActivate(); }}
+        className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black focus:bg-(--primary) focus:text-black transition-colors duration-300 cursor-pointer disabled:opacity-50">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true" className={isActivating ? 'animate-spin' : ''}>
+            <path d="M440-122q-121-15-200.5-105.5T160-440q0-66 26-126.5T260-672l57 57q-38 34-57.5 79T240-440q0 88 56 155.5T440-202v80Zm80 0v-80q87-16 143.5-83T720-440q0-100-70-170t-170-70h-3l44 44-56 56-140-140 140-140 56 56-44 44h3q134 0 227 93t93 227q0 121-79.5 211.5T520-122Z" />
+        </svg>
+    </button>;
 
     const routeQuery = new URLSearchParams(templateRoute(visibleTags, activeFilter)).toString();
 
@@ -40,13 +50,13 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
 
     if (viewMode === 'line') {
         return (
-            <div className="zzzcode-list-item border border-(--primary) p-2 bg-(--background) transition-all group relative items-center">
+            <div data-inactive={inactive} className="zzzcode-list-item border border-(--primary) p-2 bg-(--background) transition-all group relative items-center">
                 {/* Preview Image + Orange Filter */}
-                <div className="zzzcode-list-image hidden md:block aspect-square w-full overflow-hidden border border-(--primary)/20 relative">
+                <div className={`zzzcode-list-image hidden md:block aspect-square w-full overflow-hidden border border-(--primary)/20 relative ${contentTone}`}>
                     <CreatorBadge name={creatorName} />
                     <img 
                         src={item.preview_url || '/placeholder.png'} 
-                        className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
+                        className={`w-full h-full object-cover transition-all duration-500 ${inactive ? '' : 'group-hover:scale-105'}`}
                         alt={item.title}
                     />
                 </div>
@@ -54,17 +64,17 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                 {/* Info */}
                 <div className="flex flex-col gap-2 h-full md:py-2 md:pt-1">
                     {/* Name */}
-                    <h3 className="flex-1 md:flex-none content-center md:content-normal text-(--primary) md:text-2xl leading-none uppercase">
+                    <h3 className={`flex-1 md:flex-none content-center md:content-normal text-(--primary) md:text-2xl leading-none uppercase ${contentTone}`}>
                         {item.title}
                     </h3>
 
                     {/* Description */}
-                    <p className="hidden md:block flex-1 text-(--foreground)/75 text-sm leading-tight font-Google-Sans truncate">
+                    <p className={`hidden md:block flex-1 text-(--foreground)/75 text-sm leading-tight font-Google-Sans truncate ${contentTone}`}>
                         {item.description}
                     </p>
 
                     {/* Tags */}
-                    <div className="hidden md:flex flex-wrap gap-1 items-stretch">
+                    <div className={`hidden md:flex flex-wrap gap-1 items-stretch ${contentTone}`}>
                         {visibleTags.map((t: any) => (
                             <button 
                                 key={t.tags.slug}
@@ -74,7 +84,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                                     const tagSlug = t.tags.slug.toLowerCase();
                                     router.push(`/?group=${group}&tag=${tagSlug}`);
                                 }}
-                                className="zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
+                                className={`zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase ${inactive ? '' : 'hover:bg-(--background) hover:text-(--foreground)'} transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap`}
                             >
                                 {t.tags.name}
                             </button>
@@ -83,8 +93,8 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                 </div>
                 
                 {/* Buttons */}
-                <div className="flex flex-wrap gap-1 items-center">
-                    <div className="flex items-center min-w-[28px]">
+                <div data-template-actions className="flex flex-wrap gap-1 items-center">
+                    <div className={`flex items-center min-w-[28px] ${contentTone}`}>
                         {item.is_personal && (
                             <div title="Private Code" className="p-1.5 border border-(--primary)/30 text-(--background) bg-(--primary)">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -118,7 +128,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                                 </svg>
                             </button>
 
-                            <button
+                            {inactive ? activateButton : <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onDelete();
@@ -130,7 +140,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                                     <line x1="18" y1="6" x2="6" y2="18"></line>
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
-                            </button>
+                            </button>}
                         </>
                     )}
                 </div>
@@ -139,28 +149,28 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
     }
     
     return (
-        <div className="zzzcode-card-item border border-(--primary) p-2 bg-(--background) transition-all group relative">
+        <div data-inactive={inactive} className="zzzcode-card-item border border-(--primary) p-2 bg-(--background) transition-all group relative">
             {/* Preview Image + Orange Filter */}
-            <div className="zzzcode-card-image aspect-square w-full overflow-hidden border border-(--primary)/20 relative">
+            <div className={`zzzcode-card-image aspect-square w-full overflow-hidden border border-(--primary)/20 relative ${contentTone}`}>
                 <CreatorBadge name={creatorName} />
                 <img 
                     src={item.preview_url || '/placeholder.png'} 
-                    className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
+                    className={`w-full h-full object-cover transition-all duration-500 ${inactive ? '' : 'group-hover:scale-105'}`}
                     alt={item.title}
                 />
             </div>
             {/* Name */}
-            <h3 className="text-(--primary) text-2xl leading-none uppercase">
+            <h3 className={`text-(--primary) text-2xl leading-none uppercase ${contentTone}`}>
                 {item.title}
             </h3>
 
             {/* Description */}
-            <p className="text-(--foreground)/75 text-sm leading-tight font-Google-Sans min-h-8">
+            <p className={`text-(--foreground)/75 text-sm leading-tight font-Google-Sans min-h-8 ${contentTone}`}>
                 {item.description}
             </p>
 
             {/* Tags */}
-            <div className="flex flex-wrap gap-1 items-stretch">
+            <div className={`flex flex-wrap gap-1 items-stretch ${contentTone}`}>
                 {visibleTags.slice(0, 2).map((t: any) => (
                     <button 
                         key={t.tags.slug}
@@ -170,7 +180,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                             const tagSlug = t.tags.slug.toLowerCase();
                             router.push(`/?group=${group}&tag=${tagSlug}`);
                         }}
-                        className="zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase hover:bg-(--background) hover:text-(--foreground) transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap"
+                        className={`zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase ${inactive ? '' : 'hover:bg-(--background) hover:text-(--foreground)'} transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap`}
                     >
                         {t.tags.name}
                     </button>
@@ -211,8 +221,8 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
             </div>
 
             {/* Buttons */}
-            <div className="flex justify-between items-center">
-                <div className="flex items-center min-w-[28px]">
+            <div data-template-actions className="flex justify-between items-center">
+                <div className={`flex items-center min-w-[28px] ${contentTone}`}>
                     {item.is_personal && (
                         <div title="Private Code" className="p-1.5 border border-(--primary)/30 text-(--background) bg-(--primary)">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -249,7 +259,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                                 </svg>
                             </button>
 
-                            <button
+                            {inactive ? activateButton : <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onDelete();
@@ -261,7 +271,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                                     <line x1="18" y1="6" x2="6" y2="18"></line>
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
-                            </button>
+                            </button>}
                         </>
                     )}
                 </div>

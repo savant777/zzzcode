@@ -200,6 +200,17 @@ TO public
 USING (is_active = true);
 
 DROP POLICY IF EXISTS "Allow Zoe manage templates" ON public.templates;
+-- Creators must still be able to read their own row after deactivation.
+DROP POLICY IF EXISTS "Allow creators read own templates" ON public.templates;
+CREATE POLICY "Allow creators read own templates"
+ON public.templates
+FOR SELECT
+TO authenticated
+USING (
+  user_id = auth.uid()
+  AND public.is_active_creator(auth.uid())
+);
+
 DROP POLICY IF EXISTS "Allow creators insert own templates" ON public.templates;
 CREATE POLICY "Allow creators insert own templates"
 ON public.templates
@@ -262,6 +273,19 @@ USING (
 );
 
 DROP POLICY IF EXISTS "Allow Zoe manage template_tags" ON public.template_tags;
+DROP POLICY IF EXISTS "Allow creators read own template_tags" ON public.template_tags;
+CREATE POLICY "Allow creators read own template_tags"
+ON public.template_tags
+FOR SELECT
+TO authenticated
+USING (
+  public.is_active_creator(auth.uid())
+  AND EXISTS (
+    SELECT 1 FROM public.templates t
+    WHERE t.id = template_tags.template_id AND t.user_id = auth.uid()
+  )
+);
+
 DROP POLICY IF EXISTS "Allow creators manage own template_tags" ON public.template_tags;
 CREATE POLICY "Allow creators manage own template_tags"
 ON public.template_tags

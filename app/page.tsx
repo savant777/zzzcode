@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { CreatorSession, canManageTemplate, getCurrentCreator } from '@/lib/creator';
 import { getGroupSlug } from '@/lib/routes';
 import { templateRoute, visibleTemplateTags } from '@/lib/template-tags';
+import { isTemplateUnlocked, rememberTemplateUnlock } from '@/lib/template-unlock';
+import { deactivateTemplate, setTemplateActive } from '@/lib/template-actions';
 import { toast } from 'sonner';
 
 // Components
@@ -53,6 +55,8 @@ function Dashboard() {
     const [modalType, setModalType] = useState<'delete' | 'private' | null>(null);
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [password, setPassword] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [activatingId, setActivatingId] = useState<string | null>(null);
     
     // --- 2. Effects ---
     useEffect(() => {
@@ -65,7 +69,6 @@ function Dashboard() {
                 supabase
                 .from('templates')
                 .select(`*, template_tags(tags(*, tag_groups(name)))`)
-                .eq('is_active', true)
                     .order('id', { ascending: false }),
                 supabase
                     .from('creators')
@@ -73,7 +76,7 @@ function Dashboard() {
                     .eq('is_active', true)
             ]);
 
-            if (data) setTemplates(data.map(item => ({
+            if (data) setTemplates(data.filter(item => item.is_active === true || canManageTemplate(session, item.user_id)).map(item => ({
                 ...item,
                 template_tags: visibleTemplateTags(item.template_tags),
             })));
@@ -159,21 +162,35 @@ function Dashboard() {
     };
 
     const closeModal = () => {
+        if (isDeleting) return;
         setModalType(null);
         setSelectedItem(null);
         setPassword('');
     };
 
-    const handleUnlockPrivate = (e: React.FormEvent) => {
+    const handleOpenPrivate = async (item: any) => {
+        if (await isTemplateUnlocked(String(item.id), item.password)) {
+            const query = new URLSearchParams(templateRoute(item.template_tags, activeFilter));
+            router.push(`/editor/${item.id}?${query}`);
+            return;
+        }
+        setSelectedItem(item);
+        setPassword('');
+        setModalType('private');
+    };
+
+    const handleUnlockPrivate = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!selectedItem) return;
         const toastId = toast.loading("SYSTEM: Verifying_Access_Key...");
 
         const routeQuery = new URLSearchParams(templateRoute(selectedItem.template_tags, activeFilter)).toString();
         
         if (password === selectedItem?.password) {
-            sessionStorage.setItem(`unlocked_${selectedItem.id}`, 'true');
+            const persisted = await rememberTemplateUnlock(String(selectedItem.id), password);
 
             toast.success(`ACCESS_GRANTED: DECRYPT_SUCCESS`, { id: toastId });
+            if (!persisted) toast.info('เปิดเทมเพลตได้แล้ว แต่เบราว์เซอร์ไม่สามารถจำการปลดล็อกไว้ถาวรได้');
             closeModal();
             setTimeout(() => {
                 router.push(`/editor/${selectedItem.id}?${routeQuery}`);
@@ -185,27 +202,44 @@ function Dashboard() {
     };
 
     const handleDelete = async () => {
-        if (!selectedItem) return;
+        if (!selectedItem || isDeleting) return;
+        const item = selectedItem;
         const toastId = toast.loading("SYSTEM: De-activating_Module...");
-        
-        setIsLoading(true);
+        setIsDeleting(true);
         try {
-            const { error } = await supabase
-                .from('templates')
-                .update({ is_active: false })
-                .eq('id', selectedItem.id);
-
-            if (error) {
-                toast.error(`DELETE_ERROR: ${error.message}`, { id: toastId });
-            } else {
-                toast.success(`MODULE_${selectedItem?.id}_DEACTIVATED`, { id: toastId });
-                setTemplates(prev => prev.filter(t => t.id !== selectedItem.id));
-                closeModal();
+            const session = await getCurrentCreator();
+            setCreatorSession(session);
+            if (!canManageTemplate(session, item.user_id)) {
+                throw new Error('คุณไม่มีสิทธิ์ลบเทมเพลตนี้ หรือเซสชันหมดอายุแล้ว');
             }
+            await deactivateTemplate(supabase, item.id);
+            toast.success(`MODULE_${item.id}_DEACTIVATED`, { id: toastId });
+            setTemplates(prev => prev.map(t => t.id === item.id ? { ...t, is_active: false } : t));
+            setModalType(null);
+            setSelectedItem(null);
+            setPassword('');
         } catch (err: any) {
-            console.error("Unexpected error during deletion:", err);
+            toast.error(`DELETE_ERROR: ${err.message || 'ลบเทมเพลตไม่สำเร็จ'}`, { id: toastId });
         } finally {
-            setIsLoading(false);
+            setIsDeleting(false);
+        }
+    };
+
+    const handleActivate = async (item: any) => {
+        if (activatingId) return;
+        setActivatingId(String(item.id));
+        const toastId = toast.loading('กำลังเปิดใช้งานเทมเพลต...');
+        try {
+            const session = await getCurrentCreator();
+            setCreatorSession(session);
+            if (!canManageTemplate(session, item.user_id)) throw new Error('คุณไม่มีสิทธิ์แก้ไขเทมเพลตนี้');
+            await setTemplateActive(supabase, item.id, true);
+            setTemplates(prev => prev.map(t => t.id === item.id ? { ...t, is_active: true } : t));
+            toast.success('เปิดใช้งานเทมเพลตแล้ว', { id: toastId });
+        } catch (error: any) {
+            toast.error(error.message || 'เปิดใช้งานไม่สำเร็จ', { id: toastId });
+        } finally {
+            setActivatingId(null);
         }
     };
 
@@ -318,10 +352,9 @@ function Dashboard() {
                                             setSelectedItem(item);
                                             setModalType('delete');
                                         }}
-                                        onOpenPrivateModal={(selectedItem: any) => {
-                                            setSelectedItem(selectedItem);
-                                            setModalType('private');
-                                        }}
+                                        onOpenPrivateModal={handleOpenPrivate}
+                                        onActivate={() => handleActivate(item)}
+                                        isActivating={activatingId === String(item.id)}
                                     />
                                 ))
                             )}
@@ -361,17 +394,18 @@ function Dashboard() {
 
                         <div className="flex gap-2 pt-2">
                             <button 
-                                onClick={() => setModalType(null)}
+                                onClick={closeModal}
+                                disabled={isDeleting}
                                 className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors"
                             >
                                 Abort
                             </button>
                             <button 
                                 onClick={handleDelete}
-                                disabled={isLoading}
+                                disabled={isDeleting}
                                 className="cursor-pointer flex-1 py-2 bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-500 transition-all disabled:opacity-50"
                             >
-                                {isLoading ? 'Processing...' : 'Confirm_Delete'}
+                                {isDeleting ? 'Processing...' : 'Confirm_Delete'}
                             </button>
                         </div>
                     </div>

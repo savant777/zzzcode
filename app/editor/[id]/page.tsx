@@ -9,6 +9,7 @@ import { FieldConfig, defaultGradientValue, generateFinalHTML, getSelectDefaultV
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { templateRoute } from '@/lib/template-tags';
+import { isTemplateUnlocked } from '@/lib/template-unlock';
 import FieldRenderer from '@/components/FieldRenderer';
 import LivePreview from '@/components/LivePreview';
 import { localCopyKey, readLocalCopy, saveLocalCopy, type LocalDraftCopy } from '@/lib/editor-local-copy';
@@ -492,8 +493,8 @@ export default function EditorPage() {
                     }
                     templatePasswordRef.current = template.is_personal ? template.password : undefined;
                     if (template.is_personal) {
-                        const isUnlocked = sessionStorage.getItem(`unlocked_${templateId}`);
-                        if (remote) sessionStorage.setItem(`unlocked_${templateId}`, 'true');
+                        const isUnlocked = await isTemplateUnlocked(String(templateId), template.password);
+                        if (cancelled) return;
                         if (!isUnlocked && !remote) {
                             toast.error("ERROR_ACCESS_DENIED: AUTHENTICATION_REQUIRED", {
                                 duration: 4000,

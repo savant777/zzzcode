@@ -135,4 +135,43 @@ for (const [group, slug, title] of [
         assert.ok(html.includes(`href="/?group=${group}&amp;tag=${slug}"`));
     }
 }
-console.log('Template tags, both card layouts, route fallbacks and breadcrumb links passed.');
+for (const viewMode of ['line', 'grid']) {
+    let activated = false;
+    const props = { item: { id: 42, is_active: false, title: 'Inactive Template', template_tags: [] },
+        viewMode, canManage: true, onActivate: () => { activated = true; } };
+    const html = renderToStaticMarkup(React.createElement(TemplateCard, props));
+    assert.ok(html.includes('opacity-50'));
+    assert.ok(!html.includes('INACTIVE'));
+    assert.ok(html.includes('Activate Template'));
+    const card = TemplateCard(props);
+    assert.ok(!card.props.className.includes('grayscale'));
+    assert.ok(!card.props.className.includes('opacity-50'));
+    assert.equal(card.props['data-inactive'], true);
+    assert.ok(!card.props.className.includes('hover:opacity'));
+    assert.ok(!card.props.className.includes('focus-within:opacity'));
+    assert.ok(!html.includes('group-hover:scale-105'));
+    const activateIcon = findButton(card, 'Activate Template').props.children;
+    assert.equal(activateIcon.type, 'svg');
+    assert.equal(activateIcon.props.width, '14');
+    assert.equal(activateIcon.props.height, '14');
+    assert.equal(activateIcon.props.fill, 'currentColor');
+    const taggedHtml = renderToStaticMarkup(React.createElement(TemplateCard, {
+        ...props,
+        item: { ...props.item, template_tags: [1, 2, 3, 4].map(id => ({ tags: {
+            slug: `tag-${id}`, name: `Tag ${id}`, is_active: true, tag_groups: { name: 'category' },
+        } })) },
+    }));
+    assert.equal((taggedHtml.match(/zzzcode-tag-btn/g) || []).length, viewMode === 'grid' ? 2 : 4);
+    if (viewMode === 'grid') assert.ok(taggedHtml.includes('zzzcode-tooltip-btn'));
+    assert.ok(findButton(card, 'Edit Template'));
+    assert.ok(findButton(card, 'Use Template'));
+    assert.equal(findButton(card, 'Delete / Deactivate'), undefined);
+    findButton(card, 'Activate Template').props.onClick({ stopPropagation() {} });
+    assert.equal(activated, true);
+    assert.equal(findButton(TemplateCard({ ...props, isActivating: true }), 'Activate Template').props.disabled, true);
+    assert.equal(renderToStaticMarkup(React.createElement(TemplateCard, { ...props, canManage: false })), '');
+    const restored = TemplateCard({ ...props, item: { ...props.item, is_active: true } });
+    assert.ok(findButton(restored, 'Delete / Deactivate'));
+    assert.equal(findButton(restored, 'Activate Template'), undefined);
+}
+console.log('Template tags, card layouts, inactive controls and breadcrumb links passed.');
