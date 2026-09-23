@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { CreatorSession, getCurrentCreator } from '@/lib/creator';
+import { recordAuthEvent } from '@/lib/auth-diagnostics';
 import TypingHeader from './TypingHeader';
 import Modal from './Modal';
 
@@ -29,74 +30,73 @@ function MenuLabel({ symbol, label, flipSymbol = false }: { symbol: string; labe
 
 export default function MainHeader() {
     const pathname = usePathname();
-    const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
     const [creatorSession, setCreatorSession] = useState<CreatorSession | null>(null);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [modalType, setModalType] = useState<'login' | 'logout' | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const loadCreatorSession = useCallback(async () => {
-        // The onboarding page owns the auth lifecycle while a new creator is
-        // being created. Checking access here can race with the OAuth callback
-        // and sign the user out before the profile form is submitted.
-        if (pathname === '/creator/signin') {
-            setCreatorSession(null);
-            setIsLoading(false);
-            return;
-        }
-
-        const session = await getCurrentCreator();
-
-        if (session.user && !session.isCreator) {
-            const { data: { session: authSession } } = await supabase.auth.getSession();
-
-            if (authSession?.access_token) {
-                try {
-                    const cleanupResponse = await fetch('/api/creator/auth/cleanup', {
-                        method: 'POST',
-                        headers: {
-                            Authorization: `Bearer ${authSession.access_token}`,
-                        },
-                    });
-
-                    if (!cleanupResponse.ok) {
-                        console.error('Unauthorized auth user cleanup failed:', cleanupResponse.status);
-                    }
-                } catch (error) {
-                    console.error('Unauthorized auth user cleanup failed:', error);
-                }
-            }
-
-            await supabase.auth.signOut();
-            setCreatorSession(null);
-            setIsLoading(false);
-            toast.error("CREATOR_ACCESS_DENIED: DISCORD_ID_NOT_LINKED");
-            router.replace('/?group=category&tag=all');
-            return;
-        }
-
-        setCreatorSession(session);
-        setIsLoading(false);
-    }, [pathname, router]);
+    const [authNotice, setAuthNotice] = useState<string | null>(null);
+    const requestVersion = useRef(0);
 
     useEffect(() => {
-        loadCreatorSession();
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-            // Supabase advises against awaiting another auth operation inside
-            // this callback. Deferring avoids locking/racing the auth client.
-            setTimeout(() => {
-                void loadCreatorSession();
-            }, 0);
+        let disposed = false;
+        let scheduled: ReturnType<typeof setTimeout> | undefined;
+        let retryCount = 0;
+        const load = async () => {
+            const version = ++requestVersion.current;
+            if (pathname === '/creator/signin') {
+                setIsLoading(false);
+                setAuthNotice(null);
+                return;
+            }
+            const session = await getCurrentCreator();
+            if (disposed || version !== requestVersion.current) return;
+            if (session.checkFailed) {
+                recordAuthEvent('CHECK_UNAVAILABLE');
+                setAuthNotice('ตรวจสอบการล็อกอินไม่ได้ชั่วคราว งานในหน้านี้ยังอยู่ กรุณาตรวจการเชื่อมต่อแล้วลองใหม่');
+                setIsLoading(false);
+                if (retryCount++ < 2) scheduled = setTimeout(load, 3000);
+                return;
+            }
+            retryCount = 0;
+            setCreatorSession(session);
+            setIsLoading(false);
+            if (session.user && !session.isCreator) {
+                recordAuthEvent('CREATOR_ACCESS_DENIED');
+                setAuthNotice('บัญชีนี้ไม่มีสิทธิ์ครีเอเตอร์ กรุณาติดต่อเจ้าของเว็บไซต์ งานในหน้านี้ยังอยู่');
+            } else if (!session.user && (pathname === '/create' || pathname.startsWith('/edit/'))) {
+                recordAuthEvent('SESSION_MISSING');
+                window.dispatchEvent(new Event('zzzcode-save-draft'));
+                setAuthNotice('เซสชันสิ้นสุดแล้ว กรุณาล็อกอินใหม่ก่อนบันทึกเทมเพลต');
+            } else {
+                setAuthNotice(null);
+            }
+        };
+        const schedule = () => {
+            ++requestVersion.current;
+            clearTimeout(scheduled);
+            scheduled = setTimeout(load, 0);
+        };
+        void load();
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            recordAuthEvent(event);
+            if (event === 'SIGNED_OUT') setCreatorSession(null);
+            schedule();
         });
-
-        return () => subscription.unsubscribe();
-    }, [loadCreatorSession]);
-
+        window.addEventListener('online', schedule);
+        return () => {
+            disposed = true;
+            ++requestVersion.current;
+            clearTimeout(scheduled);
+            subscription.unsubscribe();
+            window.removeEventListener('online', schedule);
+        };
+    }, [pathname]);
     const isCreator = !!creatorSession?.isCreator;
 
     const handleLogin = async () => {
+        window.dispatchEvent(new Event('zzzcode-save-draft'));
         setLoading(true);
 
         try {
@@ -120,7 +120,13 @@ export default function MainHeader() {
 
     const handleLogout = async () => {
         setLoading(true);
-        await supabase.auth.signOut();
+        window.dispatchEvent(new Event('zzzcode-save-draft'));
+        const { error } = await supabase.auth.signOut({ scope: 'local' });
+        if (error) {
+            toast.error('LOGOUT_FAILED: Please try again.');
+            setLoading(false);
+            return;
+        }
         window.location.reload();
     };
 
@@ -129,6 +135,13 @@ export default function MainHeader() {
     return (
         <header className="header-grid-area relative flex items-center gap-3 p-2 border-b border-(--primary) text-(--primary) bg-(--background)">
             <TypingHeader text="zzzcode editor" speed={100} />
+            {authNotice && <div role="status" className="absolute top-full inset-x-0 z-50 border border-amber-500 bg-(--background) p-2 text-xs text-amber-300">
+                {authNotice}{' '}
+                <button className="underline cursor-pointer" onClick={() => {
+                    window.dispatchEvent(new Event('zzzcode-save-draft'));
+                    window.location.reload();
+                }}>ตรวจสอบอีกครั้ง</button>
+            </div>}
 
             {!isLoading && (
                 <div className="ml-auto flex items-center justify-end animate-in fade-in duration-300 font-Google-Code text-xs uppercase">

@@ -42,6 +42,13 @@ export default function CreatorSignInPage() {
     useEffect(() => {
         const initSignIn = async () => {
             const session = await getCurrentCreator();
+            if (session.checkFailed) {
+                toast.error('SESSION_CHECK_FAILED: Please retry. Locally saved drafts are still available.', {
+                    id: 'creator-session-check', duration: Infinity,
+                    action: { label: 'Retry', onClick: () => window.location.reload() },
+                });
+                return;
+            }
 
             if (session.isCreator) {
                 router.replace('/?group=category&tag=all');
@@ -53,7 +60,7 @@ export default function CreatorSignInPage() {
                 const accessToken = await getAccessToken();
 
                 if (!inviteVerified) {
-                    await supabase.auth.signOut();
+                    await supabase.auth.signOut({ scope: 'local' });
                     toast.error("INVITE_CODE_REQUIRED");
                     router.replace('/?group=category&tag=all');
                     return;

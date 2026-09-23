@@ -16,6 +16,7 @@ export type CreatorProfile = {
 };
 
 export type CreatorSession = {
+    checkFailed?: boolean;
     user: User | null;
     creator: CreatorProfile | null;
     isCreator: boolean;
@@ -87,33 +88,40 @@ const syncDiscordIdentity = async (user: User, creator: CreatorProfile) => {
 };
 
 export const getCurrentCreator = async (): Promise<CreatorSession> => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const unavailable = { user: null, creator: null, isCreator: false, isOwner: false, checkFailed: true };
+    try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError && userError.name !== 'AuthSessionMissingError') return unavailable;
 
-    if (!user) {
+        if (!user) {
+            return {
+                user: null,
+                creator: null,
+                isCreator: false,
+                isOwner: false,
+            };
+        }
+
+        const { data: creator, error: creatorError } = await supabase
+            .from('creators')
+            .select('user_id, discord_id, discord_username, display_name, slug, role, is_active, created_at, updated_at')
+            .eq('user_id', user.id)
+            .maybeSingle();
+        if (creatorError) return { ...unavailable, user };
+
+        const activeCreator = creator?.is_active
+            ? await syncDiscordIdentity(user, creator as CreatorProfile)
+            : null;
+
         return {
-            user: null,
-            creator: null,
-            isCreator: false,
-            isOwner: false,
+            user,
+            creator: activeCreator,
+            isCreator: !!activeCreator,
+            isOwner: activeCreator?.role === 'owner',
         };
+    } catch {
+        return unavailable;
     }
-
-    const { data: creator } = await supabase
-        .from('creators')
-        .select('user_id, discord_id, discord_username, display_name, slug, role, is_active, created_at, updated_at')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-    const activeCreator = creator?.is_active
-        ? await syncDiscordIdentity(user, creator as CreatorProfile)
-        : null;
-
-    return {
-        user,
-        creator: activeCreator,
-        isCreator: !!activeCreator,
-        isOwner: activeCreator?.role === 'owner',
-    };
 };
 
 export const canManageTemplate = (

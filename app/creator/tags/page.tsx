@@ -211,6 +211,13 @@ export default function ManageTagsPage() {
 
     const loadTags = async () => {
         const session = await requireCreator();
+        if (session.checkFailed) {
+            toast.error('SESSION_CHECK_FAILED: Please retry. Locally saved drafts are still available.', {
+                id: 'creator-session-check', duration: Infinity,
+                action: { label: 'Retry', onClick: () => window.location.reload() },
+            });
+            return;
+        }
 
         if (!session.user) {
             toast.error("ERROR_ACCESS_DENIED: LOGIN_REQUIRED");

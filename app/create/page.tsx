@@ -13,6 +13,7 @@ import BlueprintGuide from '@/components/BlueprintGuide';
 import TemplateBlockContainer from '@/components/TemplateBlockContainer';
 import { CreatorSession, requireCreator } from '@/lib/creator';
 import { getGroupSlug, PRIMARY_ROUTE_GROUPS, sortTagsByGroup } from '@/lib/routes';
+import { useTemplateDraft } from '@/lib/use-template-draft';
 import { tagsWithCreatorCredit } from '@/lib/creator-credit';
 import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
 
@@ -111,6 +112,13 @@ export default function AddTemplatePage() {
         const initAddPage = async () => {
             setIsCheckingAuth(true);
             const session = await requireCreator();
+            if (session.checkFailed) {
+                toast.error('SESSION_CHECK_FAILED: Please retry. Locally saved drafts are still available.', {
+                    id: 'creator-session-check', duration: Infinity,
+                    action: { label: 'Retry', onClick: () => window.location.reload() },
+                });
+                return;
+            }
 
             if (!session.user) {
                 toast.error("ERROR_ACCESS_DENIED: LOGIN_REQUIRED");
@@ -200,18 +208,9 @@ export default function AddTemplatePage() {
         return () => clearTimeout(timer);
     }, [formData.html_blueprint]);
 
-    // Auto-Save Draft (Debounced 2s)
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (skipDraftSaveRef.current) return;
-
-            if (formData.title || formData.html_blueprint) {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ formData, fields, selectedTags, creditOverride }));
-            }
-        }, 2000);
-        return () => clearTimeout(timer);
-    }, [formData, fields, selectedTags, creditOverride]);
-
+    const draftPayload = useMemo(() => ({ formData, fields, selectedTags, creditOverride }), [formData, fields, selectedTags, creditOverride]);
+    useTemplateDraft(STORAGE_KEY, draftPayload,
+        !isCheckingAuth && !!(formData.title || formData.html_blueprint), skipDraftSaveRef);
     // --- 4. Handlers ---
 
     // drag and drop to re-order block
@@ -253,10 +252,16 @@ export default function AddTemplatePage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        skipDraftSaveRef.current = true;
+
         const toastId = toast.loading("SYSTEM: Syncing_Module...");
 
         try {
+            window.dispatchEvent(new Event('zzzcode-save-draft'));
+            const creatorSession = await requireCreator();
+            if (creatorSession.checkFailed) {
+                throw new Error('Unable to verify your session. Please try saving again. Locally saved drafts are still available.');
+            }
+            setCreatorSession(creatorSession);
             if (!creatorSession?.user || !creatorSession.isCreator) {
                 throw new Error("CREATOR_SESSION_REQUIRED");
             }
@@ -322,6 +327,7 @@ export default function AddTemplatePage() {
                 }
             }
 
+            skipDraftSaveRef.current = true;
             localStorage.removeItem(STORAGE_KEY);
             toast.success("PROTOCOL_SUCCESS", { id: toastId });
             router.push(`/edit/${templateData.id}?group=${targetGroup}&tag=${targetTag}`);
@@ -335,6 +341,7 @@ export default function AddTemplatePage() {
 
     // onclick clear draft button
     const handleClearDraft = () => {
+        skipDraftSaveRef.current = true;
         localStorage.removeItem(STORAGE_KEY);
         window.location.reload();
     };

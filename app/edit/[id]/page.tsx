@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { templateRoute, templateTagChanges } from '@/lib/template-tags';
 import { getGroupSlug, sortTagsByGroup } from '@/lib/routes';
+import { useTemplateDraft } from '@/lib/use-template-draft';
 import { creatorCreditChanges } from '@/lib/creator-credit';
 import { toast } from 'sonner';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -73,6 +74,7 @@ export default function EditTemplatePage() {
     const [creatorSession, setCreatorSession] = useState<CreatorSession | null>(null);
     const [templateOwnerId, setTemplateOwnerId] = useState<string | null>(null);
     const [availableTags, setAvailableTags] = useState<any[]>([]);
+    const skipDraftSaveRef = useRef(false);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [creditOptions, setCreditOptions] = useState<{ id: string; name: string }[]>([]);
     const [currentCredit, setCurrentCredit] = useState<{ id: string; name: string } | null>(null);
@@ -141,6 +143,13 @@ export default function EditTemplatePage() {
         const initEditPage = async () => {
             setLoading(true);
             const session = await requireCreator();
+            if (session.checkFailed) {
+                toast.error('SESSION_CHECK_FAILED: Please retry. Locally saved drafts are still available.', {
+                    id: 'creator-session-check', duration: Infinity,
+                    action: { label: 'Retry', onClick: () => window.location.reload() },
+                });
+                return;
+            }
 
             if (!session.user) {
                 toast.error("ERROR_ACCESS_DENIED: LOGIN_REQUIRED");
@@ -235,15 +244,9 @@ export default function EditTemplatePage() {
         return () => clearTimeout(timer);
     }, [formData.html_blueprint]);
     
-    // Auto-Save Draft (Debounced 2s)
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (formData.title || formData.html_blueprint) {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ templateId, formData, fields, selectedTags, creditOverride }));
-            }
-        }, 2000);
-        return () => clearTimeout(timer);
-    }, [formData, fields, selectedTags, creditOverride]);
+    const draftPayload = useMemo(() => ({ templateId, formData, fields, selectedTags, creditOverride }), [templateId, formData, fields, selectedTags, creditOverride]);
+    useTemplateDraft(STORAGE_KEY, draftPayload,
+        !loading && !!(formData.title || formData.html_blueprint), skipDraftSaveRef);
 
     const getFirstValue = (optionsString: string) => {
         const firstOption = optionsString.split('/')[0]?.trim();
@@ -318,6 +321,12 @@ export default function EditTemplatePage() {
         const toastId = toast.loading("SYSTEM: Updating_Module...");
 
         try {
+            window.dispatchEvent(new Event('zzzcode-save-draft'));
+            const creatorSession = await requireCreator();
+            if (creatorSession.checkFailed) {
+                throw new Error('Unable to verify your session. Please try saving again. Locally saved drafts are still available.');
+            }
+            setCreatorSession(creatorSession);
             if (!creatorSession || !canManageTemplate(creatorSession, templateOwnerId)) {
                 throw new Error("TEMPLATE_OWNER_REQUIRED");
             }
@@ -384,6 +393,7 @@ export default function EditTemplatePage() {
                 if (tagError) throw tagError;
             }
 
+            skipDraftSaveRef.current = true;
             localStorage.removeItem(STORAGE_KEY);
 
             toast.success("PROTOCOL_SUCCESS: MODULE_UPDATED", { id: toastId });
@@ -392,12 +402,14 @@ export default function EditTemplatePage() {
             router.refresh();
 
         } catch (error: any) {
+            skipDraftSaveRef.current = false;
             toast.error(`CRITICAL_ERROR: ${error.message}`, { id: toastId });
         }
     };
 
     // onclick clear draft button
     const handleClearDraft = () => {
+        skipDraftSaveRef.current = true;
         localStorage.removeItem(STORAGE_KEY);
         window.location.reload();
     };
