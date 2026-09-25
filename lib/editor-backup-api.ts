@@ -21,14 +21,15 @@ async function canManageTemplate(request: Request, db: SupabaseClient, userId: s
     return !!creator?.is_active && (creator.role === 'owner' || userId === auth.user.id);
 }
 
-async function authorizeTemplate(request: Request, db: SupabaseClient, id: string, credential: TemplateCredential) {
+async function authorizeTemplate(request: Request, db: SupabaseClient, id: string, credential: TemplateCredential, allowManagerBypass = true) {
     const { data, error } = await db.from('templates')
         .select('id,is_personal,is_active,user_id').eq('id', id).maybeSingle();
     if (error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
     if (!data) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
     if (data.is_active !== true || data.is_personal === true) {
-        if (await canManageTemplate(request, db, data.user_id)) return;
-        if (data.is_active !== true) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
+        const manager = await canManageTemplate(request, db, data.user_id);
+        if (manager && allowManagerBypass) return;
+        if (data.is_active !== true && !manager) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
     }
     if (data.is_personal !== true) return;
     // Backup links are access credentials. Both ID and secret must match this template.
@@ -58,7 +59,8 @@ export async function handleTemplateRequest(request: Request, operation: 'unlock
         const id = templateId(body.templateId);
         const fingerprint = typeof body.password === 'string'
             ? digest(JSON.stringify([id, body.password])) : body.fingerprint;
-        await authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup });
+        // An explicit password check must validate the credential even for owners.
+        await authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup }, operation !== 'unlock');
         if (operation === 'unlock') return response({ unlocked: true });
         const { data, error } = await deps.db.from('templates')
             .select('id,title,description,is_personal,supports_multiple_drafts,html_blueprint,fields_config,template_tags(tags(slug,is_active,tag_groups(name)))')

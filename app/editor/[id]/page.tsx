@@ -279,6 +279,7 @@ export default function EditorPage() {
     currentTemplateRef.current = templateId;
     const [backupLinkCopied, setBackupLinkCopied] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [renameDraftName, setRenameDraftName] = useState('');
 
     const [formData, setFormData] = useState({
@@ -393,6 +394,7 @@ export default function EditorPage() {
         let cancelled = false;
         const initEditorPage = async () => {
             setLoading(true);
+            setLoadError(null);
             if (templateId) {
                 const fingerprint = await getRememberedTemplateUnlock(String(templateId));
                 let backupCredential: { id: string; token: string } | undefined;
@@ -420,9 +422,17 @@ export default function EditorPage() {
                     if (!result.ok) throw new Error(result.status === 429
                         ? 'Too many requests. Please try again later.' : 'Unable to load template. Please retry.');
                     template = (await result.json()).template;
+                    if (!template || typeof template.html_blueprint !== 'string' || !Array.isArray(template.fields_config)) {
+                        throw new Error('Template data is incomplete. Please retry or contact the template creator.');
+                    }
+                    if (!template.html_blueprint.trim() && template.fields_config.length === 0) {
+                        throw new Error('This template has no code or input fields yet. Please contact the template creator.');
+                    }
                 } catch (error) {
                     if (cancelled) return;
-                    toast.error(error instanceof Error ? error.message : 'Unable to load template.', {
+                    const message = error instanceof Error ? error.message : 'Unable to load template.';
+                    setLoadError(message);
+                    toast.error(message, {
                         duration: Infinity, action: { label: 'Retry', onClick: () => window.location.reload() },
                     });
                     return;
@@ -1145,8 +1155,9 @@ export default function EditorPage() {
                 </div>
 
                 <div className="flex-1 lg:flex overflow-y-auto lg:overflow-hidden px-4 mb-4 scrollbar-hide">
-                    <div className="min-h-full flex-1 flex items-center justify-center border border-dashed border-(--primary)/10 text-[10px] opacity-20 uppercase tracking-widest select-none">
-                        Fetching_Stored_Data...
+                    <div role={loadError ? 'alert' : 'status'} className="min-h-full flex-1 flex flex-col gap-4 items-center justify-center border border-dashed border-(--primary)/20 text-xs tracking-widest p-4 text-center">
+                        <span className={loadError ? 'text-(--foreground)/75' : 'opacity-20 uppercase'}>{loadError || 'Fetching_Stored_Data...'}</span>
+                        {loadError && <button type="button" onClick={() => window.location.reload()} className="border border-(--primary)/50 px-4 py-2 text-(--primary) hover:bg-(--primary) hover:text-black cursor-pointer">RETRY</button>}
                     </div>
                 </div>
             </div>

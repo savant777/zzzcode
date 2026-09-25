@@ -78,10 +78,14 @@ async function run() {
     assert.equal((await check({ password }, {}, 'read')).status, 403);
     const auth = { authorization: 'Bearer valid-session' };
     assert.equal((await check({}, auth, 'read')).status, 200, 'Creator can open their inactive template');
+    assert.equal((await check({ password: 'wrong' }, auth)).status, 403, 'Creator must not validate an incorrect password');
+    assert.equal((await check({ fingerprint: remembered }, auth)).status, 403, 'Creator must not validate stale remembered credentials');
+    assert.equal((await check({ password }, auth)).status, 200);
     row.user_id = 'someone-else';
     assert.equal((await check({}, auth, 'read')).status, 403);
     role = 'owner';
     assert.equal((await check({}, auth, 'read')).status, 200);
+    assert.equal((await check({ password: 'wrong' }, auth)).status, 403, 'Owner must not validate an incorrect password');
     activeCreator = false;
     assert.equal((await check({}, auth, 'read')).status, 403);
     assert.equal((await check({}, { authorization: 'Bearer forged' }, 'read')).status, 403);

@@ -205,11 +205,6 @@ function Dashboard() {
     };
 
     const handleOpenPrivate = async (item: any) => {
-        if (creatorSession && canManageTemplate(creatorSession, item.user_id)) {
-            const query = new URLSearchParams(templateRoute(item.template_tags, activeFilter));
-            router.push(`/editor/${item.id}?${query}`);
-            return;
-        }
         const remembered = await getRememberedTemplateUnlock(String(item.id));
         let unlocked = false;
         try {
