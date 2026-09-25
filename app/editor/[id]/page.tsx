@@ -9,7 +9,7 @@ import { FieldConfig, generateFinalHTML, normalizeFieldConfig } from '@/lib/temp
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { templateRoute } from '@/lib/template-tags';
-import { isTemplateUnlocked } from '@/lib/template-unlock';
+import { getRememberedTemplateUnlock } from '@/lib/template-unlock';
 import { getDefaultValue } from '@/lib/field-defaults';
 import { defaultBlockCount } from '@/lib/block-defaults';
 import { BBCODE_HEIGHTS, getBBCodeHeights, updateBBCodeHeight } from '@/lib/bbcode-height';
@@ -274,7 +274,7 @@ export default function EditorPage() {
     const [backupReady, setBackupReady] = useState(false);
     const [conflictRevision, setConflictRevision] = useState<number | null>(null);
     const backupBusyRef = useRef(false);
-    const templatePasswordRef = useRef<string | undefined>(undefined);
+    const templateAccessRef = useRef<{ fingerprint?: string; backup?: { id: string; token: string } }>({});
     const currentTemplateRef = useRef(templateId);
     currentTemplateRef.current = templateId;
     const [backupLinkCopied, setBackupLinkCopied] = useState(false);
@@ -394,7 +394,39 @@ export default function EditorPage() {
         const initEditorPage = async () => {
             setLoading(true);
             if (templateId) {
-                const { data: template } = await supabase.from('templates').select('*, template_tags(tags(slug, is_active, tag_groups(name)))').eq('id', templateId).single();
+                const fingerprint = await getRememberedTemplateUnlock(String(templateId));
+                let backupCredential: { id: string; token: string } | undefined;
+                try {
+                    const connection = parseBackupLink(window.location.hash, String(templateId))
+                        || readConnection(localStorage, String(templateId));
+                    if (connection) backupCredential = { id: connection.id, token: connection.token };
+                } catch { /* Invalid links/storage cannot grant access; existing backup UI handles them after unlock. */ }
+                templateAccessRef.current = { fingerprint: fingerprint || undefined, backup: backupCredential };
+                let template;
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const result = await fetch('/api/templates/read', {
+                        method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(30_000),
+                        headers: { 'Content-Type': 'application/json',
+                            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+                        body: JSON.stringify({ templateId: String(templateId), ...templateAccessRef.current }),
+                    });
+                    if (cancelled) return;
+                    if (result.status === 403) {
+                        toast.error('ACCESS_DENIED: Please unlock this template from the dashboard.');
+                        router.replace('/?group=category&tag=all');
+                        return;
+                    }
+                    if (!result.ok) throw new Error(result.status === 429
+                        ? 'Too many requests. Please try again later.' : 'Unable to load template. Please retry.');
+                    template = (await result.json()).template;
+                } catch (error) {
+                    if (cancelled) return;
+                    toast.error(error instanceof Error ? error.message : 'Unable to load template.', {
+                        duration: Infinity, action: { label: 'Retry', onClick: () => window.location.reload() },
+                    });
+                    return;
+                }
                 if (cancelled) return;
 
                 if (template) {
@@ -422,33 +454,6 @@ export default function EditorPage() {
                             toast.error('BACKUP_ERROR: โหลดออนไลน์ไม่สำเร็จ กำลังใช้งานที่เก็บในเครื่อง');
                         }
                     }
-                    templatePasswordRef.current = template.is_personal ? template.password : undefined;
-                    if (template.is_personal) {
-                        const isUnlocked = await isTemplateUnlocked(String(templateId), template.password);
-                        if (cancelled) return;
-                        if (!isUnlocked && !remote) {
-                            toast.error("ERROR_ACCESS_DENIED: AUTHENTICATION_REQUIRED", {
-                                duration: 4000,
-                                style: {
-                                    position: 'fixed',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%)',
-                                    margin: 0,
-                                    zIndex: 9999,
-                                    width: 'max-content',
-                                    minWidth: '320px',
-                                    height: 'fit-content'
-                                },
-                            });
-
-                            setTimeout(() => {
-                                router.replace('/?group=category&tag=all');
-                            }, 3000);
-                            return;
-                        }
-                    }
-
                     const initialData = {
                         title: template.title,
                         description: template.description,
@@ -958,7 +963,8 @@ export default function EditorPage() {
         try {
             let connection: BackupConnection;
             if (!backupConnection) {
-                const result = await createBackup(localStorage, String(templateId), payload, templatePasswordRef.current);
+                const { data: { session } } = await supabase.auth.getSession();
+                const result = await createBackup(localStorage, String(templateId), payload, templateAccessRef.current, session?.access_token);
                 connection = { id: result.id, token: result.token, templateId: String(templateId), revision: result.revision,
                     updatedAt: result.updatedAt, savedPayload: result.payload };
             } else {

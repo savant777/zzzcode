@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const ts = require('typescript');
-const { randomUUID, randomBytes } = require('node:crypto');
+const { randomUUID, randomBytes, createHash } = require('node:crypto');
 const compiled = ts.transpileModule(fs.readFileSync('lib/editor-backup-api.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
@@ -40,6 +40,7 @@ const db = {
             assert.match(args.p_client_hash, /^[0-9a-f]{64}$/);
             return limitResult;
         }
+        if (name === 'verify_template_credential') return { data: args.p_template_id === '2' && args.p_fingerprint === createHash('sha256').update(JSON.stringify(['2', 'private'])).digest('hex') };
         rpcCalls++;
         assert.equal(name, 'save_editor_backup');
         const row = rows.get(args.p_backup_id);
@@ -92,7 +93,7 @@ async function run() {
     assert.equal(leakedId.status, 400, 'Public backup ID must never be sufficient to recover its token');
     const denied = await handleBackupRequest(request('POST', { templateId: '2', payload }, { 'idempotency-key': randomBytes(32).toString('base64url') }), 'create', undefined, deps);
     assert.equal(denied.status, 403);
-    const privateOk = await handleBackupRequest(request('POST', { templateId: '2', templatePassword: 'private', payload }, { 'idempotency-key': randomBytes(32).toString('base64url') }), 'create', undefined, deps);
+    const privateOk = await handleBackupRequest(request('POST', { templateId: '2', fingerprint: createHash('sha256').update(JSON.stringify(['2', 'private'])).digest('hex'), payload }, { 'idempotency-key': randomBytes(32).toString('base64url') }), 'create', undefined, deps);
     assert.equal(privateOk.status, 201);
     const large = await handleBackupRequest(request('PUT', { templateId: '1', payload: { ...payload, large: 'x'.repeat(2097152) }, expectedRevision: 2 }, auth), 'save', saved.id, deps);
     assert.equal(large.status, 413);

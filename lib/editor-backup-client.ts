@@ -67,7 +67,7 @@ async function request(url: string, options: RequestInit): Promise<BackupResult>
     return result;
 }
 
-export async function createBackup(storage: Storage, templateId: string, payload: BackupPayload, templatePassword?: string): Promise<BackupResult & { token: string }> {
+export async function createBackup(storage: Storage, templateId: string, payload: BackupPayload, credential: { fingerprint?: string; backup?: { id: string; token: string } } = {}, accessToken?: string): Promise<BackupResult & { token: string }> {
     let pending = storage.getItem(pendingKey(templateId));
     if (!pending) {
         const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -77,8 +77,9 @@ export async function createBackup(storage: Storage, templateId: string, payload
     }
     if (!tokenPattern.test(pending)) throw new Error('INVALID_PENDING_BACKUP');
     const result = await request('/api/editor/backups', { method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pending },
-        body: JSON.stringify({ templateId, payload, templatePassword }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pending,
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+        body: JSON.stringify({ templateId, payload, ...credential }),
     });
     if (!result.token || !tokenPattern.test(result.token)) throw new Error('INVALID_BACKUP_RESPONSE');
     return { ...result, token: result.token };

@@ -185,7 +185,7 @@ export default function AddTemplatePage() {
             if (savedDraft) {
                 try {
                     const parsed = JSON.parse(savedDraft);
-                    if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData }));
+                    if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData, password: '' }));
                     if (parsed.selectedTags) setSelectedTags(parsed.selectedTags.map(String));
                     if (typeof parsed.creditOverride === 'string') setCreditOverride(parsed.creditOverride);
                     if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
@@ -208,7 +208,7 @@ export default function AddTemplatePage() {
         return () => clearTimeout(timer);
     }, [formData.html_blueprint]);
 
-    const draftPayload = useMemo(() => ({ formData, fields, selectedTags, creditOverride }), [formData, fields, selectedTags, creditOverride]);
+    const draftPayload = useMemo(() => ({ formData: { ...formData, password: '' }, fields, selectedTags, creditOverride }), [formData, fields, selectedTags, creditOverride]);
     useTemplateDraft(STORAGE_KEY, draftPayload,
         !isCheckingAuth && !!(formData.title || formData.html_blueprint), skipDraftSaveRef);
     // --- 4. Handlers ---

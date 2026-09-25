@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { CreatorSession, canManageTemplate, getCurrentCreator } from '@/lib/creator';
 import { getGroupSlug } from '@/lib/routes';
 import { templateRoute, visibleTemplateTags } from '@/lib/template-tags';
-import { isTemplateUnlocked, rememberTemplateUnlock } from '@/lib/template-unlock';
+import { getRememberedTemplateUnlock, rememberTemplateUnlock } from '@/lib/template-unlock';
 import { deactivateTemplate, setTemplateActive } from '@/lib/template-actions';
 import { toast } from 'sonner';
 
@@ -27,7 +27,6 @@ type DashboardTemplate = {
     user_id: string | null;
     is_active: boolean;
     is_personal: boolean;
-    password: string | null;
     template_tags: { tags: {
         id: number;
         name: string;
@@ -82,22 +81,22 @@ function Dashboard() {
     useEffect(() => {
         const initDashboard = async () => {
             setIsLoading(true);
-            const [session, { data }, { data: creators }] = await Promise.all([
+            const [session, { data, error: catalogError }, { data: creators }] = await Promise.all([
                 getCurrentCreator(),
                 supabase
-                .from('templates')
-                .select(`id, title, description, preview_url, user_id, is_active, is_personal, password,
-                    template_tags(tags(id, name, slug, is_active, tag_groups(name)))`)
-                    .order('id', { ascending: false })
-                    .returns<DashboardTemplate[]>(),
+                .rpc('template_catalog')
+                    .overrideTypes<DashboardTemplate[], { merge: false }>(),
                 supabase
                     .from('creators')
                     .select('user_id, display_name')
                     .eq('is_active', true)
             ]);
             setCreatorSession(session);
+            if (catalogError) toast.error('Unable to load templates. Please retry.', {
+                duration: Infinity, action: { label: 'Retry', onClick: () => window.location.reload() },
+            });
 
-            if (data) setTemplates(data.filter(item => item.is_active === true || canManageTemplate(session, item.user_id)).map(item => ({
+            if (Array.isArray(data)) setTemplates(data.filter(item => item.is_active === true || canManageTemplate(session, item.user_id)).map(item => ({
                 ...item,
                 template_tags: visibleTemplateTags(item.template_tags),
             })));
@@ -190,8 +189,36 @@ function Dashboard() {
         setPassword('');
     };
 
+    const verifyTemplateAccess = async (id: string, credential: { password: string } | { fingerprint: string }) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const result = await fetch('/api/templates/unlock', {
+            method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(30_000),
+            headers: { 'Content-Type': 'application/json',
+                ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+            body: JSON.stringify({ templateId: id, ...credential }),
+        });
+        if (result.status === 403) return false;
+        if (!result.ok) throw new Error(result.status === 429
+            ? 'Too many unlock attempts. Please try again later.'
+            : 'Unable to verify access. Please try again.');
+        return true;
+    };
+
     const handleOpenPrivate = async (item: any) => {
-        if (await isTemplateUnlocked(String(item.id), item.password)) {
+        if (creatorSession && canManageTemplate(creatorSession, item.user_id)) {
+            const query = new URLSearchParams(templateRoute(item.template_tags, activeFilter));
+            router.push(`/editor/${item.id}?${query}`);
+            return;
+        }
+        const remembered = await getRememberedTemplateUnlock(String(item.id));
+        let unlocked = false;
+        try {
+            if (remembered) unlocked = await verifyTemplateAccess(String(item.id), { fingerprint: remembered });
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Unable to verify access.');
+            return;
+        }
+        if (unlocked) {
             const query = new URLSearchParams(templateRoute(item.template_tags, activeFilter));
             router.push(`/editor/${item.id}?${query}`);
             return;
@@ -208,18 +235,22 @@ function Dashboard() {
 
         const routeQuery = new URLSearchParams(templateRoute(selectedItem.template_tags, activeFilter)).toString();
         
-        if (password === selectedItem?.password) {
-            const persisted = await rememberTemplateUnlock(String(selectedItem.id), password);
+        try {
+            if (await verifyTemplateAccess(String(selectedItem.id), { password })) {
+                const persisted = await rememberTemplateUnlock(String(selectedItem.id), password);
 
-            toast.success(`ACCESS_GRANTED: DECRYPT_SUCCESS`, { id: toastId });
-            if (!persisted) toast.info('เปิดเทมเพลตได้แล้ว แต่เบราว์เซอร์ไม่สามารถจำการปลดล็อกไว้ถาวรได้');
-            closeModal();
-            setTimeout(() => {
-                router.push(`/editor/${selectedItem.id}?${routeQuery}`);
-            }, 800);
-        } else {
-            toast.error(`ACCESS_DENIED: INVALID_SECRET_KEY`, { id: toastId });
-            setPassword('');
+                toast.success(`ACCESS_GRANTED: DECRYPT_SUCCESS`, { id: toastId });
+                if (!persisted) toast.info('เปิดเทมเพลตได้แล้ว แต่เบราว์เซอร์ไม่สามารถจำการปลดล็อกไว้ถาวรได้');
+                closeModal();
+                setTimeout(() => {
+                    router.push(`/editor/${selectedItem.id}?${routeQuery}`);
+                }, 800);
+            } else {
+                toast.error(`ACCESS_DENIED: INVALID_SECRET_KEY`, { id: toastId });
+                setPassword('');
+            }
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Unable to verify access.', { id: toastId });
         }
     };
 

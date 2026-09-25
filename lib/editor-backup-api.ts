@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { isIP } from 'node:net';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
@@ -7,6 +7,74 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const COLUMNS = 'id,template_id,payload,revision,created_at,updated_at';
 type JsonObject = Record<string, unknown>;
 type Dependencies = { db: SupabaseClient; secret: string };
+
+type TemplateCredential = { fingerprint?: unknown; backup?: unknown };
+
+async function canManageTemplate(request: Request, db: SupabaseClient, userId: string | null) {
+    const bearer = request.headers.get('authorization');
+    if (!bearer?.startsWith('Bearer ')) return false;
+    const { data: auth, error } = await db.auth.getUser(bearer.slice(7));
+    if (error || !auth.user) return false;
+    const { data: creator, error: creatorError } = await db.from('creators')
+        .select('role,is_active').eq('user_id', auth.user.id).maybeSingle();
+    if (creatorError) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
+    return !!creator?.is_active && (creator.role === 'owner' || userId === auth.user.id);
+}
+
+async function authorizeTemplate(request: Request, db: SupabaseClient, id: string, credential: TemplateCredential) {
+    const { data, error } = await db.from('templates')
+        .select('id,is_personal,is_active,user_id').eq('id', id).maybeSingle();
+    if (error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
+    if (!data) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
+    if (data.is_active !== true || data.is_personal === true) {
+        if (await canManageTemplate(request, db, data.user_id)) return;
+        if (data.is_active !== true) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
+    }
+    if (data.is_personal !== true) return;
+    // Backup links are access credentials. Both ID and secret must match this template.
+    if (object(credential.backup) && typeof credential.backup.id === 'string'
+        && UUID.test(credential.backup.id) && typeof credential.backup.token === 'string'
+        && /^[A-Za-z0-9_-]{43}$/.test(credential.backup.token)) {
+        const found = await db.from('editor_backups').select('id').eq('id', credential.backup.id)
+            .eq('template_id', id).eq('access_token_hash', digest(credential.backup.token)).maybeSingle();
+        if (found.error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
+        if (found.data) return;
+    }
+    if (typeof credential.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(credential.fingerprint)) {
+        throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
+    }
+    const verified = await db.rpc('verify_template_credential', { p_template_id: id, p_fingerprint: credential.fingerprint });
+    if (verified.error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
+    if (verified.data !== true) throw new ApiError(403, 'INVALID_SECRET_KEY');
+}
+
+/** Server-only entry points; injected dependencies are never accepted from HTTP input. */
+export async function handleTemplateRequest(request: Request, operation: 'unlock' | 'read', injected?: Dependencies): Promise<Response> {
+    try {
+        guardRequest(request, 'template-access');
+        const deps = injected ?? dependencies();
+        await sharedRateLimit(request, 'read', { ...deps, secret: `${deps.secret}:template-access` });
+        const body = await readBody(request);
+        const id = templateId(body.templateId);
+        const fingerprint = typeof body.password === 'string'
+            ? digest(JSON.stringify([id, body.password])) : body.fingerprint;
+        await authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup });
+        if (operation === 'unlock') return response({ unlocked: true });
+        const { data, error } = await deps.db.from('templates')
+            .select('id,title,description,is_personal,supports_multiple_drafts,html_blueprint,fields_config,template_tags(tags(slug,is_active,tag_groups(name)))')
+            .eq('id', id).maybeSingle();
+        if (error || !data) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
+        return response({ template: data });
+    } catch (error) {
+        return response({ error: error instanceof ApiError ? error.message : 'TEMPLATE_UNAVAILABLE' },
+            error instanceof ApiError ? error.status : 503,
+            error instanceof ApiError ? error.retryAfter : undefined);
+    }
+}
+
+export function handleTemplateUnlockRequest(request: Request, injected?: Dependencies) {
+    return handleTemplateRequest(request, 'unlock', injected);
+}
 class ApiError extends Error {
     constructor(public status: number, message: string, public retryAfter?: number) { super(message); }
 }
@@ -119,17 +187,10 @@ function tokenFrom(request: Request) {
     return match[1];
 }
 
-async function checkTemplate(db: SupabaseClient, id: string, password?: unknown, creating = false) {
-    const { data, error } = await db.from('templates').select('id,is_active,is_personal,password').eq('id', id).maybeSingle();
+async function checkTemplate(db: SupabaseClient, id: string) {
+    const { data, error } = await db.from('templates').select('id,is_active').eq('id', id).maybeSingle();
     if (error) throw new ApiError(503, 'BACKUP_UNAVAILABLE');
-    if (!data || data.is_active === false) throw new ApiError(404, 'TEMPLATE_NOT_FOUND');
-    // Existing editor passwords are stored as plain text. Never trust its client-side unlocked flag.
-    if (creating && data.is_personal) {
-        if (typeof password !== 'string' || typeof data.password !== 'string'
-            || !timingSafeEqual(Buffer.from(digest(password)), Buffer.from(digest(data.password)))) {
-            throw new ApiError(403, 'TEMPLATE_PASSWORD_REQUIRED');
-        }
-    }
+    if (!data || data.is_active !== true) throw new ApiError(404, 'BACKUP_NOT_FOUND');
 }
 
 function publicBackup(row: JsonObject) {
@@ -155,7 +216,10 @@ export async function handleBackupRequest(request: Request, operation: 'create' 
             // Secret retry key, not the public backup ID. Otherwise knowing an ID
             // would allow an unauthenticated create retry to recover its token.
             if (!requestKey || !/^[A-Za-z0-9_-]{43}$/.test(requestKey)) throw new ApiError(400, 'IDEMPOTENCY_KEY_REQUIRED');
-            await checkTemplate(db, tid, body?.templatePassword, true);
+            await authorizeTemplate(request, db, tid, { fingerprint: body?.fingerprint, backup: body?.backup });
+            // Backups remain unavailable for inactive templates, including new
+            // backups created by a manager who is allowed to open the Editor.
+            await checkTemplate(db, tid);
             const idHex = createHmac('sha256', secret).update(`editor-backup-id:v1:${tid}:${requestKey}`).digest('hex');
             const requestId = `${idHex.slice(0, 8)}-${idHex.slice(8, 12)}-4${idHex.slice(13, 16)}-8${idHex.slice(17, 20)}-${idHex.slice(20, 32)}`;
             const newToken = createHmac('sha256', secret).update(`editor-backup-token:v1:${tid}:${requestKey}`).digest('base64url');

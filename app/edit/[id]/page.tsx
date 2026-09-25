@@ -71,6 +71,7 @@ export default function EditTemplatePage() {
     const [editingField, setEditingField] = useState<FieldConfig | null>(null);
 
     const [loading, setLoading] = useState(true);
+    const [hasStoredPassword, setHasStoredPassword] = useState(false);
     const [creatorSession, setCreatorSession] = useState<CreatorSession | null>(null);
     const [templateOwnerId, setTemplateOwnerId] = useState<string | null>(null);
     const [availableTags, setAvailableTags] = useState<any[]>([]);
@@ -191,6 +192,7 @@ export default function EditTemplatePage() {
                     }
 
                     setTemplateOwnerId(template.user_id);
+                    setHasStoredPassword(template.is_personal === true);
                     setCreditOptions((allTags || []).filter((tag: any) => getGroupSlug(tag.tag_groups?.name) === 'creators'
                         && (tag.user_id === null || tag.user_id === template.user_id))
                         .map((tag: any) => ({ id: String(tag.id), name: tag.name })));
@@ -203,7 +205,7 @@ export default function EditTemplatePage() {
                         preview_url: template.preview_url,
                         is_personal: template.is_personal,
                         supports_multiple_drafts: template.supports_multiple_drafts || false,
-                        password: template.password || '',
+                        password: '',
                         html_blueprint: template.html_blueprint,
                     });
                     setFields((template.fields_config || []).map(normalizeFieldConfig));
@@ -218,7 +220,7 @@ export default function EditTemplatePage() {
                 try {
                     const parsed = JSON.parse(savedDraft);
                     if (parsed.templateId === templateId) {
-                        if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData }));
+                        if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData, password: '' }));
                         if (parsed.selectedTags) setSelectedTags(parsed.selectedTags.map(String));
                         if (typeof parsed.creditOverride === 'string') setCreditOverride(parsed.creditOverride);
                         if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
@@ -244,7 +246,7 @@ export default function EditTemplatePage() {
         return () => clearTimeout(timer);
     }, [formData.html_blueprint]);
     
-    const draftPayload = useMemo(() => ({ templateId, formData, fields, selectedTags, creditOverride }), [templateId, formData, fields, selectedTags, creditOverride]);
+    const draftPayload = useMemo(() => ({ templateId, formData: { ...formData, password: '' }, fields, selectedTags, creditOverride }), [templateId, formData, fields, selectedTags, creditOverride]);
     useTemplateDraft(STORAGE_KEY, draftPayload,
         !loading && !!(formData.title || formData.html_blueprint), skipDraftSaveRef);
 
@@ -356,7 +358,7 @@ export default function EditTemplatePage() {
                     preview_url: formData.preview_url,
                     is_personal: formData.is_personal,
                     supports_multiple_drafts: formData.supports_multiple_drafts,
-                    password: formData.is_personal ? formData.password : null,
+                    password: formData.is_personal && formData.password ? formData.password : null,
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', templateId);
@@ -584,10 +586,10 @@ export default function EditTemplatePage() {
                                         </div>
                                     </label>
                                     <input 
-                                        required={formData.is_personal}
+                                        required={formData.is_personal && !hasStoredPassword}
                                         type="text"
                                         value={formData.password}
-                                        placeholder={formData.is_personal ? "ENTER_SECRET_KEY" : "ANYONE_CAN_USE"}
+                                        placeholder={formData.is_personal ? (hasStoredPassword ? "LEAVE_BLANK_TO_KEEP_CURRENT_KEY" : "ENTER_SECRET_KEY") : "ANYONE_CAN_USE"}
                                         className={`
                                             flex-1 min-w-0 font-Google-Sans p-2 outline-none border transition-all duration-300
                                             ${formData.is_personal 
