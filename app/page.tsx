@@ -15,13 +15,31 @@ import SideNav from '@/components/SideNav';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
+import PageLoading from '@/components/PageLoading';
 import Modal from '@/components/Modal';
 import TemplateSortFilter from '@/components/TemplateSortFilter';
 
+type DashboardTemplate = {
+    id: number;
+    title: string;
+    description: string | null;
+    preview_url: string | null;
+    user_id: string | null;
+    is_active: boolean;
+    is_personal: boolean;
+    password: string | null;
+    template_tags: { tags: {
+        id: number;
+        name: string;
+        slug: string;
+        is_active: boolean;
+        tag_groups: { name: string } | null;
+    } | null }[];
+};
 
 export default function Page() {
     return (
-        <Suspense fallback={<div>Loading Dashboard...</div>}>
+        <Suspense fallback={<PageLoading label="Loading_Dashboard..." />}>
             <Dashboard />
         </Suspense>
     )
@@ -64,19 +82,20 @@ function Dashboard() {
     useEffect(() => {
         const initDashboard = async () => {
             setIsLoading(true);
-            const session = await getCurrentCreator();
-            setCreatorSession(session);
-
-            const [{ data }, { data: creators }] = await Promise.all([
+            const [session, { data }, { data: creators }] = await Promise.all([
+                getCurrentCreator(),
                 supabase
                 .from('templates')
-                .select(`*, template_tags(tags(*, tag_groups(name)))`)
-                    .order('id', { ascending: false }),
+                .select(`id, title, description, preview_url, user_id, is_active, is_personal, password,
+                    template_tags(tags(id, name, slug, is_active, tag_groups(name)))`)
+                    .order('id', { ascending: false })
+                    .returns<DashboardTemplate[]>(),
                 supabase
                     .from('creators')
                     .select('user_id, display_name')
                     .eq('is_active', true)
             ]);
+            setCreatorSession(session);
 
             if (data) setTemplates(data.filter(item => item.is_active === true || canManageTemplate(session, item.user_id)).map(item => ({
                 ...item,
@@ -301,7 +320,7 @@ function Dashboard() {
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto px-4 mb-4 scrollbar-hide">
-                    {filteredTemplates.length === 0 ? (
+                    {!isLoading && filteredTemplates.length === 0 ? (
                         <div className="min-h-full flex items-center justify-center font-Google-Code uppercase select-none">
                             <div className="flex flex-col items-center gap-4">
                                 <h2 className="text-2xl md:text-5xl text-(--primary)">
@@ -313,15 +332,15 @@ function Dashboard() {
                             </div>
                         </div>
                     ) : (
-                        <div className={`
+                        <div aria-busy={isLoading} className={`
                             ${viewMode === 'grid' 
                                 ? 'grid gap-2 zzzcode-card-grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))]' 
                                 : 'grid gap-2 md:gap-4 zzzcode-list-grid grid-cols-1'}
                         `}>
                             {isLoading ? (
-                                Array.from({ length: 12 }).map((_, i) => (
+                                <><span role="status" className="sr-only">Loading_Templates...</span>{Array.from({ length: 12 }).map((_, i) => (
                                     <SkeletonCard key={i} />
-                                ))
+                                ))}</>
                             ) : (
                                 filteredTemplates.map(item => (
                                     <TemplateCard 

@@ -87,7 +87,7 @@ const syncDiscordIdentity = async (user: User, creator: CreatorProfile) => {
     };
 };
 
-export const getCurrentCreator = async (): Promise<CreatorSession> => {
+const readCurrentCreator = async (): Promise<CreatorSession> => {
     const unavailable = { user: null, creator: null, isCreator: false, isOwner: false, checkFailed: true };
     try {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -122,6 +122,32 @@ export const getCurrentCreator = async (): Promise<CreatorSession> => {
     } catch {
         return unavailable;
     }
+};
+
+let pendingCreatorCheck: Promise<CreatorSession> | null = null;
+let authGeneration = 0;
+let observingAuth = false;
+
+export const getCurrentCreator = (): Promise<CreatorSession> => {
+    // Never share requests across users during server rendering.
+    if (typeof window === 'undefined') return readCurrentCreator();
+    if (!observingAuth) {
+        observingAuth = true;
+        supabase.auth.onAuthStateChange(event => {
+            if (event === 'INITIAL_SESSION') return;
+            authGeneration++;
+            pendingCreatorCheck = null;
+        });
+    }
+    if (pendingCreatorCheck) return pendingCreatorCheck;
+    const generation = authGeneration;
+    const request: Promise<CreatorSession> = readCurrentCreator()
+        .then(session => generation === authGeneration ? session : getCurrentCreator())
+        .finally(() => {
+            if (pendingCreatorCheck === request) pendingCreatorCheck = null;
+        });
+    pendingCreatorCheck = request;
+    return request;
 };
 
 export const canManageTemplate = (

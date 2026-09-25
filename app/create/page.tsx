@@ -240,6 +240,21 @@ export default function AddTemplatePage() {
         }
     };
 
+    const handleBlockDefaultValueChange = (fieldId: string, index: number, value: any, inherit = false) => {
+        setFields(prev => prev.map(field => {
+            if (field.id !== fieldId) return field;
+            const overrides = { ...field.block_default_values };
+            if (inherit) delete overrides[index];
+            else overrides[index] = value;
+            return { ...field, block_default_values: overrides };
+        }));
+    };
+
+    const handleBlockDefaultCountChange = (blockName: string, count: number, parentBlockName?: string) => {
+        setFields(prev => prev.map(field => field.block_name === blockName && field.parent_block_name === parentBlockName
+            ? { ...field, block_default_count: Math.max(0, Math.min(10, Math.trunc(count))) } : field));
+    };
+
     const handleBlockDescriptionChange = (blockName: string, description: string, parentBlockName?: string) => {
         setFields(prev => prev.map(field =>
             (field.block_name || "GLOBAL") === blockName && field.parent_block_name === parentBlockName
@@ -606,6 +621,8 @@ export default function AddTemplatePage() {
                                                     onFieldDragEnd={handleFieldDragEnd}
                                                     onGroupDragEnd={handleGroupDragEnd}
                                                     onBlockDescriptionChange={handleBlockDescriptionChange}
+                                                    onBlockDefaultCountChange={handleBlockDefaultCountChange}
+                                                    onBlockDefaultValueChange={handleBlockDefaultValueChange}
                                                 />
                                             ))}
                                         </div>

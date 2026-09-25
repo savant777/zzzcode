@@ -4,12 +4,14 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { FieldConfig, defaultGradientValue, generateFinalHTML, getSelectDefaultValue, getSelectOptions, normalizeFieldConfig } from '@/lib/template-parser';
+import { FieldConfig, generateFinalHTML, normalizeFieldConfig } from '@/lib/template-parser';
 
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { templateRoute } from '@/lib/template-tags';
 import { isTemplateUnlocked } from '@/lib/template-unlock';
+import { getDefaultValue } from '@/lib/field-defaults';
+import { defaultBlockCount } from '@/lib/block-defaults';
 import { BBCODE_HEIGHTS, getBBCodeHeights, updateBBCodeHeight } from '@/lib/bbcode-height';
 import FieldRenderer from '@/components/FieldRenderer';
 import LivePreview from '@/components/LivePreview';
@@ -184,92 +186,20 @@ const groupFieldList = (fieldList: FieldConfig[]): GroupedFields => {
         }, {} as GroupedFields);
 };
 
-const getDefaultValue = (field: FieldConfig) => {
-    if (field.type === 'slider') {
-        return field.config?.sliders?.map(s => s.default_value) || field.default_value;
-    }
-
-    if (field.type === 'gradient') {
-        return field.config?.gradient || defaultGradientValue;
-    }
-
-    if (field.type === 'checkbox') {
-        const trueValue = field.config?.true_value ?? 'true';
-        const falseValue = field.config?.false_value ?? 'false';
-
-        return field.default_value === trueValue ? trueValue : falseValue;
-    }
-
-    if (field.type === 'select') {
-        const defaultValue = getSelectDefaultValue(field);
-        const defaultOption = getSelectOptions(field).find(opt => opt.value === defaultValue);
-        const defaultEntry = (entry: Record<string, any>) => field.config?.select_multiple
-            ? { multiple: true, selected: [entry] }
-            : entry;
-
-        if (defaultOption?.type === 'slider') {
-            return defaultEntry({
-                option_index: 0,
-                value: defaultValue,
-                custom_value: field.config?.sliders?.map(s => s.default_value) || [0],
-            });
-        }
-
-        if (defaultOption?.type === 'gradient') {
-            return defaultEntry({
-                option_index: 0,
-                value: defaultValue,
-                custom_value: field.config?.gradient || defaultGradientValue,
-            });
-        }
-
-        if (defaultOption?.type === 'color') {
-            return defaultEntry({
-                option_index: 0,
-                value: defaultValue,
-                custom_value: defaultOption.default_value || '#FFFFFF',
-            });
-        }
-
-        if (defaultOption?.type === 'color-text') {
-            return defaultEntry({
-                option_index: 0,
-                value: defaultValue,
-                custom_value: {
-                    color: defaultOption.default_value || '#FFFFFF',
-                    text: defaultOption.secondary_default_value || '',
-                },
-            });
-        }
-
-        if (defaultOption?.type === 'text' || defaultOption?.type === 'bbcode') {
-            return defaultEntry({
-                option_index: 0,
-                value: defaultValue,
-                custom_value: defaultOption.default_value || '',
-            });
-        }
-
-        if (field.config?.select_multiple) {
-            return { multiple: true, selected: [{ option_index: 0, value: defaultValue }] };
-        }
-
-        return defaultValue;
-    }
-
-    return field.default_value;
-};
-
 const createBlockEntry = (
     blockFields: FieldConfig[],
     source?: Record<string, any>,
     childBlockMap: Record<string, FieldConfig[]> = {},
-    fallbackBlockValues?: Record<string, any>
+    fallbackBlockValues?: Record<string, any>,
+    initialIndex?: number
 ) => {
     const entry: Record<string, any> = { [BBCODE_HEIGHTS]: getBBCodeHeights(source) };
 
     blockFields.forEach(field => {
-        entry[field.variable_name] = source?.[field.variable_name] ?? getDefaultValue(field);
+        const overrides = field.block_default_values;
+        const initial = initialIndex !== undefined && overrides && Object.prototype.hasOwnProperty.call(overrides, initialIndex)
+            ? overrides[initialIndex] : getDefaultValue(field);
+        entry[field.variable_name] = structuredClone(source?.[field.variable_name] ?? initial);
     });
 
     Object.entries(childBlockMap).forEach(([childBlockName, childFields]) => {
@@ -278,7 +208,7 @@ const createBlockEntry = (
         if (Array.isArray(savedChildBlock)) {
             entry[childBlockName] = savedChildBlock.map(childEntry => createBlockEntry(childFields, childEntry));
         } else {
-            entry[childBlockName] = [createBlockEntry(childFields)];
+            entry[childBlockName] = Array.from({ length: defaultBlockCount(childFields) }, (_, index) => createBlockEntry(childFields, undefined, {}, undefined, index));
         }
     });
 
@@ -310,7 +240,7 @@ const buildInitialValues = (fieldList: FieldConfig[], savedValues?: Record<strin
         if (Array.isArray(savedBlock)) {
             values[blockName] = savedBlock.map(entry => createBlockEntry(blockFields, entry, childBlocks, savedValues));
         } else {
-            values[blockName] = [createBlockEntry(blockFields, savedValues, childBlocks, savedValues)];
+            values[blockName] = Array.from({ length: defaultBlockCount(blockFields) }, (_, index) => createBlockEntry(blockFields, savedValues, childBlocks, savedValues, index));
         }
     });
 

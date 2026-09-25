@@ -8,8 +8,8 @@ const loaded = { exports: {} };
 new Function('exports', 'require', 'module', compiled)(loaded.exports,
     name => name === './routes' ? loadTs('lib/routes.ts') : require(name), loaded);
 const { visibleTemplateTags, templateTagChanges, templateRoute } = loaded.exports;
-const active = { tags: { is_active: true, slug: 'golden-gather', tag_groups: { name: 'human party' } } };
-const inactive = { tags: { is_active: false, slug: 'human-party', tag_groups: { name: 'activity' } } };
+const active = { tags: { is_active: true, slug: 'golden-gather', tag_groups: { name: 'sapiens' } } };
+const inactive = { tags: { is_active: false, slug: 'sapiens', tag_groups: { name: 'activity' } } };
 assert.deepEqual(visibleTemplateTags([{ tags: null }, inactive, active]), [active]);
 assert.deepEqual(visibleTemplateTags(null), []);
 assert.deepEqual(visibleTemplateTags([{ tags: null }, inactive]), []);
@@ -35,8 +35,8 @@ function loadTs(path, dependencies = {}) {
     return module.exports;
 }
 const routes = loadTs('lib/routes.ts');
-assert.equal(routes.getGroupSlug('Human Party'), 'human-party');
-for (const group of ['activity', 'human-party', 'houses', 'shops', 'commission']) {
+assert.equal(routes.getGroupSlug('Sapiens'), 'sapiens');
+for (const group of ['activity', 'sapiens', 'houses', 'shops', 'commission']) {
     assert.ok(routes.PRIMARY_ROUTE_GROUPS.includes(group));
 }
 const navigations = [];
@@ -50,17 +50,17 @@ const { renderToStaticMarkup } = require('react-dom/server');
 inactive.tags.is_active = false;
 active.tags.name = 'Golden Gather';
 inactive.tags.name = 'Hidden Party';
-assert.deepEqual(templateRoute([active], 'activity:golden-gather'), { group: 'human-party', tag: 'golden-gather' });
-assert.deepEqual(templateRoute([inactive, active], 'activity:human-party'), { group: 'human-party', tag: 'golden-gather' });
-assert.deepEqual(templateRoute([active], 'human party:all'), { group: 'human-party', tag: 'golden-gather' });
-assert.deepEqual(templateRoute([active], 'category:all'), { group: 'human-party', tag: 'golden-gather' });
-assert.deepEqual(templateRoute([{ tags: null }, inactive], 'activity:human-party'), { group: 'category', tag: 'all' });
+assert.deepEqual(templateRoute([active], 'activity:golden-gather'), { group: 'sapiens', tag: 'golden-gather' });
+assert.deepEqual(templateRoute([inactive, active], 'activity:sapiens'), { group: 'sapiens', tag: 'golden-gather' });
+assert.deepEqual(templateRoute([active], 'sapiens:all'), { group: 'sapiens', tag: 'golden-gather' });
+assert.deepEqual(templateRoute([active], 'category:all'), { group: 'sapiens', tag: 'golden-gather' });
+assert.deepEqual(templateRoute([{ tags: null }, inactive], 'activity:sapiens'), { group: 'category', tag: 'all' });
 const cssTag = { tags: { is_active: true, slug: 'minimal', tag_groups: { name: 'css' } } };
-assert.deepEqual(templateRoute([active, cssTag], 'css:minimal'), { group: 'human-party', tag: 'golden-gather' });
+assert.deepEqual(templateRoute([active, cssTag], 'css:minimal'), { group: 'sapiens', tag: 'golden-gather' });
 const categoryTag = { tags: { is_active: true, slug: 'etc', tag_groups: { name: 'category' } } };
 const creatorTag = { tags: { is_active: true, slug: 'author', tag_groups: { name: 'creators' } } };
 assert.ok(!routes.PRIMARY_ROUTE_GROUPS.includes('creators'));
-for (const group of ['activity', 'commission', 'houses', 'shops', 'human party']) {
+for (const group of ['activity', 'commission', 'houses', 'shops', 'sapiens']) {
     const primary = { tags: { is_active: true, slug: 'chosen', tag_groups: { name: group } } };
     for (const source of ['category:etc', 'creators:author', 'css:minimal', 'category:all']) {
         assert.deepEqual(templateRoute([creatorTag, categoryTag, cssTag, primary], source), {
@@ -70,7 +70,7 @@ for (const group of ['activity', 'commission', 'houses', 'shops', 'human party']
 }
 assert.deepEqual(templateRoute([creatorTag, cssTag, categoryTag], 'creators:author'), { group: 'category', tag: 'etc' });
 assert.deepEqual(templateRoute([creatorTag, cssTag], 'creators:author'), { group: 'category', tag: 'all' });
-assert.deepEqual(templateRoute([inactive, categoryTag], 'activity:human-party'), { group: 'category', tag: 'etc' });
+assert.deepEqual(templateRoute([inactive, categoryTag], 'activity:sapiens'), { group: 'category', tag: 'etc' });
 for (const viewMode of ['line', 'grid']) {
     for (const links of [[{ tags: null }, inactive, active], [{ tags: null }, inactive], []]) {
         const html = renderToStaticMarkup(React.createElement(TemplateCard, {
@@ -87,11 +87,11 @@ const Breadcrumbs = loadTs('components/Breadcrumbs.tsx', {
     'next/link': { default: ({ children, ...props }) => React.createElement('a', props, children) },
 }).default;
 const breadcrumb = renderToStaticMarkup(React.createElement(Breadcrumbs, {
-    path: 'human party:golden-gather', currentFile: 'Golden Gather', editorMode: 'EDITOR',
+    path: 'sapiens:golden-gather', currentFile: 'Golden Gather', editorMode: 'EDITOR',
 }));
 assert.ok(!breadcrumb.includes('HUMAN_PARTY'));
-assert.ok(!breadcrumb.includes('href="/?group=human-party&amp;tag=all"'));
-assert.ok(breadcrumb.includes('href="/?group=human-party&amp;tag=golden-gather"'));
+assert.ok(!breadcrumb.includes('href="/?group=sapiens&amp;tag=all"'));
+assert.ok(breadcrumb.includes('href="/?group=sapiens&amp;tag=golden-gather"'));
 assert.ok(breadcrumb.includes('Golden_Gather'));
 assert.ok(breadcrumb.includes('EDITOR'));
 const encoded = renderToStaticMarkup(React.createElement(Breadcrumbs, {

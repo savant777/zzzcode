@@ -10,6 +10,8 @@ export interface FieldConfig {
     parent_block_name?: string;
     block_depth?: number;
     block_description?: string;
+    block_default_count?: number;
+    block_default_values?: Record<string, any>;
     block_order: number;
 
     group_name: string;
@@ -427,6 +429,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 parent_block_name: parentBlockName,
                 block_depth: oldField?.block_depth ?? blockScope.depth,
                 block_description: oldField?.block_description ?? oldBlockField?.block_description,
+                block_default_count: oldField?.block_default_count ?? oldBlockField?.block_default_count,
                 block_order: oldField?.block_order ?? 0,
                 group_name: oldField?.group_name || "Repeat_Element",
                 group_order: oldField?.group_order ?? 90,
@@ -486,6 +489,7 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 parent_block_name: parentBlockName,
                 block_depth: oldField?.block_depth ?? blockScope.depth,
                 block_description: oldField?.block_description ?? oldBlockField?.block_description,
+                block_default_count: oldField?.block_default_count ?? oldBlockField?.block_default_count,
                 block_order: oldField?.block_order ?? blockMap[blockId],
                 group_name: currentGroupName,
                 group_order: oldField?.group_order ?? groupMap[groupKey],

@@ -2,6 +2,8 @@
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import { defaultBlockCount } from '@/lib/block-defaults';
+import BlockDefaultValues from './BlockDefaultValues';
 import TemplateGroupContainer from './TemplateGroupContainer';
 
 export default function TemplateBlockContainer({
@@ -13,6 +15,8 @@ export default function TemplateBlockContainer({
     onGroupDragEnd,
     onEdit,
     onBlockDescriptionChange,
+    onBlockDefaultCountChange,
+    onBlockDefaultValueChange,
     parentBlockName,
     isNested = false,
 }: any) {
@@ -59,6 +63,15 @@ export default function TemplateBlockContainer({
 
             {blockName !== "GLOBAL" && (
                 <div className="mb-3 flex flex-col gap-1">
+                    <label className="mb-2 flex items-center gap-2 text-[10px] uppercase text-(--foreground)/60">
+                        Initial_Blocks
+                        <select value={defaultBlockCount(blockFields)}
+                            onChange={event => onBlockDefaultCountChange?.(blockName, Number(event.target.value), parentBlockName)}
+                            className="bg-black border border-(--primary)/30 p-1 text-(--primary)">
+                            {Array.from({ length: 11 }, (_, count) => <option key={count} value={count}>{count}</option>)}
+                        </select>
+                    </label>
+                    <BlockDefaultValues fields={blockFields} onChange={onBlockDefaultValueChange} />
                     <label className="text-[9px] uppercase tracking-[0.2em] text-(--foreground)/35">
                         Block_Description
                     </label>
@@ -113,6 +126,8 @@ export default function TemplateBlockContainer({
                                         onGroupDragEnd={onGroupDragEnd}
                                         onEdit={onEdit}
                                         onBlockDescriptionChange={onBlockDescriptionChange}
+                                        onBlockDefaultCountChange={onBlockDefaultCountChange}
+                                        onBlockDefaultValueChange={onBlockDefaultValueChange}
                                         parentBlockName={blockName}
                                         isNested
                                     />

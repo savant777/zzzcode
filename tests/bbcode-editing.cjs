@@ -48,10 +48,10 @@ assert.equal(updateBBCodeHeight(original, ['missing', 0], 'text', 256), original
 const editorSource = fs.readFileSync('app/editor/[id]/page.tsx', 'utf8');
 const helpers = editorSource.slice(editorSource.indexOf('const createBlockEntry ='), editorSource.indexOf('export default function EditorPage'));
 const helperExports = {};
-new Function('exports', 'BBCODE_HEIGHTS', 'getBBCodeHeights', 'getDefaultValue', ts.transpileModule(
+new Function('exports', 'BBCODE_HEIGHTS', 'getBBCodeHeights', 'getDefaultValue', 'defaultBlockCount', ts.transpileModule(
     helpers + '\nexport { createBlockEntry, buildInitialValues };',
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
-).outputText)(helperExports, BBCODE_HEIGHTS, getBBCodeHeights, field => field.default_value);
+).outputText)(helperExports, BBCODE_HEIGHTS, getBBCodeHeights, field => field.default_value, load('lib/block-defaults.ts').defaultBlockCount);
 const fields = [{ variable_name: 'text', default_value: 'default' }];
 const copiedBlock = helperExports.createBlockEntry(fields, resized.block[0], { child: fields });
 assert.equal(getBBCodeHeights(copiedBlock.child[0]).text, 420);
