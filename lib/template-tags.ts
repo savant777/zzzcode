@@ -59,11 +59,11 @@ export function templateRoute(entries?: TagEntry[] | null, preferredPath?: strin
     const tags = visibleTemplateTags(entries);
     const [, rawTag] = (preferredPath || '').split(':');
     const tag = (rawTag || '').toLowerCase();
-    const primaryTags = tags.filter(entry =>
-        PRIMARY_ROUTE_GROUPS.includes(getGroupSlug(entry.tags?.tag_groups?.name)));
-    const candidates = primaryTags.length ? primaryTags : tags.filter(entry =>
-        getGroupSlug(entry.tags?.tag_groups?.name) === 'category');
-    // The incoming tag only breaks ties within the eligible priority tier.
+    const preferredGroup = PRIMARY_ROUTE_GROUPS.find(group => tags.some(entry =>
+        getGroupSlug(entry.tags?.tag_groups?.name) === group)) || 'category';
+    const candidates = tags.filter(entry =>
+        getGroupSlug(entry.tags?.tag_groups?.name) === preferredGroup);
+    // The incoming tag only breaks ties within the highest-priority group.
     // Never let category, CSS or creator navigation override a primary tag.
     const selected = candidates.find(entry => entry.tags?.slug?.toLowerCase() === tag) || candidates[0];
     return {

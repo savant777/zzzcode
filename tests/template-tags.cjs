@@ -60,6 +60,23 @@ assert.deepEqual(templateRoute([active, cssTag], 'css:minimal'), { group: 'sapie
 const categoryTag = { tags: { is_active: true, slug: 'etc', tag_groups: { name: 'category' } } };
 const creatorTag = { tags: { is_active: true, slug: 'author', tag_groups: { name: 'creators' } } };
 assert.ok(!routes.PRIMARY_ROUTE_GROUPS.includes('creators'));
+const priorityTags = ['activity', 'sapiens', 'houses', 'shops', 'commission'].map(group => ({
+    tags: { is_active: true, slug: `${group}-tag`, tag_groups: { name: group } },
+}));
+for (let index = 0; index < priorityTags.length; index++) {
+    const eligible = priorityTags.slice(index);
+    const first = eligible[0].tags;
+    assert.deepEqual(templateRoute([...eligible].reverse(), 'commission:commission-tag'), {
+        group: first.tag_groups.name, tag: first.slug,
+    });
+}
+const secondActivity = { tags: { is_active: true, slug: 'other-activity', tag_groups: { name: 'activity' } } };
+assert.deepEqual(templateRoute([...priorityTags, secondActivity], 'activity:other-activity'), {
+    group: 'activity', tag: 'other-activity',
+});
+assert.deepEqual(templateRoute([
+    { tags: { ...priorityTags[0].tags, is_active: false } }, ...priorityTags.slice(1),
+], 'activity:activity-tag'), { group: 'sapiens', tag: 'sapiens-tag' });
 for (const group of ['activity', 'commission', 'houses', 'shops', 'sapiens']) {
     const primary = { tags: { is_active: true, slug: 'chosen', tag_groups: { name: group } } };
     for (const source of ['category:etc', 'creators:author', 'css:minimal', 'category:all']) {
