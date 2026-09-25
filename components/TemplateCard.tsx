@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from 'next/navigation';
 import { getGroupSlug } from '@/lib/routes';
-import { templateRoute, visibleTemplateTags } from '@/lib/template-tags';
+import { templateRoute, sortedVisibleTemplateTags } from '@/lib/template-tags';
 
 function CreatorBadge({ name }: { name: string }) {
     return (
@@ -17,7 +17,7 @@ function CreatorBadge({ name }: { name: string }) {
 
 export default function TemplateCard({ item, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onOpenPrivateModal, onActivate, isActivating }: any) {
     const router = useRouter();
-    const visibleTags = visibleTemplateTags(item.template_tags);
+    const visibleTags = sortedVisibleTemplateTags(item.template_tags);
     const inactive = item.is_active === false;
     if (inactive && !canManage) return null;
     const contentTone = inactive ? 'grayscale opacity-50' : '';

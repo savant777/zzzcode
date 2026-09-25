@@ -46,6 +46,14 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
                     return acc;
                 }, {});
 
+                Object.values(tagsByGroup).forEach(groupTags => {
+                    groupTags.sort((a, b) =>
+                        a.name.localeCompare(b.name, undefined, {
+                            sensitivity: 'base',
+                        })
+                    );
+                });
+
                 const activeGroups = groups
                     .map(group => ({
                         ...group,
