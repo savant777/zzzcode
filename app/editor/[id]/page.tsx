@@ -10,6 +10,7 @@ import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { templateRoute } from '@/lib/template-tags';
 import { isTemplateUnlocked } from '@/lib/template-unlock';
+import { BBCODE_HEIGHTS, getBBCodeHeights, updateBBCodeHeight } from '@/lib/bbcode-height';
 import FieldRenderer from '@/components/FieldRenderer';
 import LivePreview from '@/components/LivePreview';
 import { localCopyKey, readLocalCopy, saveLocalCopy, type LocalDraftCopy } from '@/lib/editor-local-copy';
@@ -265,7 +266,7 @@ const createBlockEntry = (
     childBlockMap: Record<string, FieldConfig[]> = {},
     fallbackBlockValues?: Record<string, any>
 ) => {
-    const entry: Record<string, any> = {};
+    const entry: Record<string, any> = { [BBCODE_HEIGHTS]: getBBCodeHeights(source) };
 
     blockFields.forEach(field => {
         entry[field.variable_name] = source?.[field.variable_name] ?? getDefaultValue(field);
@@ -285,7 +286,7 @@ const createBlockEntry = (
 };
 
 const buildInitialValues = (fieldList: FieldConfig[], savedValues?: Record<string, any>) => {
-    const values: Record<string, any> = {};
+    const values: Record<string, any> = { [BBCODE_HEIGHTS]: getBBCodeHeights(savedValues) };
     const blockBuckets: Record<string, FieldConfig[]> = {};
     const childBlockBuckets: Record<string, Record<string, FieldConfig[]>> = {};
 
@@ -634,6 +635,7 @@ export default function EditorPage() {
 
     useEffect(() => {
         const handleHistoryShortcut = (event: KeyboardEvent) => {
+            if (event.defaultPrevented) return;
             const isModifier = event.ctrlKey || event.metaKey;
             if (!isModifier) return;
 
@@ -1393,9 +1395,11 @@ export default function EditorPage() {
 
                                                 return (
                                                     <FieldRenderer 
-                                                        key={field.id}
+                                                        key={`${activeDraftId}-${field.id}`}
                                                         field={field}
                                                         value={fieldValues[field.variable_name]}
+                                                        bbcodeHeights={getBBCodeHeights(fieldValues)}
+                                                        onBBCodeHeightChange={(key, height) => setFieldValues(prev => updateBBCodeHeight(prev, [], key, height))}
                                                         onChange={handleValueChange}
                                                         className={isWide ? "lg:col-span-2" : "col-span-1"}
                                                     />
@@ -1486,9 +1490,11 @@ export default function EditorPage() {
 
                                                                             return (
                                                                                 <FieldRenderer
-                                                                                    key={`${field.id}-${entryIndex}`}
+                                                                                    key={`${activeDraftId}-${field.id}-${entryIndex}`}
                                                                                     field={field}
                                                                                     value={entryValues[field.variable_name]}
+                                                                                    bbcodeHeights={getBBCodeHeights(entryValues)}
+                                                                                    onBBCodeHeightChange={(key, height) => setFieldValues(prev => updateBBCodeHeight(prev, [blockName, entryIndex], key, height))}
                                                                                     onChange={(varName, value) => handleBlockValueChange(blockName, entryIndex, varName, value)}
                                                                                     className={isWide ? "lg:col-span-2" : "col-span-1"}
                                                                                 />
@@ -1577,9 +1583,11 @@ export default function EditorPage() {
 
                                                                                                         return (
                                                                                                             <FieldRenderer
-                                                                                                                key={`${field.id}-${entryIndex}-${childEntryIndex}`}
+                                                                                                                key={`${activeDraftId}-${field.id}-${entryIndex}-${childEntryIndex}`}
                                                                                                                 field={field}
                                                                                                                 value={childEntryValues[field.variable_name]}
+                                                                                                                bbcodeHeights={getBBCodeHeights(childEntryValues)}
+                                                                                                                onBBCodeHeightChange={(key, height) => setFieldValues(prev => updateBBCodeHeight(prev, [blockName, entryIndex, childBlock.blockName, childEntryIndex], key, height))}
                                                                                                                 onChange={(varName, value) => handleNestedBlockValueChange(blockName, entryIndex, childBlock.blockName, childEntryIndex, varName, value)}
                                                                                                                 className={isWide ? "lg:col-span-2" : "col-span-1"}
                                                                                                             />

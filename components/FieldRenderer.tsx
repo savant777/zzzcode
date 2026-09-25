@@ -11,6 +11,8 @@ interface FieldRendererProps {
     value: any;
     onChange: (varName: string, newValue: any) => void;
     className?: string;
+    bbcodeHeights?: Record<string, number>;
+    onBBCodeHeightChange?: (key: string, height: number) => void;
 }
 
 const isSafeLink = (href: string) => /^https?:\/\//i.test(href);
@@ -123,7 +125,12 @@ function WordCount({ value }: { value: string }) {
     );
 }
 
-export default function FieldRenderer({ field, value, onChange, className }: FieldRendererProps) {
+export default function FieldRenderer({ field, value, onChange, className, bbcodeHeights = {}, onBBCodeHeightChange }: FieldRendererProps) {
+    const editorSize = (suffix = '') => {
+        const key = field.variable_name + suffix;
+        return { compact: field.config?.bbcode_height === 'compact', height: bbcodeHeights[key],
+            onHeightChange: (height: number) => onBBCodeHeightChange?.(key, height) };
+    };
     const [toolbarToggleTarget, setToolbarToggleTarget] = useState<HTMLDivElement | null>(null);
     const [colorModeTarget, setColorModeTarget] = useState<HTMLDivElement | null>(null);
     const [showDescription, setShowDescription] = useState(false);
@@ -259,7 +266,7 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
             {/* --- TYPE: BBCODE --- */}
             {field.type === 'bbcode' && (
                 <>
-                    <BBCodeEditor
+                    <BBCodeEditor {...editorSize()}
                         toolbarToggleTarget={toolbarToggleTarget}
                         value={value || ''} 
                         onChange={(val) => onChange(field.variable_name, val)}
@@ -337,7 +344,7 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
 
                                             {opt.type === 'bbcode' && (
                                             <div className="mt-2">
-                                                <BBCodeEditor
+                                                <BBCodeEditor {...editorSize(":" + index)}
                                                     value={entry?.custom_value || ''}
                                                     onChange={(val) => updateMultipleEntries(selectedMultipleEntries.map((item: any) => item.option_index === index ? { ...item, custom_value: val } : item))}
                                                 />
@@ -445,7 +452,7 @@ export default function FieldRenderer({ field, value, onChange, className }: Fie
 
                     {selectedSelectOption?.type === 'bbcode' && (
                         <div>
-                            <BBCodeEditor
+                            <BBCodeEditor {...editorSize(":" + selectedSelectIndex)}
                                 value={value?.custom_value || ''}
                                 onChange={(val) => onChange(field.variable_name, { option_index: selectedSelectIndex, value: selectedSelectValue, custom_value: val })}
                             />

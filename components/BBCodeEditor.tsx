@@ -1,5 +1,7 @@
 ﻿"use client";
 import { useRef, useState, useEffect, useId } from 'react';
+import { BBCodeHistory } from '@/lib/bbcode-history';
+import { bbcodeShortcutKey } from '@/lib/bbcode-shortcut';
 import ColorNameInput from './ColorNameInput';
 import { isBBCodeColor, parseColor, formatColor } from '@/lib/colors';
 import { HexColorPicker } from "react-colorful";
@@ -7,6 +9,9 @@ import Modal from './Modal';
 import { createPortal } from 'react-dom';
 
 interface Props {
+    height?: number;
+    compact?: boolean;
+    onHeightChange?: (height: number) => void;
     toolbarToggleTarget?: HTMLElement | null;
     value: string;
     onChange: (val: string) => void;
@@ -42,7 +47,7 @@ const extractYouTubeId = (input: string) => {
     return trimmed.replace(/^[^A-Za-z0-9_-]+|[^A-Za-z0-9_-]+$/g, '').split(/[?&#]/)[0];
 };
 
-export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: Props) {
+export default function BBCodeEditor({ value, onChange, toolbarToggleTarget, height, compact, onHeightChange }: Props) {
     const [toolbarExpanded, setToolbarExpanded] = useState(true);
     const toolbarId = useId();
     const [toolbarHeight, setToolbarHeight] = useState<number>();
@@ -72,6 +77,32 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
         return () => observer.disconnect();
     }, [toolbarExpanded]);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const historyRef = useRef(new BBCodeHistory(value));
+    useEffect(() => { historyRef.current.sync(value); }, [value]);
+    const commitText = (next: string, start: number, end = start) => {
+        historyRef.current.record({ value: next, start, end });
+        onChange(next);
+    };
+    const rememberSelection = () => {
+        const el = textareaRef.current;
+        if (el) historyRef.current.select(el.selectionStart, el.selectionEnd);
+    };
+    const heightCallback = useRef(onHeightChange);
+    heightCallback.current = onHeightChange;
+    useEffect(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        let previous = el.offsetHeight;
+        const observer = new ResizeObserver(() => {
+            const next = el.offsetHeight;
+            if (next > 0 && next !== previous) {
+                previous = next;
+                heightCallback.current?.(next);
+            }
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
     const colorPickerRef = useRef<HTMLDivElement>(null);
     const sizePickerRef = useRef<HTMLDivElement>(null);
     const [showSizePicker, setShowSizePicker] = useState(false);
@@ -132,7 +163,8 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
         }
 
         const newValue = beforeText + replacement + afterText;
-        onChange(newValue);
+        rememberSelection();
+        commitText(newValue, start + replacement.length);
 
         setTimeout(() => {
             textarea.focus();
@@ -141,17 +173,22 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
         }, 10);
     };
 
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.ctrlKey || e.metaKey) {
-            if (e.key === 'b') { e.preventDefault(); insertTag('[b]', '[/b]'); }
-            if (e.key === 'i') { e.preventDefault(); insertTag('[i]', '[/i]'); }
-            if (e.key === 'u') { e.preventDefault(); insertTag('[u]', '[/u]'); }
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [value]);
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.nativeEvent.isComposing) return;
+        const key = bbcodeShortcutKey(event.key, event.code);
+        if (!key) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (key === 'z' || key === 'y') {
+            rememberSelection();
+            const snapshot = key === 'y' || event.shiftKey ? historyRef.current.redo() : historyRef.current.undo();
+            if (!snapshot) return;
+            onChange(snapshot.value);
+            requestAnimationFrame(() => textareaRef.current?.setSelectionRange(snapshot.start, snapshot.end));
+        } else {
+            insertTag('[' + key + ']', '[/' + key + ']');
+        }
+    };
 
     // Color Picker
     const [currentColor, setCurrentColor] = useState(() => getStoredColor(TEXT_COLOR_STORAGE_KEY, "#000000"));
@@ -276,7 +313,8 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
         const afterText = value.substring(end);
         const newValue = beforeText + content + afterText;
 
-        onChange(newValue);
+        rememberSelection();
+        commitText(newValue, start + content.length);
 
         setTimeout(() => {
             textarea.focus();
@@ -320,28 +358,28 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
             <div ref={toolbarRef} id={toolbarId} className="relative flex flex-wrap items-start content-start p-2 gap-2">
                 {/* กลุ่มสไตล์ */}
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
-                    <button title="ตัวหนา" onClick={() => insertTag('[b]', '[/b]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="ตัวหนา" onClick={() => insertTag('[b]', '[/b]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M272-200v-560h221q65 0 120 40t55 111q0 51-23 78.5T602-491q25 11 55.5 41t30.5 90q0 89-65 124.5T501-200H272Zm121-112h104q48 0 58.5-24.5T566-372q0-11-10.5-35.5T494-432H393v120Zm0-228h93q33 0 48-17t15-38q0-24-17-39t-44-15h-95v109Z"/>
                         </svg>
                     </button>
-                    <button title="ตัวเอียง" onClick={() => insertTag('[i]', '[/i]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="ตัวเอียง" onClick={() => insertTag('[i]', '[/i]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M200-200v-100h160l120-360H320v-100h400v100H580L460-300h140v100H200Z"/>
                         </svg>
                     </button>
-                    <button title="ขีดเส้นใต้" onClick={() => insertTag('[u]', '[/u]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="ขีดเส้นใต้" onClick={() => insertTag('[u]', '[/u]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M200-120v-80h560v80H200Zm123-223q-56-63-56-167v-330h103v336q0 56 28 91t82 35q54 0 82-35t28-91v-336h103v330q0 104-56 167t-157 63q-101 0-157-63Z"/>
                         </svg>
                     </button>
-                    <button title="abbr" onClick={applyAbbr} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="abbr" onClick={applyAbbr} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M323-343q-56-63-56-167v-330h103v336q0 56 28 91t82 35q54 0 82-35t28-91v-336h103v330q0 104-56 167t-157 63q-101 0-157-63Z"/>
                             <path d="M200-160h560" fill="none" stroke="currentColor" strokeWidth="72" strokeLinecap="butt" strokeDasharray="64 44"/>
                         </svg>
                     </button>
-                    <button title="ขีดทับ" onClick={() => insertTag('[s]', '[/s]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="ขีดทับ" onClick={() => insertTag('[s]', '[/s]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M486-160q-76 0-135-45t-85-123l88-38q14 48 48.5 79t85.5 31q42 0 76-20t34-64q0-18-7-33t-19-27h112q5 14 7.5 28.5T694-340q0 86-61.5 133T486-160ZM80-480v-80h800v80H80Zm402-326q66 0 115.5 32.5T674-674l-88 39q-9-29-33.5-52T484-710q-41 0-68 18.5T386-640h-96q2-69 54.5-117.5T482-806Z"/>
                         </svg>
@@ -350,22 +388,22 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
 
                 {/* กลุ่มจัดแนว */}
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
-                    <button title="ชิดซ้าย" onClick={() => insertTag('[align=left]', '[/align]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="ชิดซ้าย" onClick={() => insertTag('[align=left]', '[/align]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M120-120v-80h720v80H120Zm0-160v-80h480v80H120Zm0-160v-80h720v80H120Zm0-160v-80h480v80H120Zm0-160v-80h720v80H120Z"/>
                         </svg>
                     </button>
-                    <button title="ตรงกลาง" onClick={() => insertTag('[align=center]', '[/align]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="ตรงกลาง" onClick={() => insertTag('[align=center]', '[/align]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M120-120v-80h720v80H120Zm160-160v-80h400v80H280ZM120-440v-80h720v80H120Zm160-160v-80h400v80H280ZM120-760v-80h720v80H120Z"/>
                         </svg>
                     </button>
-                    <button title="ชิดขวา" onClick={() => insertTag('[align=right]', '[/align]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="ชิดขวา" onClick={() => insertTag('[align=right]', '[/align]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M120-760v-80h720v80H120Zm240 160v-80h480v80H360ZM120-440v-80h720v80H120Zm240 160v-80h480v80H360ZM120-120v-80h720v80H120Z"/>
                         </svg>
                     </button>
-                    <button title="จัดบรรทัดให้เสมอกัน" onClick={() => insertTag('[align=justify]', '[/align]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="จัดบรรทัดให้เสมอกัน" onClick={() => insertTag('[align=justify]', '[/align]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M120-120v-80h720v80H120Zm0-160v-80h720v80H120Zm0-160v-80h720v80H120Zm0-160v-80h720v80H120Zm0-160v-80h720v80H120Z"/>
                         </svg>
@@ -375,7 +413,7 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
                 {/* กลุ่มตกแต่ง */}
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
                     <div className="relative">
-                        <button title="ตัวหนาพร้อมใส่สี (เลือกสีข้าง ๆ)" onClick={applyBoldColor} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <button type="button" title="ตัวหนาพร้อมใส่สี (เลือกสีข้าง ๆ)" onClick={applyBoldColor} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                                 <path d="M272-280V-840h221c43 0 83 13 120 40s55 64 55 111-8 60-23 79-30 32-43 40c17 7 35 21 56 41s31 50 31 90c0 59-22 101-65 125-43 24-84 36-122 36h-229ZM393-392h104c32 0 52-8 59-25s11-28 11-36-4-19-11-36-28-25-62-25h-101v120ZM393-620h93c22 0 38-6 48-17s15-24 15-38-6-29-17-39-26-15-44-15h-95v109ZM80 0v-160h800v160H80Z"/>
                             </svg>
@@ -411,7 +449,7 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
 
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
                     <div ref={colorPickerRef} className="relative">
-                        <button title="สีตัวอักษร" onClick={() => setShowColorPicker(!showColorPicker)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                        <button type="button" title="สีตัวอักษร" onClick={() => setShowColorPicker(!showColorPicker)} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                                 <path d="M96 0v-192h768V0H96Zm161-336 180-480h86l180 480h-83l-43-123H384l-44 123h-83Zm151-192h144l-70-194h-4l-70 194Z"/>
                             </svg>
@@ -469,7 +507,7 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
                             </div>
                         )}
                     </div>
-                    <button title="ลบการจัดรูปแบบ" onClick={() => onChange(value.replace(/\[\/?.*?\]/g, ''))} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="ลบการจัดรูปแบบ" onClick={() => { rememberSelection(); commitText(value.replace(/\[\/?.*?\]/g, ''), 0); }} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M768-90 576-282l-89 90H235L117-310q-21-22-21-51.5t21-50.5l165-164L90-768l51-51 678 678-51 51ZM265-264h192l69-69-193-193-165 165 97 97Zm413-120-51-50 165-165-193-193-165 165-50-51 164-165q22-20 52-20.5t50 20.5l193 193q21 22 21.5 52T843-548L678-384ZM530-530ZM430-428Z"/>
                         </svg>
@@ -532,12 +570,12 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
                 </div>
 
                 <div className="flex p-0.5 gap-0.5 border border-(--primary)/25 bg-(--primary)/5">
-                    <button title="รายการจุด" onClick={() => insertTag('[list]', '[/list]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="รายการจุด" onClick={() => insertTag('[list]', '[/list]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M360-240v-72h456v72H360Zm0-204v-72h456v72H360Zm0-204v-72h456v72H360ZM215.79-204Q186-204 165-225.21t-21-51Q144-306 165.21-327t51-21Q246-348 267-326.79t21 51Q288-246 266.79-225t-51 21Zm0-204Q186-408 165-429.21t-21-51Q144-510 165.21-531t51-21Q246-552 267-530.79t21 51Q288-450 266.79-429t-51 21ZM165-633.21q-21-21.21-21-51T165.21-735q21.21-21 51-21T267-734.79q21 21.21 21 51T266.79-633q-21.21 21-51 21T165-633.21Z"/>
                         </svg>
                     </button>
-                    <button title="รายการตัวเลข" onClick={() => insertTag('[list=1]', '[/list]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
+                    <button type="button" title="รายการตัวเลข" onClick={() => insertTag('[list=1]', '[/list]')} className="flex-1 p-0.5 px-1 cursor-pointer hover:bg-(--primary)/15 transition-color duration-300 ease-in-out">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 -960 960 960" fill="currentColor">
                             <path d="M144-144v-48h96v-24h-48v-48h48v-24h-96v-48h120q10.2 0 17.1 6.9 6.9 6.9 6.9 17.1v48q0 10.2-6.9 17.1-6.9 6.9-17.1 6.9 10.2 0 17.1 6.9 6.9 6.9 6.9 17.1v48q0 10.2-6.9 17.1-6.9 6.9-17.1 6.9H144Zm0-240v-96q0-10.2 6.9-17.1 6.9-6.9 17.1-6.9h72v-24h-96v-48h120q10.2 0 17.1 6.9 6.9 6.9 6.9 17.1v72q0 10.2-6.9 17.1-6.9 6.9-17.1 6.9h-72v24h96v48H144Zm48-240v-144h-48v-48h96v192h-48Zm168 384v-72h456v72H360Zm0-204v-72h456v72H360Zm0-204v-72h456v72H360Z"/>
                         </svg>
@@ -549,9 +587,13 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget }: P
             </div>
             <textarea
                 ref={textareaRef}
-                className="w-full p-3 h-64 focus:outline-none font-sans text-sm leading-relaxed"
+                className="w-full p-3 min-h-[76px] resize-y focus:outline-none font-sans text-sm leading-relaxed"
+                style={{ height: height ?? (compact ? 76 : 256) }}
+                onKeyDown={handleKeyDown}
+                onBeforeInput={rememberSelection}
+                onSelect={rememberSelection}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => commitText(e.target.value, e.target.selectionStart, e.target.selectionEnd)}
                 placeholder="พิมพ์ข้อความที่นี่..."
             />
         </div>

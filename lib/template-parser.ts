@@ -51,6 +51,7 @@ export interface FieldConfig {
         false_value?: string;
         separate_placeholder?: boolean;
         show_word_count?: boolean;
+        bbcode_height?: 'compact' | 'normal';
         [key: string]: any;
     };
     is_repeat?: boolean;

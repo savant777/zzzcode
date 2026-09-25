@@ -140,6 +140,18 @@ export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onC
                     <DefaultValueConfig field={tempField} onChange={setTempField} />
                 )}
 
+                {(tempField.type === 'bbcode' || (tempField.type === 'select' && tempField.config?.select_options?.some(option => option.type === 'bbcode'))) && (
+                    <label className="flex items-center gap-2 text-[10px] uppercase text-(--foreground)/60">
+                        BBCode_Height
+                        <select value={tempField.config?.bbcode_height || 'normal'}
+                            onChange={e => updateField({ config: { ...tempField.config, bbcode_height: e.target.value as 'compact' | 'normal' } })}
+                            className="bg-black border border-(--primary)/40 p-1 text-(--primary)">
+                            <option value="compact">Compact (2 × Text)</option>
+                            <option value="normal">Normal</option>
+                        </select>
+                    </label>
+                )}
+
                 {tempField.type === 'bbcode' && (
                     <label className="flex w-fit items-center gap-2 text-[10px] uppercase text-(--foreground)/60 cursor-pointer">
                         <input

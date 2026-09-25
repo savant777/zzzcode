@@ -5,7 +5,11 @@ const compiled = ts.transpileModule(fs.readFileSync('lib/template-parser.ts', 'u
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const loaded = { exports: {} };
-new Function('exports', 'require', 'module', compiled)(loaded.exports, require, loaded);
+const colors = {};
+new Function('exports', ts.transpileModule(fs.readFileSync('lib/colors.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText)(colors);
+new Function('exports', 'require', 'module', compiled)(loaded.exports, name => name === './colors' ? colors : require(name), loaded);
 const { parseBBCode, generateFinalHTML } = loaded.exports;
 let count = 0;
 function check(input, expected) {
