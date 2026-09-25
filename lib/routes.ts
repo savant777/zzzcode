@@ -1,5 +1,5 @@
-export const PRIMARY_ROUTE_GROUPS = ['activity', 'human-party', 'houses', 'shops', 'commission'];
-export const TAG_GROUP_ORDER = ['creators', 'category', 'css', 'style', 'activity', 'human-party', 'houses', 'shops', 'commission'];
+export const PRIMARY_ROUTE_GROUPS = ['activity', 'sapiens', 'houses', 'shops', 'commission'];
+export const TAG_GROUP_ORDER = ['creators', 'category', 'css', 'style', 'activity', 'sapiens', 'houses', 'shops', 'commission'];
 
 export function sortTagsByGroup<T extends { tag_groups?: { name?: string | null } | { name?: string | null }[] | null }>(tags: T[]): T[] {
     const rank = (tag: T) => {
