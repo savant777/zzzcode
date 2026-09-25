@@ -16,6 +16,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import Modal from '@/components/Modal';
+import TemplateSortFilter from '@/components/TemplateSortFilter';
 
 
 export default function Page() {
@@ -50,6 +51,7 @@ function Dashboard() {
         if (savedView) setViewMode(savedView);
     }, []);
     const [sortBy, setSortBy] = useState('none');
+    const [noPassOnly, setNoPassOnly] = useState(false);
     
     // Modal & Security
     const [modalType, setModalType] = useState<'delete' | 'private' | null>(null);
@@ -111,7 +113,8 @@ function Dashboard() {
     };
 
     const filteredTemplates = useMemo(() => {
-        let result = templates.filter((item) => {
+        const result = templates.filter((item) => {
+            if (noPassOnly && item.is_personal) return false;
             const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
             const [group, tagSlug] = activeFilter.split(':'); 
             
@@ -153,7 +156,7 @@ function Dashboard() {
         }
 
         return sortedResult;
-    }, [templates, searchQuery, activeFilter, sortBy]);
+    }, [templates, searchQuery, activeFilter, sortBy, noPassOnly]);
 
     // --- 4. Event Handlers ---
 
@@ -292,23 +295,8 @@ function Dashboard() {
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                                 </button>
                             </div>
-                            {/* Sort Filter */}
-                            <div className="relative flex-none" suppressHydrationWarning>
-                                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-(--primary) pointer-events-none">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-                                </div>
-                                <select 
-                                    value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value)}
-                                    className="bg-transparent border border-(--primary)/30 h-[28px] pl-6 pr-2 outline-none cursor-pointer hover:border-(--primary) text-(--primary) w-full lg:w-auto appearance-none"
-                                >
-                                    <option value="none" className="bg-black">NONE</option>
-                                    <option value="az" className="bg-black">A → Z</option>
-                                    <option value="za" className="bg-black">Z → A</option>
-                                    <option value="newest" className="bg-black">NEWEST</option>
-                                    <option value="oldest" className="bg-black">OLDEST</option>
-                                </select>
-                            </div>
+                            <TemplateSortFilter sortBy={sortBy} onSortChange={setSortBy}
+                                noPassOnly={noPassOnly} onNoPassChange={setNoPassOnly} />
                         </div>
                     </div>
                 </div>
