@@ -7,6 +7,7 @@ import { templateRoute, templateTagChanges } from '@/lib/template-tags';
 import { getGroupSlug, sortTagsByGroup } from '@/lib/routes';
 import { useTemplateDraft } from '@/lib/use-template-draft';
 import { creatorCreditChanges } from '@/lib/creator-credit';
+import { setTemplateActive } from '@/lib/template-actions';
 import { toast } from 'sonner';
 import { KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -55,6 +56,9 @@ export default function EditTemplatePage() {
     const [editingField, setEditingField] = useState<FieldConfig | null>(null);
 
     const [loading, setLoading] = useState(true);
+    const saveInProgressRef = useRef(false);
+    const [activationPromptOpen, setActivationPromptOpen] = useState(false);
+    const [activating, setActivating] = useState(false);
     const [hasStoredPassword, setHasStoredPassword] = useState(false);
     const [creatorSession, setCreatorSession] = useState<CreatorSession | null>(null);
     const [templateOwnerId, setTemplateOwnerId] = useState<string | null>(null);
@@ -284,6 +288,8 @@ export default function EditTemplatePage() {
     // submit: UPDATE to template and template_tags
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (saveInProgressRef.current || activationPromptOpen) return;
+        saveInProgressRef.current = true;
         const toastId = toast.loading("SYSTEM: Updating_Module...");
 
         try {
@@ -298,7 +304,7 @@ export default function EditTemplatePage() {
                 throw new Error("TEMPLATE_OWNER_REQUIRED");
             }
 
-            const { error: updateError } = await supabase
+            const { data: savedTemplate, error: updateError } = await supabase
                 .from('templates')
                 .update({
                     title: formData.title,
@@ -311,7 +317,9 @@ export default function EditTemplatePage() {
                     password: formData.is_personal && formData.password ? formData.password : null,
                     updated_at: new Date().toISOString(),
                 })
-                .eq('id', templateId);
+                .eq('id', templateId)
+                .select('id, is_active')
+                .single();
 
             if (updateError) throw updateError;
 
@@ -365,12 +373,41 @@ export default function EditTemplatePage() {
 
             toast.success("PROTOCOL_SUCCESS: MODULE_UPDATED", { id: toastId });
             
-            router.push(`/?group=category&tag=all`);
-            router.refresh();
+            if (savedTemplate.is_active === false) {
+                setActivationPromptOpen(true);
+            } else {
+                finishEditing();
+            }
 
         } catch (error: any) {
             skipDraftSaveRef.current = false;
             toast.error(`CRITICAL_ERROR: ${error.message}`, { id: toastId });
+        } finally {
+            saveInProgressRef.current = false;
+        }
+    };
+
+    const finishEditing = () => {
+        setActivationPromptOpen(false);
+        router.push('/?group=category&tag=all');
+        router.refresh();
+    };
+
+    const handleActivate = async () => {
+        if (activating) return;
+        setActivating(true);
+        try {
+            const session = await requireCreator();
+            if (session.checkFailed || !canManageTemplate(session, templateOwnerId)) {
+                throw new Error('ไม่สามารถยืนยันสิทธิ์แก้ไขเทมเพลตได้ กรุณาลองใหม่');
+            }
+            await setTemplateActive(supabase, String(templateId), true);
+            toast.success('TEMPLATE_ACTIVATED');
+            finishEditing();
+        } catch (error: any) {
+            toast.error(`ACTIVATION_FAILED: ${error.message}`);
+        } finally {
+            setActivating(false);
         }
     };
 
@@ -648,8 +685,28 @@ export default function EditTemplatePage() {
                 </form>
             </div>
 
+            <Modal
+                isOpen={activationPromptOpen}
+                onClose={() => { if (!activating) finishEditing(); }}
+                title="Activate Template?"
+            >
+                <p className="font-Google-Sans leading-relaxed text-(--foreground)/75">
+                    บันทึกการแก้ไขแล้ว ต้องการเปิดใช้งานเทมเพลตนี้ไหม? หากยังไม่พร้อม สามารถเปิดใช้งานภายหลังจากหน้ารวมเทมเพลตได้
+                </p>
+                <div className="mt-6 flex gap-3">
+                    <button type="button" disabled={activating} onClick={finishEditing}
+                        className="flex-1 cursor-pointer border border-(--primary)/30 px-3 py-2 text-xs uppercase disabled:opacity-50">
+                        Keep Inactive
+                    </button>
+                    <button type="button" disabled={activating} onClick={handleActivate}
+                        className="flex-1 cursor-pointer bg-(--primary) px-3 py-2 text-xs font-bold uppercase text-(--background) disabled:opacity-50">
+                        {activating ? 'Activating...' : 'Activate'}
+                    </button>
+                </div>
+            </Modal>
+
             <Modal 
-                isOpen={modalType !== null} 
+                isOpen={modalType !== null}
                 onClose={() => setModalType(null)} 
                 title={modalType === 'clear_draft' ? 'Memory Wipe Confirmation' : 'Blueprint Quick Guide'}
             >

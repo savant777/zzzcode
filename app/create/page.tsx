@@ -255,7 +255,7 @@ export default function AddTemplatePage() {
                     ...formData,
                     password: formData.is_personal ? formData.password : null,
                     fields_config: fieldsToSave.map(normalizeFieldConfig),
-                    is_active: true,
+                    is_active: false,
                     user_id: creatorSession.user.id
                 }])
                 .select().single();
