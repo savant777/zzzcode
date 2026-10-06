@@ -3,7 +3,7 @@ import { useRef, useState, useEffect, useId } from 'react';
 import { BBCodeHistory } from '@/lib/bbcode-history';
 import { bbcodeShortcutKey } from '@/lib/bbcode-shortcut';
 import ColorNameInput from './ColorNameInput';
-import { isBBCodeColor, parseColor, formatColor } from '@/lib/colors';
+import { isBBCodeColor, parseColor, formatColor, normalizeColorInput } from '@/lib/colors';
 import { HexColorPicker } from "react-colorful";
 import Modal from './Modal';
 import { createPortal } from 'react-dom';
@@ -441,7 +441,9 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget, hei
                                         onChange={(newColor) => setBoldColor(newColor.toUpperCase())}
                                     />
                                 </div>
-                                <ColorNameInput value={boldColor} onChange={setBoldColor} />
+                                <ColorNameInput value={boldColor}
+                                    onChange={value => setBoldColor(/^#[\da-f]*$/i.test(value) ? value.toUpperCase() : value)}
+                                    onInputBlur={() => setBoldColor(normalizeColorInput(boldColor))} />
                             </div>
                         )}
                     </div>
@@ -463,7 +465,9 @@ export default function BBCodeEditor({ value, onChange, toolbarToggleTarget, hei
                                         onChange={(newColor) => setCurrentColor(newColor.toUpperCase())} 
                                     />
                                 </div>
-                                <ColorNameInput value={currentColor} onChange={setCurrentColor} />
+                                <ColorNameInput value={currentColor}
+                                    onChange={value => setCurrentColor(/^#[\da-f]*$/i.test(value) ? value.toUpperCase() : value)}
+                                    onInputBlur={() => setCurrentColor(normalizeColorInput(currentColor))} />
                                 <button 
                                     onClick={applyColor}
                                     className="bg-(--primary) text-(--background) px-4 py-1 text-xs font-black uppercase hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"

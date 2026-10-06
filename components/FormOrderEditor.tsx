@@ -10,11 +10,11 @@ import type { FieldConfig } from '@/lib/template-parser';
 function SectionRow({ section }: { section: FormSection }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     return <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, position: 'relative', zIndex: isDragging ? 2 : undefined }}
-        className="flex min-w-0 items-center gap-3 border border-(--primary)/25 bg-(--background) p-2">
+        className="flex min-w-0 items-center gap-2 border border-(--primary)/25 bg-(--background) p-2">
         <button type="button" {...attributes} {...listeners} aria-label={`ย้าย ${section.kind} ${section.name}`}
-            className="h-11 w-11 shrink-0 touch-none cursor-grab border border-(--primary)/30 text-xl text-(--primary)">⠿</button>
-        <div className="min-w-0"><span className="text-[10px] uppercase opacity-50">{section.kind === 'group' ? 'Field group' : section.kind}</span>
-            <p className="break-words text-sm text-(--primary)">{section.name}</p></div>
+            className="h-11 w-5 shrink-0 touch-none cursor-grab text-xl text-(--primary) active:cursor-grabbing">⋮</button>
+        <div className="min-w-0"><span className="block text-[10px] uppercase leading-tight text-(--primary) opacity-60">{section.kind === 'group' ? 'FIELD GROUP' : section.kind}</span>
+            <p className="break-words text-sm font-bold leading-snug">{section.name}</p></div>
     </li>;
 }
 
@@ -25,8 +25,8 @@ export default function FormOrderEditor({ fields, onChange }: { fields: FieldCon
         useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
     return <details className="mb-5 border border-(--primary)/30 p-3">
-        <summary className="min-h-11 cursor-pointer text-sm text-(--primary)">จัดลำดับฟอร์ม Editor</summary>
-        <p className="mb-3 text-xs leading-relaxed opacity-60">ลากกลุ่มฟิลด์, BLOCK หรือ GBLOCK เพื่อเลือกตำแหน่งในฟอร์มกรอกข้อมูล การจัดตรงนี้ไม่เปลี่ยนลำดับเนื้อหาในโค้ด</p>
+        <summary className="cursor-pointer text-sm text-(--primary)">Rearrange Form Order</summary>
+        <p className="mt-2 mb-3 text-xs leading-relaxed opacity-60">ลาก FIELD GROUP, BLOCK หรือ GBLOCK เพื่อจัดลำดับการแสดงผลในหน้า Editor</p>
         <DndContext id={contextId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={({ active, over }) => {
             if (!over || active.id === over.id) return;
             const ids = sections.map(section => section.id);

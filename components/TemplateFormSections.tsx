@@ -31,10 +31,14 @@ export default function TemplateFormSections({ fields, onFieldsChange, ...callba
             {section.kind === 'group'
                 ? <TemplateBlockContainer {...callbacks} blockName="GLOBAL" groups={groupsFor(section.fields)} disableSort />
                 : section.kind === 'block' ? renderBlock(section.name, section.fields)
-                : <div className="mb-4 border border-(--primary)/30 p-3 pt-5">
-                    <h4 className="mb-5 break-words text-xs text-(--primary)">GBLOCK: {section.name}</h4>
-                    {[...new Set(section.fields.sort((a, b) => (a.block_group_member_order ?? 0) - (b.block_group_member_order ?? 0)).map(f => f.block_name!))]
-                        .map(name => renderBlock(name, section.fields.filter(f => f.block_name === name)))}
+                : <div className="relative mt-3 mb-6 min-w-0 border-2 border-solid border-(--primary)/70 p-3 pt-8 sm:p-4 sm:pt-8">
+                    <h4 className="absolute -top-3 left-3 right-3 w-fit max-w-[calc(100%-1.5rem)] border border-(--primary)/70 bg-(--background) px-3 py-1 text-[10px] font-black uppercase tracking-wider text-(--primary) break-words sm:left-4">
+                        GROUP BLOCK SCOPE: {section.name}
+                    </h4>
+                    <div className="flex flex-col gap-8 [&>div]:mb-0">
+                        {[...new Set(section.fields.sort((a, b) => (a.block_group_member_order ?? 0) - (b.block_group_member_order ?? 0)).map(f => f.block_name!))]
+                            .map(name => renderBlock(name, section.fields.filter(f => f.block_name === name)))}
+                    </div>
                 </div>}
         </div>)}
     </>;

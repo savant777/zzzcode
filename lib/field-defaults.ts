@@ -1,4 +1,4 @@
-import { FieldConfig, defaultGradientValue, getSelectDefaultValue, getSelectOptions } from './template-parser';
+import { FieldConfig, defaultGradientValue, getSelectDefaultValue, getSelectDefaultIndex, getSelectOptions } from './template-parser';
 
 export const getDefaultValue = (field: FieldConfig) => {
     if (field.type === 'slider') {
@@ -18,14 +18,15 @@ export const getDefaultValue = (field: FieldConfig) => {
 
     if (field.type === 'select') {
         const defaultValue = getSelectDefaultValue(field);
-        const defaultOption = getSelectOptions(field).find(opt => opt.value === defaultValue);
+        const defaultIndex = getSelectDefaultIndex(field);
+        const defaultOption = getSelectOptions(field)[defaultIndex];
         const defaultEntry = (entry: Record<string, any>) => field.config?.select_multiple
             ? { multiple: true, selected: [entry] }
             : entry;
 
         if (defaultOption?.type === 'slider') {
             return defaultEntry({
-                option_index: 0,
+                option_index: defaultIndex,
                 value: defaultValue,
                 custom_value: field.config?.sliders?.map(s => s.default_value) || [0],
             });
@@ -33,7 +34,7 @@ export const getDefaultValue = (field: FieldConfig) => {
 
         if (defaultOption?.type === 'gradient') {
             return defaultEntry({
-                option_index: 0,
+                option_index: defaultIndex,
                 value: defaultValue,
                 custom_value: field.config?.gradient || defaultGradientValue,
             });
@@ -41,7 +42,7 @@ export const getDefaultValue = (field: FieldConfig) => {
 
         if (defaultOption?.type === 'color') {
             return defaultEntry({
-                option_index: 0,
+                option_index: defaultIndex,
                 value: defaultValue,
                 custom_value: defaultOption.default_value || '#FFFFFF',
             });
@@ -49,7 +50,7 @@ export const getDefaultValue = (field: FieldConfig) => {
 
         if (defaultOption?.type === 'color-text') {
             return defaultEntry({
-                option_index: 0,
+                option_index: defaultIndex,
                 value: defaultValue,
                 custom_value: {
                     color: defaultOption.default_value || '#FFFFFF',
@@ -60,14 +61,14 @@ export const getDefaultValue = (field: FieldConfig) => {
 
         if (defaultOption?.type === 'text' || defaultOption?.type === 'bbcode') {
             return defaultEntry({
-                option_index: 0,
+                option_index: defaultIndex,
                 value: defaultValue,
                 custom_value: defaultOption.default_value || '',
             });
         }
 
         if (field.config?.select_multiple) {
-            return { multiple: true, selected: [{ option_index: 0, value: defaultValue }] };
+            return { multiple: true, selected: [{ option_index: defaultIndex, value: defaultValue }] };
         }
 
         return defaultValue;

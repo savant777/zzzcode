@@ -35,6 +35,21 @@ export default function MainHeader() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [modalType, setModalType] = useState<'login' | 'logout' | null>(null);
     const [loading, setLoading] = useState(false);
+    const [loginDiagnostics, setLoginDiagnostics] = useState<{ authHost: string; redirectTo: string } | null>(null);
+
+    useEffect(() => {
+        if (process.env.NODE_ENV !== 'development' || modalType !== 'login') return;
+        let disposed = false;
+        void supabase.auth.signInWithOAuth({
+            provider: 'discord',
+            options: { redirectTo: new URL('/', window.location.origin).href, skipBrowserRedirect: true },
+        }).then(({ data }) => {
+            if (disposed || !data.url) return;
+            const url = new URL(data.url);
+            setLoginDiagnostics({ authHost: url.hostname, redirectTo: url.searchParams.get('redirect_to') || '(missing)' });
+        });
+        return () => { disposed = true; };
+    }, [modalType]);
 
     const [authNotice, setAuthNotice] = useState<string | null>(null);
     const requestVersion = useRef(0);
@@ -103,7 +118,7 @@ export default function MainHeader() {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'discord',
                 options: {
-                    redirectTo: window.location.origin,
+                    redirectTo: new URL('/', window.location.origin).href,
                 },
             });
 
@@ -246,6 +261,12 @@ export default function MainHeader() {
                         <p className="text-xs leading-relaxed text-(--foreground)/70">
                             Creator access only. Continue with the Discord account linked to your creator profile.
                         </p>
+                        {process.env.NODE_ENV === 'development' && loginDiagnostics && (
+                            <div className="border border-(--primary)/30 p-2 text-xs break-all" role="status">
+                                <p>Auth server: {loginDiagnostics.authHost}</p>
+                                <p>Return URL: {loginDiagnostics.redirectTo}</p>
+                            </div>
+                        )}
                         <button
                             type="button"
                             onClick={handleLogin}

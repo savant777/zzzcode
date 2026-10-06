@@ -1,6 +1,18 @@
 export const colorNames = 'aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen'.split(' ');
 export function isBBCodeColor(value: string) { return /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(value) || colorNames.includes(value.toLowerCase()); }
 export type RGBA = { r: number; g: number; b: number; a: number };
+export function normalizeColorInput(value: string) {
+    const text = value.trim();
+    if (colorNames.includes(text.toLowerCase()) || text.toLowerCase() === 'transparent') return text;
+    if (/^#?(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i.test(text)) return '#' + text.replace(/^#/, '').toUpperCase();
+    return value;
+}
+export function normalizeColorWhileTyping(value: string) {
+    if (/^#[\da-f]*$/i.test(value)) return value.toUpperCase();
+    const query = value.trim().toLowerCase();
+    if (query && [...colorNames, 'transparent'].some(name => name.startsWith(query))) return value;
+    return normalizeColorInput(value);
+}
 export function parseColor(value: string): RGBA | null {
     const text = value.trim().toLowerCase();
     if (text === 'transparent') return { r: 0, g: 0, b: 0, a: 0 };

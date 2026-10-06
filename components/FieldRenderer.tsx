@@ -11,6 +11,7 @@ interface FieldRendererProps {
     value: any;
     onChange: (varName: string, newValue: any) => void;
     className?: string;
+    hideLabel?: boolean;
     bbcodeHeights?: Record<string, number>;
     onBBCodeHeightChange?: (key: string, height: number) => void;
 }
@@ -125,7 +126,7 @@ function WordCount({ value }: { value: string }) {
     );
 }
 
-export default function FieldRenderer({ field, value, onChange, className, bbcodeHeights = {}, onBBCodeHeightChange }: FieldRendererProps) {
+export default function FieldRenderer({ field, value, onChange, className, hideLabel = false, bbcodeHeights = {}, onBBCodeHeightChange }: FieldRendererProps) {
     const editorSize = (suffix = '') => {
         const key = field.variable_name + suffix;
         return { compact: field.config?.bbcode_height === 'compact', height: bbcodeHeights[key],
@@ -229,9 +230,9 @@ export default function FieldRenderer({ field, value, onChange, className, bbcod
     return (
         <div className={`${className} flex flex-col gap-1 w-full`}>
             <div className="flex items-center gap-1">
-                <label className="text-xs font-Google-Sans opacity-70">
+                {!hideLabel && <label className="text-xs font-Google-Sans opacity-70">
                     {field.label || field.variable_name}
-                </label>
+                </label>}
                 {field.description && (
                     <button
                         type="button"

@@ -30,6 +30,8 @@ export interface FieldConfig {
     options?: string;
     config?: {
         select_options?: {
+            id?: string;
+            is_default?: boolean;
             option: string;
             value: string;
             type?: '' | 'text' | 'bbcode' | 'color' | 'color-text' | 'slider' | 'gradient';
@@ -66,6 +68,8 @@ export interface FieldConfig {
 }
 
 export type SelectOptionConfig = {
+    id?: string;
+    is_default?: boolean;
     option: string;
     value: string;
     type?: '' | 'text' | 'bbcode' | 'color' | 'color-text' | 'slider' | 'gradient';
@@ -103,6 +107,8 @@ export const formatGradientValue = (gradient?: Partial<GradientValue> | string) 
 export const getSelectOptions = (field: FieldConfig): SelectOptionConfig[] => {
     if (field.config?.select_options?.length) {
         return field.config.select_options.map(opt => ({
+            ...(opt.id ? { id: opt.id } : {}),
+            ...(opt.is_default !== undefined ? { is_default: opt.is_default } : {}),
             option: opt.option || opt.value || '',
             value: opt.value || '',
             type: opt.type || '',
@@ -132,7 +138,12 @@ export const getSelectOptions = (field: FieldConfig): SelectOptionConfig[] => {
 };
 
 export const getSelectDefaultValue = (field: FieldConfig) => {
-    return getSelectOptions(field)[0]?.value || '';
+    const options = getSelectOptions(field);
+    return options[getSelectDefaultIndex(field)]?.value || '';
+};
+export const getSelectDefaultIndex = (field: FieldConfig) => {
+    const index = getSelectOptions(field).findIndex(option => option.is_default);
+    return Math.max(0, index);
 };
 
 const formatSelectOutput = (format: string, value: string, rawValue?: any, field?: FieldConfig): string => {

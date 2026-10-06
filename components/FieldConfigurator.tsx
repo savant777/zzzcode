@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
+import { DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { FieldConfig, GradientValue, SelectOptionConfig, defaultGradientValue, getSelectDefaultValue, getSelectOptions } from '@/lib/template-parser';
 import { parseColor } from '@/lib/colors';
 import ColorPicker from '@/components/ColorPicker';
@@ -33,7 +36,11 @@ const cssDeclarationValue = (cssVariable: string, value: string) => cssDeclarati
 export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onCancel }: ConfiguratorProps) {
     const [tempField, setTempField] = useState<FieldConfig>({ ...field });
 
-    const selectOptions = useMemo(() => getSelectOptions(tempField), [tempField]);
+    const selectOptions = useMemo(() => {
+        const options = getSelectOptions(tempField);
+        const hasDefault = options.some(option => option.is_default);
+        return options.map((option, index) => ({ ...option, id: option.id || `option-${index}`, is_default: hasDefault ? !!option.is_default : index === 0 }));
+    }, [tempField]);
 
     const updateField = (patch: Partial<FieldConfig>) => {
         setTempField(prev => ({ ...prev, ...patch }));
@@ -41,6 +48,8 @@ export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onC
 
     const saveSelectOptions = (options: SelectOptionConfig[]) => {
         const normalized: SelectOptionConfig[] = options.map(opt => ({
+            id: opt.id,
+            is_default: opt.is_default,
             option: opt.option,
             value: opt.value,
             type: opt.type || '',
@@ -209,8 +218,8 @@ export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onC
 const prepareFieldForSave = (field: FieldConfig) => {
     if (field.type !== 'select') return field;
 
-    const firstSelectValue = getSelectDefaultValue(field);
-    return { ...field, default_value: firstSelectValue, placeholder: firstSelectValue };
+    const selectedDefaultValue = getSelectDefaultValue(field);
+    return { ...field, default_value: selectedDefaultValue, placeholder: selectedDefaultValue };
 };
 
 const directionPresets = ['to right', 'to left', 'to bottom', 'to top'];
@@ -467,6 +476,26 @@ function NumberInput({ label, value, onChange, highlight }: { label: string; val
     );
 }
 
+function SortableSelectOption({ id, label, isDefault, onDefault, children }: {
+    id: string; label: string; isDefault: boolean; onDefault: () => void; children: ReactNode;
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, position: 'relative', zIndex: isDragging ? 2 : undefined }}
+        className="min-w-0 p-3 bg-black/40 border border-(--primary)/40 space-y-3">
+        <div className="flex items-center gap-2">
+            <button type="button" {...attributes} {...listeners} aria-label={`Reorder ${label}`} className="h-4 w-5 shrink-0 touch-none cursor-grab text-sm leading-none text-(--primary) active:cursor-grabbing">=</button>
+            <label className="ml-auto flex items-center gap-2 cursor-pointer text-[10px] uppercase text-(--primary)">
+                <input type="radio" checked={isDefault} onChange={onDefault} className="peer sr-only" />
+                <span aria-hidden="true" className="flex h-4 w-4 shrink-0 items-center justify-center border border-(--primary)/30 bg-black/30 peer-checked:[&>span]:bg-(--primary) peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-(--primary)">
+                    <span className="h-2 w-2" />
+                </span>
+                Default
+            </label>
+        </div>
+        {children}
+    </div>;
+}
+
 function SelectConfig({
     field,
     options,
@@ -478,6 +507,10 @@ function SelectConfig({
     onOptionsChange: (options: SelectOptionConfig[]) => void;
     onFieldChange: (field: FieldConfig) => void;
 }) {
+    const contextId = useId();
+    const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
     const existingCssVariable = useMemo(() => {
         const format = options.find(opt => opt.format?.includes('--'))?.format || '';
         return format.match(/(--[a-zA-Z0-9_-]+)\s*:/)?.[1] || '';
@@ -524,7 +557,7 @@ function SelectConfig({
                 <label className="text-[10px] uppercase text-(--primary) font-bold">Select_Options</label>
                 <button
                     type="button"
-                    onClick={() => onOptionsChange([...options, { option: 'Option', value: 'Value', type: '' }])}
+                    onClick={() => onOptionsChange([...options, { id: crypto.randomUUID(), option: 'Option', value: 'Value', type: '' }])}
                     className="ml-auto cursor-pointer border border-(--primary)/30 px-2 py-1 text-[10px] uppercase hover:border-(--primary) transition-colors"
                 >
                     Add
@@ -594,8 +627,17 @@ function SelectConfig({
                 )}
             </div>
 
+            <DndContext id={contextId} sensors={sensors} modifiers={[({ transform }) => ({ ...transform, x: 0 })]} collisionDetection={closestCenter}
+                onDragEnd={({ active, over }) => {
+                    if (!over || active.id === over.id) return;
+                    const from = options.findIndex(option => option.id === active.id);
+                    const to = options.findIndex(option => option.id === over.id);
+                    if (from >= 0 && to >= 0) onOptionsChange(arrayMove(options, from, to));
+                }}>
+            <SortableContext items={options.map(option => option.id!)} strategy={verticalListSortingStrategy}>
             {options.map((opt, index) => (
-                <div key={index} className="p-3 bg-black/40 border border-(--primary)/40 space-y-3">
+                <SortableSelectOption key={opt.id} id={opt.id!} label={opt.option} isDefault={!!opt.is_default}
+                    onDefault={() => onOptionsChange(options.map((option, optionIndex) => ({ ...option, is_default: optionIndex === index })))}>
                     <div className="grid grid-cols-1 lg:grid-cols-[1fr_130px_auto] gap-2">
                         <div className="flex flex-col gap-1">
                             <label className="text-[8px] opacity-40 uppercase">Option_Label</label>
@@ -603,7 +645,7 @@ function SelectConfig({
                                 type="text"
                                 value={opt.option}
                                 onChange={(e) => updateOption(index, { option: e.target.value })}
-                                className={compactInputClass}
+                                className={`${compactInputClass} h-7 min-w-0`}
                             />
                         </div>
                         <div className="flex flex-col gap-1">
@@ -611,7 +653,7 @@ function SelectConfig({
                             <select
                                 value={opt.type || ''}
                                 onChange={(e) => updateOption(index, { type: e.target.value as SelectOptionConfig['type'] })}
-                                className={`${compactInputClass} text-(--primary)`}
+                                className={`${compactInputClass} h-7 min-w-0 text-(--primary)`}
                             >
                                 <option value="" className="bg-black">None</option>
                                 <option value="text" className="bg-black">Text</option>
@@ -626,7 +668,7 @@ function SelectConfig({
                             type="button"
                             disabled={options.length <= 1}
                             onClick={() => onOptionsChange(options.filter((_, i) => i !== index))}
-                            className="self-end cursor-pointer border border-red-500/30 px-2 py-1 text-[10px] uppercase text-red-300 hover:border-red-500 disabled:cursor-not-allowed disabled:opacity-30 transition-colors"
+                            className="self-end inline-flex h-7 items-center justify-center cursor-pointer border border-red-500/30 px-2 text-[10px] uppercase text-red-300 hover:border-red-500 disabled:cursor-not-allowed disabled:opacity-30 transition-colors"
                         >
                             Remove
                         </button>
@@ -709,8 +751,10 @@ function SelectConfig({
                             )}
                         </div>
                     )}
-                </div>
+                </SortableSelectOption>
             ))}
+            </SortableContext>
+            </DndContext>
 
             <p className="font-Google-Sans text-[9px] opacity-40">
                 * Default uses <span className="text-yellow-500 font-bold underline">{getSelectDefaultValue(field) || '...'}</span>. HTML values are stored per option, so closing tags with / are safe.

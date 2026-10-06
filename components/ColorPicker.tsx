@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import ColorNameInput from './ColorNameInput';
 import { createPortal } from 'react-dom';
 import { RgbaColorPicker } from 'react-colorful';
-import { parseColor, formatColor } from '@/lib/colors';
+import { parseColor, formatColor, normalizeColorInput } from '@/lib/colors';
 export default function ColorPicker({ color, onChange, modeTarget }: { color: string; onChange: (color: string) => void; modeTarget?: HTMLDivElement | null }) {
     const [open, setOpen] = useState(false);
     const [mode, setMode] = useState<'HEX' | 'RGB'>(/^rgb/i.test(color) ? 'RGB' : 'HEX');
@@ -36,11 +36,9 @@ export default function ColorPicker({ color, onChange, modeTarget }: { color: st
                 label={'สี ' + mode + ' หรือชื่อสี'}
                 inputClassName="font-Google-Sans block h-10 w-full min-w-0 bg-black/20 border border-(--primary)/50 p-2 text-sm outline-none focus:border-(--primary)/75 transition-all duration-300"
                 value={color}
-                onChange={onChange}
-                onSelect={name => {
-                    const selected = parseColor(name);
-                    if (selected) onChange(formatColor(selected, mode));
-                }}
+                onChange={value => onChange(/^#[\da-f]*$/i.test(value) ? value.toUpperCase() : value)}
+                onInputBlur={() => onChange(normalizeColorInput(color))}
+                onSelect={name => onChange(name)}
                 isValid={value => !!parseColor(value)}
                 placeholder={mode === 'HEX' ? '#FFFFFF' : 'rgba(255, 255, 255, 1)'}
             />
