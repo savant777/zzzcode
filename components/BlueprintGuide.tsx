@@ -24,6 +24,11 @@ const examples = [
         description: 'ใช้กับส่วนที่ผู้ใช้ต้องเพิ่มซ้ำได้ เช่น ความสัมพันธ์ แกลเลอรี หรือรายการไอเทม',
     },
     {
+        label: 'Group of Blocks',
+        code: '[GBLOCK:conversation]\n  [BLOCK:chat]<p>{{message}}</p>[/BLOCK:chat]\n  [BLOCK:noti]<p>{{notice}}</p>[/BLOCK:noti]\n[/GBLOCK:conversation]',
+        description: 'ให้รายการต่างชนิดลากเรียงปะปนกันได้ วาง HTML ที่ครอบทั้งกลุ่มไว้นอก GBLOCK ภายในมีเฉพาะ BLOCK และช่องว่าง ส่วนจัดลำดับฟอร์ม Editor ใช้ย้ายตำแหน่งกลุ่มฟิลด์และบล็อกในแบบฟอร์ม โดยไม่เปลี่ยนโค้ดผลลัพธ์',
+    },
+    {
         label: 'Repeat Marker',
         code: '[REPEAT:stars]\n  *\n[/REPEAT]',
         description: 'ทำซ้ำโค้ดด้านในตามจำนวนที่ผู้ใช้เลือก เหมาะกับดาว คะแนน หรือ element ที่ซ้ำเป็นจำนวน',

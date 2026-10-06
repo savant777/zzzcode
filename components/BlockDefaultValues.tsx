@@ -19,9 +19,12 @@ export default function BlockDefaultValues({ fields, onChange }: {
         {count === 0 ? <p className="text-xs text-(--foreground)/40">ตั้ง Initial_Blocks อย่างน้อย 1 เพื่อกำหนดค่าเริ่มต้นแยกบล็อก</p> : <>
             <label className="flex items-center gap-2 text-xs text-(--primary)">
                 Block
-                <select value={index} onChange={event => setSelected(Number(event.target.value))} className="bg-black border border-(--primary)/30 p-1">
-                    {Array.from({ length: count }, (_, i) => <option key={i} value={i}>#{i + 1}</option>)}
-                </select>
+                <input type="number" min={1} max={count} step={1} value={index + 1}
+                    onChange={event => {
+                        const value = Number(event.target.value);
+                        if (Number.isSafeInteger(value)) setSelected(Math.max(0, Math.min(count - 1, value - 1)));
+                    }} className="w-24 bg-black border border-(--primary)/30 p-1" />
+                <span>/ {count}</span>
             </label>
             <div className="mt-3 flex flex-col gap-3">
                 {fields.map(field => {

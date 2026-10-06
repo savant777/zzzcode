@@ -11,6 +11,11 @@ export interface FieldConfig {
     block_depth?: number;
     block_description?: string;
     block_default_count?: number;
+    block_min_count?: number;
+    block_max_count?: number | null;
+    block_sortable?: boolean;
+    block_group_name?: string;
+    block_group_member_order?: number;
     block_default_values?: Record<string, any>;
     block_order: number;
 
@@ -18,6 +23,7 @@ export interface FieldConfig {
     group_order: number;
 
     field_order: number;
+    form_section_order?: number;
     default_value: string;
     placeholder?: string;
     description?: string;
@@ -372,8 +378,59 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
     return html;
 };
 
+export type BlockGroup = { name: string; start: number; end: number; members: { name: string; content: string }[] };
+
+// GBLOCK is deliberately limited to root-level sibling BLOCKs. Reject ambiguous
+// wrappers instead of silently moving HTML out of its original container.
+export function parseBlockGroups(html: string): BlockGroup[] {
+    const groups: BlockGroup[] = [];
+    const rootBlockNames: string[] = [];
+    const stack: { kind: string; name: string; contentStart: number }[] = [];
+    let group: BlockGroup | undefined;
+    let gapStart = 0;
+    const tokens = /\[(\/)?(GBLOCK|BLOCK):([^\]]+)\]/g;
+    for (const token of html.matchAll(tokens)) {
+        const [, close, kind, name] = token;
+        const pos = token.index!;
+        if (!close) {
+            if (kind === 'BLOCK' && (stack.length === 0 || stack[stack.length - 1]?.kind === 'GBLOCK')) rootBlockNames.push(name);
+            if (kind === 'GBLOCK') {
+                if (stack.length || group || groups.some(g => g.name === name)) throw new Error('GBLOCK must have a unique name and be outside BLOCKs');
+                group = { name, start: pos, end: 0, members: [] };
+                gapStart = pos + token[0].length;
+            } else if (group && stack.length === 1) {
+                if (html.slice(gapStart, pos).trim()) throw new Error('GBLOCK may contain only BLOCKs and whitespace');
+                if (group.members.some(m => m.name === name)) throw new Error('Duplicate BLOCK name inside GBLOCK');
+            }
+            stack.push({ kind, name, contentStart: pos + token[0].length });
+        } else {
+            const open = stack.pop();
+            if (!open || open.kind !== kind || open.name !== name) {
+                if (/\[\/?GBLOCK:/.test(html)) throw new Error('Mismatched BLOCK/GBLOCK closing marker');
+                continue; // Preserve legacy blueprint behavior outside GBLOCK.
+            }
+            if (group && kind === 'BLOCK' && stack.length === 1) {
+                group.members.push({ name, content: html.slice(open.contentStart, pos) });
+                gapStart = pos + token[0].length;
+            }
+            if (group && kind === 'GBLOCK') {
+                if (html.slice(gapStart, pos).trim() || !group.members.length) throw new Error('GBLOCK requires BLOCK members only');
+                group.end = pos + token[0].length;
+                groups.push(group);
+                group = undefined;
+            }
+        }
+    }
+    if (group || (groups.length && stack.length)) throw new Error('Unclosed BLOCK/GBLOCK marker');
+    const names = groups.flatMap(g => g.members.map(m => m.name));
+    if (new Set(names).size !== names.length) throw new Error('A BLOCK cannot belong to multiple GBLOCKs');
+    if (names.some(name => rootBlockNames.filter(root => root === name).length !== 1)) throw new Error('GBLOCK member names must be unique among root BLOCKs');
+    return groups;
+}
+
 export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] = []): FieldConfig[] => {
     const fields: FieldConfig[] = [];
+    const blockGroups = parseBlockGroups(html);
     
     // find BLOCK scope
     const blockTags: { type: 'open' | 'close', name: string, pos: number }[] = [];
@@ -430,6 +487,11 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 block_depth: oldField?.block_depth ?? blockScope.depth,
                 block_description: oldField?.block_description ?? oldBlockField?.block_description,
                 block_default_count: oldField?.block_default_count ?? oldBlockField?.block_default_count,
+                block_min_count: oldField?.block_min_count ?? oldBlockField?.block_min_count,
+                block_max_count: oldField?.block_max_count ?? oldBlockField?.block_max_count,
+                block_sortable: oldField?.block_sortable ?? oldBlockField?.block_sortable,
+                block_group_member_order: blockGroups.find(g => g.members.some(m => m.name === blockName))?.members.findIndex(m => m.name === blockName),
+                block_group_name: blockName && !parentBlockName ? blockGroups.find(g => g.members.some(m => m.name === blockName))?.name : undefined,
                 block_order: oldField?.block_order ?? 0,
                 group_name: oldField?.group_name || "Repeat_Element",
                 group_order: oldField?.group_order ?? 90,
@@ -490,6 +552,11 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 block_depth: oldField?.block_depth ?? blockScope.depth,
                 block_description: oldField?.block_description ?? oldBlockField?.block_description,
                 block_default_count: oldField?.block_default_count ?? oldBlockField?.block_default_count,
+                block_min_count: oldField?.block_min_count ?? oldBlockField?.block_min_count,
+                block_max_count: oldField?.block_max_count ?? oldBlockField?.block_max_count,
+                block_sortable: oldField?.block_sortable ?? oldBlockField?.block_sortable,
+                block_group_member_order: blockGroups.find(g => g.members.some(m => m.name === blockName))?.members.findIndex(m => m.name === blockName),
+                block_group_name: blockName && !parentBlockName ? blockGroups.find(g => g.members.some(m => m.name === blockName))?.name : undefined,
                 block_order: oldField?.block_order ?? blockMap[blockId],
                 group_name: currentGroupName,
                 group_order: oldField?.group_order ?? groupMap[groupKey],
@@ -508,7 +575,7 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
         let result = content;
 
         const renderBlocks = (input: string) => {
-            const openRegex = /\[BLOCK:([^\]]+)\]/g;
+            const openRegex = /\[(GBLOCK|BLOCK):([^\]]+)\]/g;
             let output = '';
             let cursor = 0;
             let openMatch: RegExpExecArray | null;
@@ -540,7 +607,25 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
             };
 
             while ((openMatch = openRegex.exec(input)) !== null) {
-                const blockName = openMatch[1];
+                const blockName = openMatch[2];
+                if (openMatch[1] === 'GBLOCK') {
+                    const group = parseBlockGroups(input).find(g => g.start === openMatch!.index)!;
+                    output += input.slice(cursor, group.start);
+                    const entries = group.members.flatMap(member => {
+                        const items = Array.isArray(values[member.name]) ? values[member.name] : [];
+                        return items.map((entry: any) => ({ member, entry }));
+                    });
+                    const savedOrder = values.__zzzcode_groups?.[group.name];
+                    const ranks = new Map<string, number>();
+                    if (Array.isArray(savedOrder)) savedOrder.forEach((id: string, index: number) => {
+                        if (!ranks.has(id)) ranks.set(id, index);
+                    });
+                    entries.sort((a, b) => (ranks.get(a.entry.__zzzcode_entry_id) ?? Infinity) - (ranks.get(b.entry.__zzzcode_entry_id) ?? Infinity));
+                    output += entries.map(({ member, entry }) => processTemplate(member.content, { ...currentValues, ...entry }, member.name)).join('');
+                    cursor = group.end;
+                    openRegex.lastIndex = group.end;
+                    continue;
+                }
                 const openStart = openMatch.index;
                 const openEnd = openRegex.lastIndex;
                 const closeMatch = findMatchingClose(blockName, openEnd);

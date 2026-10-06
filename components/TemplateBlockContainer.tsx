@@ -1,8 +1,9 @@
 "use client";
+import { useId } from 'react';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { defaultBlockCount } from '@/lib/block-defaults';
+import { defaultBlockCount, blockLimits } from '@/lib/block-defaults';
 import BlockDefaultValues from './BlockDefaultValues';
 import TemplateGroupContainer from './TemplateGroupContainer';
 
@@ -16,15 +17,20 @@ export default function TemplateBlockContainer({
     onEdit,
     onBlockDescriptionChange,
     onBlockDefaultCountChange,
+    onBlockLimitsChange,
     onBlockDefaultValueChange,
     parentBlockName,
     isNested = false,
+    disableSort = false,
 }: any) {
+    const contextId = useId();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
         id: parentBlockName ? `${parentBlockName}>${blockName}` : blockName,
-        disabled: isNested,
+        disabled: isNested || disableSort,
     });
     const blockFields = Object.values(groups).flat() as any[];
+    const limits = blockLimits(blockFields);
+    const sortable = blockFields[0]?.block_sortable ?? true;
     const blockDescription = blockFields[0]?.block_description || '';
 
     const style = {
@@ -47,11 +53,11 @@ export default function TemplateBlockContainer({
         >
             {/* Block Header (Drag Handle) */}
             <div 
-                {...attributes} 
-                {...listeners}
+                {...(disableSort || isNested ? {} : attributes)}
+                {...(disableSort || isNested ? {} : listeners)}
                 className={`
                     absolute -top-3 left-4 px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2
-                    ${isNested ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}
+                    ${isNested || disableSort ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}
                     ${blockName === "GLOBAL" ? 'bg-zinc-800 text-white/40' : isNested ? 'bg-black text-(--primary) border border-(--primary)/40' : 'bg-(--primary) text-(--background)'}
                 `}
             >
@@ -65,12 +71,28 @@ export default function TemplateBlockContainer({
                 <div className="mb-3 flex flex-col gap-1">
                     <label className="mb-2 flex items-center gap-2 text-[10px] uppercase text-(--foreground)/60">
                         Initial_Blocks
-                        <select value={defaultBlockCount(blockFields)}
-                            onChange={event => onBlockDefaultCountChange?.(blockName, Number(event.target.value), parentBlockName)}
-                            className="bg-black border border-(--primary)/30 p-1 text-(--primary)">
-                            {Array.from({ length: 11 }, (_, count) => <option key={count} value={count}>{count}</option>)}
-                        </select>
+                        <input type="number" min={limits.min} max={limits.max ?? undefined} step={1}
+                            value={defaultBlockCount(blockFields)}
+                            onChange={event => {
+                                const value = Number(event.target.value);
+                                if (Number.isSafeInteger(value)) onBlockDefaultCountChange?.(blockName, Math.min(limits.max ?? Infinity, Math.max(limits.min, value)), parentBlockName);
+                            }}
+                            className="w-24 bg-black border border-(--primary)/30 p-1 text-(--primary)" />
                     </label>
+                    <div className="mb-2 flex flex-wrap gap-3 text-xs">
+                        <label>Minimum <input type="number" min={0} step={1} value={limits.min}
+                            onChange={event => {
+                                const min = Number(event.target.value);
+                                if (Number.isSafeInteger(min) && min >= 0) onBlockLimitsChange?.(blockName, min, limits.max === null ? null : Math.max(min, limits.max), sortable, parentBlockName);
+                            }} className="w-24 bg-black border border-(--primary)/30 p-1" /></label>
+                        <label>Maximum <input type="number" min={limits.min} step={1} value={limits.max ?? ''} placeholder="Unlimited"
+                            onChange={event => {
+                                const max = event.target.value === '' ? null : Number(event.target.value);
+                                if (max === null || (Number.isSafeInteger(max) && max >= limits.min)) onBlockLimitsChange?.(blockName, limits.min, max, sortable, parentBlockName);
+                            }} className="w-24 bg-black border border-(--primary)/30 p-1" /></label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={sortable}
+                            onChange={event => onBlockLimitsChange?.(blockName, limits.min, limits.max, event.target.checked, parentBlockName)} />Allow reordering</label>
+                    </div>
                     <BlockDefaultValues fields={blockFields} onChange={onBlockDefaultValueChange} />
                     <label className="text-[9px] uppercase tracking-[0.2em] text-(--foreground)/35">
                         Block_Description
@@ -86,7 +108,7 @@ export default function TemplateBlockContainer({
             )}
 
             {/* SortableContext for Group in each Block */}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onGroupDragEnd(e, blockName, parentBlockName)}>
+            <DndContext id={`${contextId}-groups`} sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onGroupDragEnd(e, blockName, parentBlockName)}>
                 <SortableContext items={Object.keys(groups)} strategy={verticalListSortingStrategy}>
                     <div className="flex flex-col gap-2">
                         {Object.entries(groups).map(([groupName, fields]: any, gIdx) => (
@@ -126,6 +148,7 @@ export default function TemplateBlockContainer({
                                         onGroupDragEnd={onGroupDragEnd}
                                         onEdit={onEdit}
                                         onBlockDescriptionChange={onBlockDescriptionChange}
+                                        onBlockLimitsChange={onBlockLimitsChange}
                                         onBlockDefaultCountChange={onBlockDefaultCountChange}
                                         onBlockDefaultValueChange={onBlockDefaultValueChange}
                                         parentBlockName={blockName}

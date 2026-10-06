@@ -3,36 +3,20 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 import Modal from '@/components/Modal';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import AutoResizeTextarea from '@/components/AutoResizeTextarea';
 import BlueprintGuide from '@/components/BlueprintGuide';
-import TemplateBlockContainer from '@/components/TemplateBlockContainer';
+import TemplateFormSections from '@/components/TemplateFormSections';
+import { syncFormFields } from '@/lib/form-layout';
 import { CreatorSession, requireCreator } from '@/lib/creator';
 import { getGroupSlug, PRIMARY_ROUTE_GROUPS, sortTagsByGroup } from '@/lib/routes';
 import { useTemplateDraft } from '@/lib/use-template-draft';
 import { tagsWithCreatorCredit } from '@/lib/creator-credit';
-import { FieldConfig, syncFieldsFromHTML, reorderFields, reorderGroups, reorderBlocks, normalizeFieldConfig } from '@/lib/template-parser';
-
-const groupFieldsByGroup = (fieldList: FieldConfig[]) => {
-    const groups: Record<string, FieldConfig[]> = {};
-
-    fieldList.forEach(field => {
-        const groupName = field.group_name || "General";
-        if (!groups[groupName]) groups[groupName] = [];
-        groups[groupName].push(field);
-    });
-
-    return Object.entries(groups)
-        .sort(([, a], [, b]) => (a[0].group_order || 0) - (b[0].group_order || 0))
-        .reduce((acc, [groupName, groupFields]) => {
-            acc[groupName] = groupFields.sort((a, b) => (a.field_order || 0) - (b.field_order || 0));
-            return acc;
-        }, {} as Record<string, FieldConfig[]>);
-};
+import { FieldConfig, reorderFields, reorderGroups, normalizeFieldConfig } from '@/lib/template-parser';
 
 export default function AddTemplatePage() {
     const router = useRouter();
@@ -66,44 +50,6 @@ export default function AddTemplatePage() {
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
-
-    const nestedData = useMemo(() => {
-        const rootBlocks: Record<string, FieldConfig[]> = {};
-        const childBlocks: Record<string, Record<string, FieldConfig[]>> = {};
-
-        fields.forEach(f => {
-            if (f.block_name && f.parent_block_name) {
-                if (!childBlocks[f.parent_block_name]) childBlocks[f.parent_block_name] = {};
-                if (!childBlocks[f.parent_block_name][f.block_name]) childBlocks[f.parent_block_name][f.block_name] = [];
-                childBlocks[f.parent_block_name][f.block_name].push(f);
-                return;
-            }
-
-            const bName = f.block_name || "GLOBAL";
-            if (!rootBlocks[bName]) rootBlocks[bName] = [];
-            rootBlocks[bName].push(f);
-        });
-
-        return Object.entries(rootBlocks)
-            .sort(([nameA, fieldsA], [nameB, fieldsB]) => {
-                const orderA = fieldsA[0].block_order || 0;
-                const orderB = fieldsB[0].block_order || 0;
-                return orderA - orderB;
-            })
-            .reduce((acc, [bName, blockFields]) => {
-                acc[bName] = {
-                    groups: groupFieldsByGroup(blockFields),
-                    childBlocks: Object.entries(childBlocks[bName] || {})
-                        .sort(([, a], [, b]) => (a[0].block_order || 0) - (b[0].block_order || 0))
-                        .map(([childBlockName, childFields]) => ({
-                            blockName: childBlockName,
-                            groups: groupFieldsByGroup(childFields),
-                            childBlocks: [],
-                        })),
-                };
-                return acc;
-            }, {} as Record<string, { groups: Record<string, FieldConfig[]>; childBlocks: any[] }>);
-    }, [fields]);
 
     // --- 3. Effects ---
 
@@ -201,8 +147,12 @@ export default function AddTemplatePage() {
     useEffect(() => {
         const timer = setTimeout(() => {
             if (formData.html_blueprint) {
-                const synced = syncFieldsFromHTML(formData.html_blueprint, fields);
-                setFields(synced);
+                try {
+                    const synced = syncFormFields(formData.html_blueprint, fields, true);
+                    setFields(synced);
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Invalid GBLOCK');
+                }
             }
         }, 500);
         return () => clearTimeout(timer);
@@ -214,15 +164,6 @@ export default function AddTemplatePage() {
     // --- 4. Handlers ---
 
     // drag and drop to re-order block
-    const handleBlockDragEnd = (event: any) => {
-        const { active, over } = event;
-        if (over && active.id !== over.id) {
-            const updated = reorderBlocks(fields, active.id, over.id);
-            setFields(updated);
-        }
-    };
-
-    // drag and drop to re-order group
     const handleGroupDragEnd = (event: any, blockName: string, parentBlockName?: string) => {
         const { active, over } = event;
         if (over && active.id !== over.id) {
@@ -250,9 +191,15 @@ export default function AddTemplatePage() {
         }));
     };
 
+    const handleBlockLimitsChange = (blockName: string, min: number, max: number | null, sortable: boolean, parentBlockName?: string) => {
+        setFields(prev => prev.map(field => field.block_name === blockName && field.parent_block_name === parentBlockName
+            ? { ...field, block_min_count: min, block_max_count: max, block_sortable: sortable,
+                block_default_count: Math.min(max ?? Infinity, Math.max(min, field.block_default_count ?? 1)) } : field));
+    };
+
     const handleBlockDefaultCountChange = (blockName: string, count: number, parentBlockName?: string) => {
         setFields(prev => prev.map(field => field.block_name === blockName && field.parent_block_name === parentBlockName
-            ? { ...field, block_default_count: Math.max(0, Math.min(10, Math.trunc(count))) } : field));
+            ? { ...field, block_default_count: Math.max(0, Math.trunc(count)) } : field));
     };
 
     const handleBlockDescriptionChange = (blockName: string, description: string, parentBlockName?: string) => {
@@ -271,6 +218,7 @@ export default function AddTemplatePage() {
         const toastId = toast.loading("SYSTEM: Syncing_Module...");
 
         try {
+            const fieldsToSave = syncFormFields(formData.html_blueprint, fields, true);
             window.dispatchEvent(new Event('zzzcode-save-draft'));
             const creatorSession = await requireCreator();
             if (creatorSession.checkFailed) {
@@ -306,7 +254,7 @@ export default function AddTemplatePage() {
                 .insert([{
                     ...formData,
                     password: formData.is_personal ? formData.password : null,
-                    fields_config: fields.map(normalizeFieldConfig),
+                    fields_config: fieldsToSave.map(normalizeFieldConfig),
                     is_active: true,
                     user_id: creatorSession.user.id
                 }])
@@ -608,26 +556,14 @@ export default function AddTemplatePage() {
                                     Awaiting_Blueprint_Input...
                                 </div>
                             ) : (
-                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
-                                    <SortableContext items={Object.keys(nestedData)} strategy={verticalListSortingStrategy}>
-                                        <div className="flex flex-col">
-                                            {Object.entries(nestedData).map(([blockName, blockData]) => (
-                                                <TemplateBlockContainer 
-                                                    key={blockName}
-                                                    blockName={blockName}
-                                                    groups={blockData.groups}
-                                                    childBlocks={blockData.childBlocks}
-                                                    sensors={sensors}
+                                <TemplateFormSections fields={fields} onFieldsChange={setFields}
+                                    sensors={sensors}
                                                     onFieldDragEnd={handleFieldDragEnd}
                                                     onGroupDragEnd={handleGroupDragEnd}
                                                     onBlockDescriptionChange={handleBlockDescriptionChange}
+                                                    onBlockLimitsChange={handleBlockLimitsChange}
                                                     onBlockDefaultCountChange={handleBlockDefaultCountChange}
-                                                    onBlockDefaultValueChange={handleBlockDefaultValueChange}
-                                                />
-                                            ))}
-                                        </div>
-                                    </SortableContext>
-                                </DndContext>
+                                                    onBlockDefaultValueChange={handleBlockDefaultValueChange} />
                             )}
                         </div>
                     </div>
