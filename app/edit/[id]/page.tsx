@@ -135,7 +135,7 @@ export default function EditTemplatePage() {
             }
 
             if (templateId) {
-                const { data: template, error } = await supabase.from('templates').select(`*, template_tags(tags_id, tags(name, slug, is_active, tag_groups(name)))`).eq('id', templateId).single();
+                const { data: template, error } = await supabase.from('templates').select(`*, template_tags(tags_id, tags(id, name, slug, is_active, tag_groups(name)))`).eq('id', templateId).single();
 
                 if (template) {
                     if (!canManageTemplate(session, template.user_id)) {

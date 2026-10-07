@@ -192,3 +192,15 @@ for (const viewMode of ['line', 'grid']) {
     assert.equal(findButton(restored, 'Activate Template'), undefined);
 }
 console.log('Template tags, card layouts, inactive controls and breadcrumb links passed.');
+
+for (const group of ['category', 'css', 'style']) {
+    const tags = [{id:30,name:'Alpha'}, {id:2,name:'Zulu'}, {id:10,name:'Middle'}].map(tag => ({...tag, slug:tag.name.toLowerCase(),tag_groups:{name:group}}));
+    assert.deepEqual(routes.sortTagsByGroup(tags).map(t=>t.id), [2,10,30]);
+    const entries = tags.map(tags=>({tags:{...tags,is_active:true}}));
+    assert.deepEqual(loaded.exports.sortedVisibleTemplateTags(entries).map(t=>t.tags.id),[2,10,30]);
+    assert.deepEqual([...tags].sort((a,b)=>routes.compareTagOrder(group,a,b)).map(t=>t.id),[2,10,30]);
+    assert.ok(routes.compareTagOrder(group,{id:'10'},{id:'2'}) > 0);
+    assert.ok(routes.compareTagOrder(group,{id:10},{name:'Unknown'}) < 0);
+}
+assert.ok(routes.compareTagOrder('activity',{id:30,name:'Alpha'},{id:2,name:'Zulu'}) < 0);
+console.log('Category/CSS/style ID order, appended new tags and other groups alphabetical order passed.');

@@ -1,159 +1,60 @@
 # ZZZCODE EDITOR
 
-ZZZCODE EDITOR is a template editing tool built to make RoleplayTH roleplay templates easier to use. Instead of manually digging through HTML or BBCode, users can fill in structured fields, preview the result in real time, and copy the finished code for use on the RoleplayTH website.
+A template editor for RoleplayTH and Hogthai. Users fill in structured fields,
+check the live preview, and copy HTML/BBCode to paste into the destination forum.
 
-Live site: [https://zzzcode.vercel.app/?group=category&tag=all](https://zzzcode.vercel.app/?group=category&tag=all)
+Live site: [ZZZCODE EDITOR](https://zzzcode.vercel.app/?group=category&tag=all)
 
-## Project Goal
+## Roles and workflow
 
-Roleplay templates can be difficult to edit when users need to search through raw code, identify the right values, and avoid accidentally breaking the layout. This project turns those templates into guided forms.
-
-The main goal is to help users:
-
-- edit RoleplayTH templates without touching raw code
-- fill in template values field by field
-- preview the final layout while editing
-- copy the generated code, then paste it into RoleplayTH manually
-
-## User Roles
-
-### General Users
-
-General users only need access to the editor flow. They do not need to log in because their goal is simply to use an existing template, fill in the content, preview it, and copy the result.
-
-This keeps the public experience simple and avoids exposing template setup tools to users who only want to generate code.
-
-### Template Creators
-
-Template creators use the create and edit pages to build, configure, and maintain templates.
-
-Creators sign in with Discord. Access is limited to Discord accounts that are linked to an active creator profile, and new creators must pass an invite-code onboarding flow before a creator profile can be created.
-
-The project owner can manage all templates, tags, and creator-owned content. Other creators can manage their own templates and creator-owned tags.
+- General users browse templates and use Editor without signing in. Protected
+  templates require a password or an existing authorized access link.
+- Creators sign in with Discord. New creators complete invite-code onboarding;
+  an active creator profile is required to access creator tools.
+- Creators manage their own templates and eligible tags. An active Owner can
+  manage all templates. Creator credit does not change template ownership.
+- Create saves a template with `is_active = false`. Complete configuration in
+  Edit, save, and use the activation prompt when ready to publish.
+- The built-in Creator Guide is available at `/creator/guide`.
 
 ## Features
 
-- Public template dashboard with search, category filters, tags, and grid/list views
-- Template editor with generated input fields
-- Live preview while editing
-- One-click copy for generated HTML/BBCode output
-- Private templates with password access
-- Draft autosave in local storage
-- Undo/redo support in the editor
-- Template creation page for setting up new templates
-- Template edit page for updating existing templates and field configuration
-- Creator profile page with Discord account linking
-- Creator tag management page with search, filters, sorting, and soft-delete/deactivation
-- Invite-code creator onboarding with Discord authentication
-- Automatic field detection from template blueprint syntax
-- Support for text, BBCode, color, select, slider, checkbox, and gradient fields
-- Repeatable blocks for templates with multiple similar sections
-- Drag-and-drop ordering for blocks, groups, and fields
-- Supabase-backed template and tag storage
+- Dashboard search, tag filters, No Pass filter, and grid/list views.
+- Generated fields: text, BBCode, color, select, slider, checkbox, and gradient.
+- BBCode keyboard shortcuts and configurable editor height.
+- HEX inputs add `#` and uppercase hex characters; HTML color names are retained.
+- Select options support an explicit default and drag ordering.
+- Local autosave, undo/redo, optional multiple drafts, and online backup links.
+- Repeatable BLOCKs, nested BLOCKs, mixed GBLOCK ordering, Copy, Duplicate,
+  Remove, and Collapse/Expand controls.
+- Creator form ordering for field groups, standalone BLOCKs, and whole GBLOCKs.
+- Supabase storage, creator profiles, Discord onboarding, and tag management.
 
-## Tech Stack
+### Live preview and tags
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- Supabase
-- dnd-kit
-- react-colorful
-- Sonner
-- Vercel
+Templates tagged with slug `hogthai` use the Hogthai parser and preview;
+other templates use RoleplayTH. Create/Edit have no separate preview selector.
+Copy preserves the source output syntax rather than copying preview HTML.
 
-## User Guide
+Hogthai preview supports `dohtml`, Google Fonts, nested BBCode, and line breaks.
+It recreates `.postcolor`, block-level `#dohtml_span`, and the `#121212` post
+background. The post layout can expand for wide content before scaling into
+Preview, keeping fixed-width columns visible on narrow screens.
 
-### 1. Open the Template List
+Category, CSS, and Style tags sort by numeric tag ID ascending in navigation,
+Create/Edit, and template cards. New tags append within their group. Other groups
+sort by name. Group priority remains separate from the order of tags inside it.
 
-Go to the default public page:
+### Blueprint syntax
 
-[https://zzzcode.vercel.app/?group=category&tag=all](https://zzzcode.vercel.app/?group=category&tag=all)
-
-Users can browse available templates, search by title, filter by tags, and switch between grid and list views.
-
-### 2. Choose a Template
-
-Click `use_this` on a template card.
-
-If the template is public, the editor will open immediately. If the template is private, the user must enter the template password first.
-
-### 3. Fill In the Fields
-
-The editor displays structured fields based on the template configuration. Depending on the template, fields may include text inputs, BBCode editors, colors, dropdowns, sliders, checkboxes, gradients, or repeatable blocks.
-
-Users only need to edit the fields shown on screen. They do not need to modify the template code manually.
-
-### 4. Check the Live Preview
-
-The preview updates as the user edits the fields. This helps users confirm spacing, colors, images, and text before copying the final code.
-
-### 5. Copy the Output
-
-Click `Copy` to copy the generated code. After that, users manually paste the copied output into the RoleplayTH website.
-
-## Template Creator Guide
-
-### 1. Create a Template
-
-Template creators can use the create page to add a new template.
-
-The creator provides:
-
-- template title
-- description
-- preview image URL
-- tags
-- private/password setting if needed
-- HTML blueprint
-
-When a blueprint is entered, ZZZCODE EDITOR scans it and detects editable fields automatically.
-
-### 2. Configure Fields
-
-Detected fields can be configured into different input types:
-
-- `text`
-- `bbcode`
-- `color`
-- `select`
-- `slider`
-- `checkbox`
-- `gradient`
-
-Creators can also group fields, organize blocks, and adjust field order so the editor is easier for general users to understand.
-
-### 3. Use Template Syntax
-
-Templates are built from an HTML blueprint with special markers.
-
-#### Variable
+Define editable variables and configure their defaults through field settings:
 
 ```html
 <div>{{character_name}}</div>
+{{age[GROUP:Basic Info]}}
 ```
 
-This creates an editable field named `character_name`.
-
-#### Variable With Default Value
-
-```html
-<div>{{character_name:Unknown}}</div>
-```
-
-If the user does not enter a value, the default value can be used as the starting field value.
-
-#### Field Group
-
-```html
-{{character_name:Unknown[GROUP:Basic Info]}}
-{{age:18[GROUP:Basic Info]}}
-```
-
-Groups help organize related fields in the editor.
-
-#### Repeatable Block
+Repeat a section with BLOCK:
 
 ```html
 [BLOCK:relationships]
@@ -162,9 +63,24 @@ Groups help organize related fields in the editor.
 [/BLOCK:relationships]
 ```
 
-Blocks allow users to add multiple entries for the same section, such as relationships, inventory items, gallery images, or timeline entries.
+Group different BLOCK types so Editor can interleave their entries:
 
-#### Repeat Marker
+```html
+<section>
+[GBLOCK:conversation]
+  [BLOCK:chat]<p>{{message}}</p>[/BLOCK:chat]
+  [BLOCK:noti]<aside>{{notice}}</aside>[/BLOCK:noti]
+[/GBLOCK:conversation]
+</section>
+```
+
+GBLOCKs are root-level groups of uniquely named sibling BLOCKs, with only
+whitespace between members. Put wrapping HTML outside the GBLOCK. Nested BLOCKs
+are supported inside a member; nested GBLOCKs are not. Invalid group syntax is
+rejected during synchronization/save. A BLOCK needs its own editable fields to
+appear in the forms. GBLOCK markers do not appear in copied output.
+
+Use REPEAT to repeat content according to a numeric field:
 
 ```html
 [REPEAT:stars]
@@ -172,164 +88,186 @@ Blocks allow users to add multiple entries for the same section, such as relatio
 [/REPEAT]
 ```
 
-Repeats a piece of content based on a user-controlled number.
+### BLOCK settings and draft compatibility
 
-### 4. Edit Existing Templates
+- Initial count and minimum are non-negative integers. Maximum can be blank for
+  unlimited entries; the initial count is normalized into the allowed range.
+- Add/Duplicate/Remove enforce limits for root and nested blocks. Existing saved
+  arrays are preserved even when a creator changes limits.
+- Sorting can be disabled for a BLOCK; locked entries retain their positions.
+  Child entries remain within their parent.
+- Duplicate gets new entry identities, opens the new entry, and inserts it after
+  its source. Copy includes child content and the current variable context.
+- Collapse, order, and values persist in drafts/backups. Confirmed reorder has
+  its own undo step; cancelling leaves the existing order intact.
+- Creator form ordering changes the input layout, not blueprint/output order.
+  Saved section order survives field synchronization; new sections append.
+- `fields_config` stores these settings; no BLOCK-specific SQL migration is needed.
+- Reserved editor state keys include `__zzzcode_entry_id`, `__zzzcode_groups`,
+  and `__zzzcode_collapsed`. Existing draft data is reconciled without truncation.
 
-The edit page lets creators update template details, tags, blueprint code, field configuration, and private access settings.
+## Online backups
 
-Existing field settings are preserved when possible, even when the blueprint changes.
+SAVE creates an online backup on first use and saves changes thereafter. Keep
+its backup link private: anyone with the link can read and edit that backup.
+Open it once on another browser/device, then SAVE before switching devices.
+Local autosave alone does not synchronize online changes.
 
-### 5. Manage Tags
+When a newer online revision exists, CANCEL keeps editing, KEEP & LOAD saves one
+local copy before loading online data, and OVERWRITE explicitly replaces the
+online revision. Local copies stay on that device and are cleared only after a
+successful overwrite. Clear Draft clears local editor data, not the online backup.
 
-Creators can use the manage tags page to view, search, filter, sort, add, edit, and deactivate tags.
+Backup tokens travel in URL fragments and authorization headers. The database
+stores only token hashes. Server saves enforce optimistic revision checks;
+conflicts return HTTP 409. Responses use `no-store` and failures retain local work.
 
-Tag management rules:
+Limits: 2 MiB per JSON draft set, 200 drafts per set, 500 characters per draft name.
+Shared per-IP limits are 10 creates/minute and 50 creates/24 hours, 120 reads/minute,
+and 120 saves/minute. Template-access requests have a separate 120/minute limit.
+HTTP 429 includes `Retry-After`; limiter outages fail closed. Vercel IP identities
+are HMAC-hashed, and local development shares a counter. These are abuse controls,
+not a total storage cap. Deleting a template cascades to its backups.
 
-- global tags are owner-managed
-- creator-owned tags can only be managed by their creator
-- the `creators` tag group is managed by the system and is not editable from the tag manager
-- the `houses` tag group is locked to the project owner
-- deactivating a tag uses `is_active = false` instead of deleting the row
+## Password storage
 
-### 6. Creator Sign-In and Onboarding
+`template_private.credentials` stores `password_hash` and nullable
+`password_encrypted`, linked by `template_id`. `public.templates.password` is
+removed. Hash verification uses bcrypt over the template-bound SHA-256 fingerprint,
+maintaining remembered unlock compatibility and avoiding bcrypt's length limit.
 
-The creator sign-in page is intentionally not exposed as a main navigation item. It can be accessed directly when onboarding a new creator.
+Creator saves go through server APIs, encrypting displayable passwords with
+AES-256-GCM before an atomic metadata/credential save. Only the template creator
+and active Owner can retrieve the decrypted value in Edit. Browser roles cannot
+read the private credentials table or invoke the encrypted-password read RPC.
 
-The onboarding flow is:
+Legacy hash-only passwords still unlock templates but cannot be recovered for
+display. Re-enter a known password and save once to populate the encrypted column.
+Leaving the password field blank retains existing credentials; entering a password
+updates both values. Disabling protection deletes credentials. Creator drafts do
+not store plaintext passwords in local storage.
 
-1. Enter the creator invite code.
-2. Continue with Discord login.
-3. Enter a display name.
-4. The system creates the creator profile and matching creator tag.
+Changing a password invalidates its old remembered unlock, but existing backup
+links remain independent access credentials. Protected HTML/field defaults are
+fetched through authorized server APIs; the public catalog returns metadata only.
 
-The regular login button is only for existing authorized creators. If a Discord account is not linked to an active creator profile, the user is signed out and returned to the public dashboard.
+## Local development and deployment
 
-## Local Development
-
-Install dependencies:
+Stack: Next.js, React, TypeScript, Tailwind CSS, Supabase, dnd-kit,
+react-colorful, Sonner, and Vercel.
 
 ```bash
 npm install
+npm run dev
 ```
 
-Create `.env.local`:
+Open [localhost:3000](http://localhost:3000). Configure `.env.local`:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 CREATOR_INVITE_CODE=your_bcrypt_hashed_invite_code
+TEMPLATE_PASSWORD_ENCRYPTION_KEY=your_64_character_random_hex_key
 ```
 
-`CREATOR_INVITE_CODE` should be a bcrypt hash. If the hash contains `$`, escape each `$` in `.env.local`.
-
-Example:
-
-```env
-CREATOR_INVITE_CODE=\$2a\$12\$...
-```
-
-The service role key is only used by server-side API routes. It must not be exposed with a `NEXT_PUBLIC_` prefix.
-
-Run the development server:
+`CREATOR_INVITE_CODE` is a bcrypt hash; escape each `$` as `\$` in `.env.local`.
+Generate a password encryption key once with:
 
 ```bash
-npm run dev
+node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Open:
+Service-role, invite, and encryption keys are server-only. Never prefix them with
+`NEXT_PUBLIC_`, commit `.env.local`, or log credentials/backup tokens. Configure
+the same encryption key for every deployment sharing the database, including
+Production/Preview as needed. Back it up privately: changing or losing it prevents
+reading existing encrypted passwords. Redeploy after changing environment values.
 
-```txt
-http://localhost:3000
-```
+Scripts: `npm run dev`, `npm run build`, `npm run start`, and `npm run lint`.
 
-## Available Scripts
+## Supabase setup and migration order
+
+SQL files remain in `supabase/`. **Do not run `schema.sql` on an existing database:**
+it drops application tables. It is a legacy bootstrap, including the old password
+column. For a fresh database, apply the baseline schema, functions, and policies,
+then the applicable migrations. Review SQL before applying it.
+
+For an older database, apply missing migrations in this order:
+
+1. Creator baseline: `migration-creators.sql`, `functions.sql`, and `policies.sql`
+   as applicable; review creator/tag permission migrations in `supabase/`.
+2. `add-supports-multiple-drafts.sql` for multiple-draft configuration.
+3. `add-editor-backups.sql`, then `verify-editor-backups.sql`.
+4. `add-editor-backup-rate-limits.sql`, then `verify-editor-backup-rate-limits.sql`.
+5. `secure-template-access.sql` to migrate legacy plaintext passwords into private
+   hashes and install catalog/access controls. It rejects protected rows without
+   either a password or an existing credential. Requires pgcrypto in `extensions`.
+6. `password-free-template-writes.sql` to remove the legacy capture trigger and
+   password column, installing atomic creator writes.
+7. `display-template-passwords.sql` to add encrypted password storage and the
+   current save/read RPCs. Configure the encryption env key with matching app code.
+8. Run `verify-template-access.sql`; all boolean results should be true.
+
+**For a database already at step 7, do not rerun steps 5 or 6.** Step 5 expects the
+removed password column; step 6 reinstalls the older save function. The latest
+`display-template-passwords.sql` can be rerun with the current definition.
+No `preview_profile` database column is required: preview follows tags.
+
+Coordinate database migrations and deployment of their matching app version.
+Do not roll back only the app to a version that expects plaintext passwords.
+Backup verification scripts roll back their temporary data. Do not manually delete
+online drafts as a retention policy without deciding that policy first.
+
+Main tables: `creators`, `templates`, `tag_groups`, `tags`, `template_tags`,
+`editor_backups`, and `template_private.credentials`. Template ownership is based
+on `user_id`; assigned creator credit is separate. Tags support deactivation via
+`is_active = false`; creator tags are system-managed.
+
+## Verification
+
+Useful isolated checks (no remote database writes):
 
 ```bash
-npm run dev
-```
-
-Starts the development server.
-
-```bash
+node tests/template-password-api.cjs
+node tests/template-unlock-api.cjs
+node tests/template-unlock.cjs
+node tests/template-tags.cjs
+node tests/hogthai-preview.cjs
+node tests/preview-viewport.cjs
+node tests/parser-newlines.cjs
+node tests/block-defaults.cjs
+node tests/block-editor.cjs
+node tests/editor-history.cjs
+node tests/form-layout.cjs
+node tests/field-input-defaults.cjs
+node tests/editor-backup-api.cjs
+node tests/editor-backup-client.cjs
+node tests/editor-local-copy.cjs
+npx tsc --noEmit --pretty false
 npm run build
 ```
 
-Builds the production app.
+`tests/template-access-sql.cjs` runs migrations, permissions, and credential tests
+in isolated PostgreSQL/WASM. Install `@electric-sql/pglite` into a temporary folder
+and set `PGLITE_TEST_ROOT` to that folder before running it; do not add it to app
+dependencies solely for this test.
 
-```bash
-npm run start
-```
+`tests/editor-backup-live.cjs` is different: it calls localhost:3000 against the
+configured Supabase project and creates/cleans up a temporary backup. Run it only
+when intentionally testing that database.
 
-Runs the production build.
+After deployment, check dashboard filters, protected-template unlock/refresh,
+creator Save, saved-password display, inactive-template activation, Hogthai preview,
+and backup create/load/conflict in a second browser. Physical phone drag gestures
+and system clipboard behavior require manual testing.
 
-```bash
-npm run lint
-```
+## Project structure
 
-Runs ESLint.
-
-## Project Structure
-
-```txt
-app/
-  page.tsx              # Public dashboard
-  create/page.tsx       # Template creation page
-  creator/profile/      # Creator profile management
-  creator/signin/       # Invite-code and Discord onboarding flow
-  creator/tags/         # Creator tag management
-  api/creator/          # Server-side creator invite and onboarding APIs
-  edit/[id]/page.tsx    # Template configuration page
-  editor/[id]/page.tsx  # Public template editor
-
-components/
-  TemplateCard.tsx
-  FieldRenderer.tsx
-  FieldConfigurator.tsx
-  LivePreview.tsx
-  BBCodeEditor.tsx
-  ColorPicker.tsx
-
-lib/
-  creator.ts
-  routes.ts
-  supabase.ts
-  template-parser.ts
-
-supabase/
-  schema.sql              # Table definitions and core database structure
-  migration-creators.sql  # Non-destructive migration for creator support
-  policies.sql            # Row-Level Security policies
-  functions.sql           # Slug generation, tag indexing, triggers, and helpers
-```
-
-## Database Overview
-
-The app uses Supabase to store template data, tags, creator profiles, and creator-managed configuration.
-
-Main tables:
-
-- `creators` stores creator profiles, roles, Discord identity data, active status, and Supabase auth ownership.
-- `templates` stores template metadata, blueprint code, field configuration, privacy settings, status, timestamps, and creator ownership.
-- `tag_groups` stores groups for organizing tags.
-- `tags` stores individual tags, slugs, ownership, and active status.
-- `template_tags` connects templates and tags through a many-to-many relationship.
-
-SQL setup files are stored in the `supabase/` folder. For an existing database with real data, use non-destructive migration files instead of running `schema.sql`, because `schema.sql` is intended for fresh database setup.
-
-## Portfolio Notes
-
-ZZZCODE EDITOR is designed as a practical content tool rather than a static showcase page. The main engineering challenge is converting flexible template code into a safe, user-friendly editing interface.
-
-Key implementation highlights:
-
-- custom template parser for variables, groups, blocks, repeats, and BBCode
-- dynamic form rendering from stored JSON field configuration
-- live preview isolation through an iframe
-- Supabase data model for templates, tags, and template-tag relationships
-- Discord-based creator authentication with invite-code onboarding
-- draft persistence with local storage
-- creator-focused configuration flow separate from the public user editor
-
-The project demonstrates frontend state management, dynamic UI generation, database-backed content management, and a real workflow built around RoleplayTH template editing.
+- `app/`: dashboard, Creator pages, Create/Edit/Editor, and server API routes.
+- `components/`: form fields, configuration dialogs, blocks, navigation, preview,
+  and the built-in Creator Guide.
+- `lib/`: parsing, field/block state, ordering, authentication, encryption,
+  password APIs, draft persistence, and online backups.
+- `supabase/`: SQL baselines, migrations, and verification scripts.
+- `tests/`: isolated parser, state, API, component, and database checks.

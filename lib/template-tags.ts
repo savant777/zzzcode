@@ -1,7 +1,8 @@
-import { getGroupSlug, PRIMARY_ROUTE_GROUPS } from './routes';
+import { getGroupSlug, PRIMARY_ROUTE_GROUPS, compareTagOrder } from './routes';
 
 type TagEntry = {
     tags: {
+        id?: number | string | null;
         is_active?: boolean | null;
         slug?: string | null;
         name?: string | null;
@@ -40,12 +41,7 @@ export function sortedVisibleTemplateTags<T extends TagEntry>(entries?: T[] | nu
             return groupA.localeCompare(groupB);
         }
 
-        const nameA = a.tags?.name || a.tags?.slug || '';
-        const nameB = b.tags?.name || b.tags?.slug || '';
-
-        return nameA.localeCompare(nameB, undefined, {
-            sensitivity: 'base',
-        });
+        return compareTagOrder(groupA, a.tags || {}, b.tags || {});
     });
 }
 
