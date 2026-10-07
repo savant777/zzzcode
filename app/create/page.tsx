@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { creatorTemplateRequest } from '@/lib/template-save';
 import { toast } from 'sonner';
 import { KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -131,7 +132,10 @@ export default function AddTemplatePage() {
             if (savedDraft) {
                 try {
                     const parsed = JSON.parse(savedDraft);
-                    if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData, password: '' }));
+                    if (parsed.formData) {
+                        const { preview_profile: _legacyPreviewProfile, ...draftFormData } = parsed.formData;
+                        setFormData(prev => ({ ...prev, ...draftFormData, password: '' }));
+                    }
                     if (parsed.selectedTags) setSelectedTags(parsed.selectedTags.map(String));
                     if (typeof parsed.creditOverride === 'string') setCreditOverride(parsed.creditOverride);
                     if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
@@ -249,18 +253,12 @@ export default function AddTemplatePage() {
             templateTagIds = tagsWithCreatorCredit(currentTags || [], selectedTags.map(String),
                 chosenCreditId, creatorSession.user.id);
             
-            const { data: templateData, error: templateError } = await supabase
-                .from('templates')
-                .insert([{
-                    ...formData,
-                    password: formData.is_personal ? formData.password : null,
-                    fields_config: fieldsToSave.map(normalizeFieldConfig),
-                    is_active: false,
-                    user_id: creatorSession.user.id
-                }])
-                .select().single();
-
-            if (templateError) throw templateError;
+            const { password, ...templateMetadata } = formData;
+            const { template: templateData } = await creatorTemplateRequest('save', {
+                templateId: null,
+                data: { ...templateMetadata, fields_config: fieldsToSave.map(normalizeFieldConfig) },
+                password: formData.is_personal && password ? password : null,
+            });
             
             if (templateTagIds.length > 0 && templateData) {
                 const { error: tagError } = await supabase

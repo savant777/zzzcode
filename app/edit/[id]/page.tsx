@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { creatorTemplateRequest } from '@/lib/template-save';
 import { templateRoute, templateTagChanges } from '@/lib/template-tags';
 import { getGroupSlug, sortTagsByGroup } from '@/lib/routes';
 import { useTemplateDraft } from '@/lib/use-template-draft';
@@ -143,6 +144,15 @@ export default function EditTemplatePage() {
                         return;
                     }
 
+                    let storedPassword = '';
+                    if (template.is_personal) {
+                        try {
+                            const result = await creatorTemplateRequest('password', { templateId });
+                            storedPassword = result.password || '';
+                        } catch {
+                            toast.error('โหลดรหัสผ่านไม่สำเร็จ ช่องว่างจะเก็บรหัสเดิมไว้');
+                        }
+                    }
                     setTemplateOwnerId(template.user_id);
                     setHasStoredPassword(template.is_personal === true);
                     setCreditOptions((allTags || []).filter((tag: any) => getGroupSlug(tag.tag_groups?.name) === 'creators'
@@ -157,7 +167,7 @@ export default function EditTemplatePage() {
                         preview_url: template.preview_url,
                         is_personal: template.is_personal,
                         supports_multiple_drafts: template.supports_multiple_drafts || false,
-                        password: '',
+                        password: storedPassword,
                         html_blueprint: template.html_blueprint,
                     });
                     setFields((template.fields_config || []).map(normalizeFieldConfig));
@@ -172,7 +182,10 @@ export default function EditTemplatePage() {
                 try {
                     const parsed = JSON.parse(savedDraft);
                     if (parsed.templateId === templateId) {
-                        if (parsed.formData) setFormData(prev => ({ ...prev, ...parsed.formData, password: '' }));
+                        if (parsed.formData) {
+                            const { preview_profile: _legacyPreviewProfile, ...draftFormData } = parsed.formData;
+                            setFormData(prev => ({ ...prev, ...draftFormData, password: prev.password }));
+                        }
                         if (parsed.selectedTags) setSelectedTags(parsed.selectedTags.map(String));
                         if (typeof parsed.creditOverride === 'string') setCreditOverride(parsed.creditOverride);
                         if (parsed.fields) setFields(parsed.fields.map(normalizeFieldConfig));
@@ -304,24 +317,12 @@ export default function EditTemplatePage() {
                 throw new Error("TEMPLATE_OWNER_REQUIRED");
             }
 
-            const { data: savedTemplate, error: updateError } = await supabase
-                .from('templates')
-                .update({
-                    title: formData.title,
-                    description: formData.description,
-                    html_blueprint: formData.html_blueprint,
-                    fields_config: fieldsToSave.map(normalizeFieldConfig),
-                    preview_url: formData.preview_url,
-                    is_personal: formData.is_personal,
-                    supports_multiple_drafts: formData.supports_multiple_drafts,
-                    password: formData.is_personal && formData.password ? formData.password : null,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', templateId)
-                .select('id, is_active')
-                .single();
-
-            if (updateError) throw updateError;
+            const { password, ...templateMetadata } = formData;
+            const { template: savedTemplate } = await creatorTemplateRequest('save', {
+                templateId: templateId,
+                data: { ...templateMetadata, fields_config: fieldsToSave.map(normalizeFieldConfig) },
+                password: formData.is_personal && password ? password : null,
+            });
 
             const { data: currentLinks, error: linksError } = await supabase
                 .from('template_tags').select('tags_id, tags(tag_groups(name))').eq('template_id', templateId);

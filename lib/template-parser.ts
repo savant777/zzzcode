@@ -581,7 +581,41 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
     return fields;
 };
 
-export const generateFinalHTML = (blueprint: string, values: any, fields: FieldConfig[], isExport: boolean = false): string => {
+export type PreviewProfile = 'roleplayth' | 'hogthai';
+
+// Hogthai keeps line breaks inside dohtml, unlike RoleplayTH block HTML.
+export const parseHogthaiBBCode = (text: string): string => {
+    const attribute = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const literal: string[] = [];
+    let prefix = '\u0000HOG_CODE_';
+    while (text.includes(prefix)) prefix += '_';
+    let html = text.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, (_, value: string) => {
+        const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r?\n/g, '<br>');
+        return `${prefix}${literal.push(`<pre>${escaped}</pre>`) - 1}\u0000`;
+    });
+    html = html
+        .replace(/\[googlefonts\]([^\[]*)\[\/googlefonts\]/gi, (_, family: string) => `<link href="https://fonts.googleapis.com/css?family=${attribute(encodeURIComponent(family.trim()))}&amp;display=swap" rel="stylesheet">`)
+        .replace(/\[dohtml=([^\]]*)\]/gi, (_, css: string) => `<span id="dohtml_span" style="${attribute(css)}">`)
+        .replace(/\[\/dohtml\]/gi, '</span>')
+        .replace(/\[(center|left|right)\]/gi, (_, align: string) => `<div align="${align.toLowerCase()}">`)
+        .replace(/\[\/(center|left|right)\]/gi, '</div>')
+        .replace(/\[indent\]/gi, '<blockquote>').replace(/\[\/indent\]/gi, '</blockquote>')
+        .replace(/\[color=([^\]\r\n]+)\]/gi, (match, value: string) => {
+            const color = value.trim().replace(/^(["'])(.*)\1$/, '$2');
+            return isBBCodeColor(color) ? `<span style="color:${attribute(color)}">` : match;
+        }).replace(/\[\/color\]/gi, '</span>')
+        .replace(/\[(b|i|u|s)\]/gi, (_, tag: string) => `<${tag.toLowerCase()}>`)
+        .replace(/\[\/(b|i|u|s)\]/gi, (_, tag: string) => `</${tag.toLowerCase()}>`)
+        .replace(/\[size=(\d+)\]/gi, '<span style="font-size:$1pt">').replace(/\[\/size\]/gi, '</span>')
+        .replace(/\[font=([^\]]+)\]/gi, (_, font: string) => `<span style="font-family:${attribute(font)}">`).replace(/\[\/font\]/gi, '</span>')
+        .replace(/\[img\]([\s\S]*?)\[\/img\]/gi, (_, url: string) => `<img src="${attribute(url.trim())}" alt="">`)
+        .replace(/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi, (_, url: string, content: string) => `<a href="${attribute(url)}" target="_blank" rel="noopener">${content}</a>`);
+    // Only text nodes get <br>; do not corrupt multiline HTML attributes.
+    html = html.split(/(<[^>]*>)/g).map(part => part.startsWith('<') ? part : part.replace(/\r?\n/g, '<br>')).join('');
+    return html.replace(new RegExp(`${prefix}(\\d+)\\u0000`, 'g'), (_, index: string) => literal[Number(index)]);
+};
+
+export const generateFinalHTML = (blueprint: string, values: any, fields: FieldConfig[], isExport: boolean = false, profile: PreviewProfile = 'roleplayth'): string => {
     const processTemplate = (content: string, currentValues: any, currentBlockName?: string, parentBlockName?: string): string => {
         let result = content;
 
@@ -744,8 +778,11 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
                    .replace(/\[REPEAT:[^\]]+\]|\[\/REPEAT\]/gi, '');
 
     if (isExport) {
-        output = parseBBCode(output, false);
-        output = preserveTextNewlines(output);
+        if (profile === 'hogthai') output = parseHogthaiBBCode(output);
+        else {
+            output = parseBBCode(output, false);
+            output = preserveTextNewlines(output);
+        }
     }
 
     return output;

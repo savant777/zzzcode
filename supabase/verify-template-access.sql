@@ -1,7 +1,7 @@
--- Read-only verification after secure-template-access.sql. Run as postgres.
+-- Read-only verification after password-free-template-writes.sql. Run as postgres.
 BEGIN;
 SELECT
-  NOT EXISTS (SELECT 1 FROM public.templates WHERE password IS NOT NULL) AS plaintext_passwords_removed,
+  NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'templates' AND column_name = 'password') AS plaintext_passwords_removed,
   NOT EXISTS (SELECT 1 FROM public.templates t WHERE t.is_personal = true
     AND NOT EXISTS (SELECT 1 FROM template_private.credentials c WHERE c.template_id = t.id)) AS protected_rows_have_credentials,
   NOT has_schema_privilege('anon', 'template_private', 'USAGE') AS anon_cannot_access_credentials,

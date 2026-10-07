@@ -14,7 +14,7 @@ const extractStylesheetLinks = (html: string) => {
     return { bodyHtml, hrefs };
 };
 
-export default function LivePreview({ html }: { html: string }) {
+export default function LivePreview({ html, profile = 'roleplayth' }: { html: string; profile?: 'roleplayth' | 'hogthai' }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const latestHtmlRef = useRef(html);
@@ -22,6 +22,9 @@ export default function LivePreview({ html }: { html: string }) {
     const [iframeHeight, setIframeHeight] = useState(500);
     const [viewportWidth, setViewportWidth] = useState(1440);
     const [postBodyWidth, setPostBodyWidth] = useState(961);
+    const [visibleWidth, setVisibleWidth] = useState(961);
+    const [contentCenter, setContentCenter] = useState<number | null>(null);
+    const updateSizingRef = useRef<() => void>(() => {});
 
     useLayoutEffect(() => {
         const updateScale = () => {
@@ -29,13 +32,38 @@ export default function LivePreview({ html }: { html: string }) {
                 const availableWidth = containerRef.current.offsetWidth;
                 const availableHeight = containerRef.current.clientHeight;
                 if (availableWidth <= 0 || availableHeight <= 0) return;
-                const next = previewViewport(window.innerWidth, window.innerHeight, availableWidth, availableHeight);
+                const doc = iframeRef.current?.contentDocument;
+                if (profile === 'hogthai' && doc) {
+                    const layout = previewViewport(window.innerWidth, window.innerHeight, availableWidth, availableHeight, profile);
+                    doc.documentElement.style.setProperty('--preview-layout-width', layout.viewportWidth + 'px');
+                    doc.documentElement.style.setProperty('--preview-post-width', layout.postBodyWidth + 'px');
+                }
+                const post = doc?.querySelector<HTMLElement>('[data-preview-content]');
+                let contentWidth = 760;
+                let center: number | null = null;
+                if (profile === 'hogthai' && post) {
+                    // Measure horizontal content only. The forum column remains
+                    // unchanged; height must never grow the iframe viewport.
+                    const boxes = Array.from(post.querySelectorAll<HTMLElement>('*'))
+                        .filter(el => !['BR', 'LINK', 'STYLE', 'SCRIPT'].includes(el.tagName))
+                        .map(el => el.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0);
+                    if (boxes.length) {
+                        const left = Math.min(...boxes.map(rect => rect.left));
+                        const right = Math.max(...boxes.map(rect => rect.right));
+                        contentWidth = right - left;
+                        center = (left + right) / 2;
+                    }
+                }
+                const next = previewViewport(window.innerWidth, window.innerHeight, availableWidth, availableHeight, profile, contentWidth);
                 setViewportWidth(next.viewportWidth);
                 setPostBodyWidth(next.postBodyWidth);
+                setVisibleWidth(next.visibleWidth);
                 setScale(next.scale);
                 setIframeHeight(next.iframeHeight);
+                setContentCenter(center);
             }
         };
+        updateSizingRef.current = updateScale;
 
         const observer = new ResizeObserver(updateScale);
         if (containerRef.current) observer.observe(containerRef.current);
@@ -51,19 +79,20 @@ export default function LivePreview({ html }: { html: string }) {
             window.visualViewport?.removeEventListener('resize', updateScale);
             window.removeEventListener('pageshow', updateScale);
         };
-    }, []);
+    }, [profile]);
 
     // Keep srcDoc stable while resizing: reloading it races with mobile viewport changes.
     const postBodyWidthRef = useRef(postBodyWidth);
     useLayoutEffect(() => {
         postBodyWidthRef.current = postBodyWidth;
         iframeRef.current?.contentDocument?.documentElement.style.setProperty('--preview-post-width', postBodyWidth + 'px');
+        if (profile === 'hogthai') updateSizingRef.current();
     }, [postBodyWidth]);
 
     const updatePreviewHtml = () => {
         const iframe = iframeRef.current;
         const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
-        const postBody = doc?.querySelector('.post_body');
+        const postBody = doc?.querySelector('[data-preview-content]');
 
         if (!doc || !postBody) return;
         doc.documentElement.style.setProperty('--preview-post-width', postBodyWidthRef.current + 'px');
@@ -85,27 +114,50 @@ export default function LivePreview({ html }: { html: string }) {
             link.rel = 'stylesheet';
             link.href = href;
             link.dataset.livePreviewStylesheet = 'true';
+            link.onload = () => updateSizingRef.current();
             doc.head.appendChild(link);
         });
 
         postBody.innerHTML = bodyHtml;
+        if (profile === 'hogthai') updateSizingRef.current();
     };
 
     useEffect(() => {
         const iframe = iframeRef.current;
         if (!iframe) return;
 
-        const handleIframeLoad = () => updatePreviewHtml();
+        let contentObserver: ResizeObserver | undefined;
+        const handleIframeLoad = () => {
+            updatePreviewHtml();
+            if (profile === 'hogthai') {
+                contentObserver?.disconnect();
+                contentObserver = new ResizeObserver(() => updateSizingRef.current());
+                const post = iframe.contentDocument?.querySelector('[data-preview-content]');
+                if (post) contentObserver.observe(post);
+            }
+        };
         iframe.addEventListener('load', handleIframeLoad);
         handleIframeLoad();
-        return () => iframe.removeEventListener('load', handleIframeLoad);
+        return () => {
+            iframe.removeEventListener('load', handleIframeLoad);
+            contentObserver?.disconnect();
+        };
     }, []);
     useEffect(() => {
         latestHtmlRef.current = html;
         updatePreviewHtml();
     }, [html]);
 
-    const styles = `
+    const styles = profile === 'hogthai' ? `<style>
+        html { margin:0; padding:0; width:var(--preview-layout-width,1440px); overflow-x:visible; }
+        body { margin:0; padding:0; width:100%; overflow-x:visible; }
+        body { background:#121212; color:#FFFFCC; font-family:Verdana,Tahoma,Arial,'Trebuchet MS',sans-serif,Georgia,Courier,'Times New Roman',serif; font-size:12px; line-height:normal; text-align:center; }
+        .preview-post { display:table; width:var(--preview-post-width,760px); margin:0 auto; padding-top:8px; background:#121212; text-align:left; font-size:13px; line-height:135%; }
+        .preview-post-cell { display:table-cell; padding:5px; }
+        .postcolor { font-size:13px; line-height:160%; margin-top:8px; margin-left:8px; }
+        #dohtml_span { display:block; }
+        ::-webkit-scrollbar { display:none; }
+    </style>` : `
         <link rel="stylesheet" href="https://cdn-uicons.flaticon.com/uicons-bold-rounded/css/uicons-bold-rounded.css">
         <link rel="stylesheet" href="https://cdn-uicons.flaticon.com/2.4.0/uicons-solid-rounded/css/uicons-solid-rounded.css">
         <link rel="stylesheet" href="https://cdn-uicons.flaticon.com/uicons-regular-rounded/css/uicons-regular-rounded.css">
@@ -215,8 +267,15 @@ export default function LivePreview({ html }: { html: string }) {
         </style>
     `;
 
-    const cropOffset = Math.max(0, (viewportWidth - postBodyWidth) / 2);
-    const scaledWidth = postBodyWidth * scale;
+    const cropOffset = profile === 'hogthai' && contentCenter !== null
+        ? contentCenter - visibleWidth / 2
+        : Math.max(0, (viewportWidth - visibleWidth) / 2) + (profile === 'hogthai' ? 8 : 0);
+    const scaledWidth = visibleWidth * scale;
+    // The iframe itself must include overflowing fixed-width templates. Keeping
+    // its CSS layout width separate prevents expansion from changing centering.
+    const renderWidth = profile === 'hogthai'
+        ? Math.max(viewportWidth, cropOffset + visibleWidth)
+        : viewportWidth;
     const scaledHeight = iframeHeight * scale;
 
     return (
@@ -233,12 +292,12 @@ export default function LivePreview({ html }: { html: string }) {
                 <iframe
                     title="Live preview"
                     ref={iframeRef}
-                    srcDoc={`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${styles}</head><body><div class="post_body scaleimages"></div></body></html>`}
+                    srcDoc={`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${styles}</head><body>${profile === 'hogthai' ? '<div class="preview-post"><div class="preview-post-cell"><div class="postcolor" data-preview-content></div></div></div>' : '<div class="post_body scaleimages" data-preview-content></div>'}</body></html>`}
                     style={{
                         position: 'absolute',
                         top: 0,
                         left: `-${cropOffset * scale}px`,
-                        width: `${viewportWidth}px`,
+                        width: `${renderWidth}px`,
                         height: `${iframeHeight}px`,
                         border: 'none',
                         display: 'block',

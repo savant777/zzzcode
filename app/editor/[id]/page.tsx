@@ -10,13 +10,14 @@ import Modal from '@/components/Modal';
 import EditorForm from '@/components/EditorForm';
 import { useUndoableState } from '@/lib/use-undoable-state';
 import Breadcrumbs from '@/components/Breadcrumbs';
-import { templateRoute } from '@/lib/template-tags';
+import { templateRoute, templatePreviewProfile } from '@/lib/template-tags';
 import { getRememberedTemplateUnlock } from '@/lib/template-unlock';
 import { getDefaultValue } from '@/lib/field-defaults';
 import { defaultBlockCount, canAddBlock, canRemoveBlock } from '@/lib/block-defaults';
 import { BLOCK_ENTRY_ID, BLOCK_GROUPS, renewBlockIds, reconcileBlockGroups } from '@/lib/block-state';
 import { BBCODE_HEIGHTS, getBBCodeHeights } from '@/lib/bbcode-height';
 import LivePreview from '@/components/LivePreview';
+import type { PreviewProfile } from '@/lib/template-parser';
 import { localCopyKey, readLocalCopy, saveLocalCopy, type LocalDraftCopy } from '@/lib/editor-local-copy';
 import { backupLink, backupOpenAction, BackupRequestError, createBackup, loadBackup, parseBackupLink, persistConnection, readConnection, sameBackupContent, updateBackup, type BackupConnection, type BackupPayload } from '@/lib/editor-backup-client';
 
@@ -148,6 +149,7 @@ export default function EditorPage() {
         title: '',
         description: '',
         supports_multiple_drafts: false,
+        preview_profile: 'roleplayth' as PreviewProfile,
         html_blueprint: '',
     });
 
@@ -184,8 +186,8 @@ export default function EditorPage() {
     // --- 2. Computed Preview ---
     const liveHTML = useMemo(() => {
         if (!formData.html_blueprint) return "";
-        return generateFinalHTML(formData.html_blueprint, fieldValues, fields, true);
-    }, [formData.html_blueprint, fieldValues, fields]);
+        return generateFinalHTML(formData.html_blueprint, fieldValues, fields, true, formData.preview_profile);
+    }, [formData.html_blueprint, formData.preview_profile, fieldValues, fields]);
 
     // Grouping Field
 
@@ -291,6 +293,7 @@ export default function EditorPage() {
                         title: template.title,
                         description: template.description,
                         supports_multiple_drafts: template.supports_multiple_drafts || false,
+                        preview_profile: templatePreviewProfile(template.template_tags),
                         html_blueprint: template.html_blueprint,
                     };
                     
@@ -1206,7 +1209,7 @@ export default function EditorPage() {
                         
                         <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
                             {/* generate Live Preview */}
-                            <LivePreview html={liveHTML} />
+                            <LivePreview key={formData.preview_profile} html={liveHTML} profile={formData.preview_profile} />
                         </div>
                     </div>
                 </div>

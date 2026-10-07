@@ -82,3 +82,9 @@ export function templateTagChanges(existing: string[], selected: string[], selec
         add: [...desired].filter(id => !current.has(id)),
     };
 }
+
+// Preview follows the template's assigned site tag, independently of navigation.
+export function templatePreviewProfile(entries?: TagEntry[] | null): 'roleplayth' | 'hogthai' {
+    return (entries || []).some(entry => entry.tags?.slug?.trim().toLowerCase() === 'hogthai')
+        ? 'hogthai' : 'roleplayth';
+}

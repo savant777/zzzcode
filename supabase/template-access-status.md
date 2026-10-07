@@ -72,3 +72,31 @@ back to their original passwords.
 
 References: [PostgreSQL pgcrypto](https://www.postgresql.org/docs/17/pgcrypto.html),
 [restrictive RLS policies](https://www.postgresql.org/docs/17/ddl-rowsecurity.html).
+
+## Password column removal
+
+After `secure-template-access.sql` has migrated existing credentials, run
+`password-free-template-writes.sql` together with the matching application update.
+It removes the legacy capture trigger and `templates.password`, and adds
+`save_template()` for atomic metadata and credential writes. Do not rerun the
+legacy `secure-template-access.sql` after this step: it expects the old column.
+The new migration is rerunnable, retains hashes and remembered unlocks, and
+checks creator/owner authorization inside the RPC. New templates remain inactive.
+Blank passwords on Edit retain the existing hash; disabling protection removes it.
+
+## Displaying passwords in Edit
+
+Run `display-template-passwords.sql` after the password-column removal migration.
+Set server-only `TEMPLATE_PASSWORD_ENCRYPTION_KEY` to 64 random hexadecimal
+characters on every deployment. Keep the same key and back it up privately;
+changing or losing it prevents decrypting previously stored passwords.
+Never prefix it with `NEXT_PUBLIC_`. Local `.env.local` has been configured.
+
+`credentials.password_encrypted` stores AES-256-GCM ciphertext alongside the
+bcrypt hash. Creator save requests go through the server to encrypt the password
+before the atomic database RPC. Only the template creator and active Owner can
+read the decrypted value through the server API. Legacy hashes remain usable, but
+have no displayable password until a password is re-entered and saved. Leaving
+the field blank keeps both existing values; disabling protection deletes both.
+After applying this migration, do not rerun `password-free-template-writes.sql`,
+which installs the older save RPC. Run the newest migration again if necessary.

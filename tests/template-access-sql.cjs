@@ -87,6 +87,42 @@ async function run() {
     await as('anon', null, async () => {
         assert.equal((await pg.query('SELECT * FROM public.templates WHERE is_personal=true')).rows.length, 0);
     });
+    await pg.exec(sql('password-free-template-writes.sql'));
+    await pg.exec(sql('password-free-template-writes.sql'));
+    const save = (id, data, password = null) => pg.query('SELECT public.save_template($1,$2,$3) AS saved', [id, data, password]);
+    await as('anon', null, async () => assert.rejects(save(null, {title:'denied'}), /permission denied/));
+    await as('authenticated', other, async () => assert.rejects(save(2, {title:'denied'}), /TEMPLATE_OWNER_REQUIRED/));
+    await as('authenticated', creator, async () => {
+        const result = await save(null, {title:'rpc protected', is_personal:true, is_active:true, user_id:owner}, secret);
+        const added = result.rows[0].saved;
+        assert.equal(added.is_active, false);
+        const row = (await pg.query('SELECT * FROM public.templates WHERE id=$1', [added.id])).rows[0];
+        assert.equal(row.user_id, creator);
+        assert.ok(!('password' in row));
+        await save(added.id, {title:'keep', is_personal:true});
+        await save(added.id, {title:'rotate', is_personal:true}, 'rpc-rotated');
+        global.rpcTemplateId = added.id;
+        await assert.rejects(save(null, {title:'missing', is_personal:true}), /PASSWORD_REQUIRED/);
+    });
+    assert.equal(await verify(global.rpcTemplateId, 'rpc-rotated'), true);
+    assert.equal(await verify(global.rpcTemplateId, secret), false);
+    await as('authenticated', owner, async () => {
+        await save(global.rpcTemplateId, {title:'owner edited', is_personal:false});
+        await assert.rejects(save(global.rpcTemplateId, {title:'reprotect', is_personal:true}), /PASSWORD_REQUIRED/);
+    });
+    assert.equal(await verify(global.rpcTemplateId, 'rpc-rotated'), false);
+    await pg.exec(sql('display-template-passwords.sql'));
+    await pg.exec(sql('display-template-passwords.sql'));
+    const saveEncrypted = (id, password, encrypted) => pg.query('SELECT public.save_template($1,$2,$3,$4) AS saved', [id, {title:'encrypted',is_personal:true}, password, encrypted]);
+    await as('authenticated', creator, async () => {
+        await saveEncrypted(global.rpcTemplateId, secret, 'v1.test-ciphertext');
+        await saveEncrypted(global.rpcTemplateId, null, null);
+        await assert.rejects(pg.query('SELECT public.read_template_password_encrypted($1)', [global.rpcTemplateId]), /permission denied/);
+    });
+    assert.equal(await verify(global.rpcTemplateId, secret), true);
+    await as('service_role', null, async () => assert.equal((await pg.query('SELECT public.read_template_password_encrypted($1) AS value', [global.rpcTemplateId])).rows[0].value, 'v1.test-ciphertext'));
+    await as('authenticated', creator, async () => { await saveEncrypted(global.rpcTemplateId, 'updated', 'v1.updated'); });
+    assert.equal(await verify(global.rpcTemplateId, 'updated'), true);
     const checks = await pg.exec(sql('verify-template-access.sql'));
     for (const result of checks) for (const row of result.rows) {
         for (const [name, passed] of Object.entries(row)) assert.equal(passed, true, name);
