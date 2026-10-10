@@ -13,7 +13,7 @@ export default function TemplateFieldItem({ field, onEdit }: Props) {
 
     const style = { 
         transform: CSS.Transform.toString(transform), 
-        transition, 
+        transition: isDragging ? 'none' : transition,
         zIndex: isDragging ? 50 : 'auto', 
         opacity: isDragging ? 0.5 : 1 
     };
@@ -23,7 +23,7 @@ export default function TemplateFieldItem({ field, onEdit }: Props) {
             ref={setNodeRef} 
             style={style} 
             className={`
-                group flex gap-4 p-2 border border-(--primary)/30 bg-black/40 hover:border-(--primary)/70 transition-all
+                group flex gap-4 p-2 border border-(--primary)/30 bg-black/40 hover:border-(--primary)/70 transition-colors
                 ${isDragging ? 'border-(--primary) shadow-lg' : ''}
             `}
         >

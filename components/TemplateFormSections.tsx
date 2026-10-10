@@ -13,6 +13,9 @@ const groupsFor = (fields: FieldConfig[]) => {
         if (!groups[name]) groups[name] = [];
         groups[name].push(field);
     });
+    // Legacy fields in one group may retain different group_order values.
+    // Group ranks choose the group position, never the order of its fields.
+    Object.values(groups).forEach(group => group.sort((a, b) => (a.field_order ?? 0) - (b.field_order ?? 0)));
     return groups;
 };
 
