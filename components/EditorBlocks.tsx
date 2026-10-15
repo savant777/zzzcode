@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import type { FieldConfig } from '@/lib/template-parser';
+import { getCheckboxLinkSource } from '@/lib/template-parser';
 import { BLOCK_ENTRY_ID } from '@/lib/block-state';
 import { blockItems, blockSummary, collapseBlockItems, copyBlockHTML, reorderBlockItems, BLOCK_COLLAPSED, type BlockScope } from '@/lib/block-editor';
 import { canAddBlock, canRemoveBlock } from '@/lib/block-defaults';
@@ -101,6 +102,7 @@ export default function EditorBlocks(props: EditorBlocksProps) {
                 const collapsed = !!item.entry[BLOCK_COLLAPSED];
                 const groups = new Map<string, FieldConfig[]>();
                 [...item.fields].sort((a, b) => (a.group_order ?? 0) - (b.group_order ?? 0) || (a.field_order ?? 0) - (b.field_order ?? 0)).forEach(field => {
+                    if (getCheckboxLinkSource(field, fields)) return;
                     if (!groups.has(field.group_name)) groups.set(field.group_name, []);
                     groups.get(field.group_name)!.push(field);
                 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { getFormSections } from '@/lib/form-layout';
+import { getCheckboxLinkSource } from '@/lib/template-parser';
 import { getBBCodeHeights, updateBBCodeHeight } from '@/lib/bbcode-height';
 import EditorBlocks, { type EditorBlocksProps } from './EditorBlocks';
 import FieldRenderer from './FieldRenderer';
@@ -9,7 +10,8 @@ export default function EditorForm(props: EditorBlocksProps & { onGlobalValue: (
     return <>{getFormSections(props.fields).map(section => {
         if (section.kind !== 'group') return <EditorBlocks key={section.id} {...props}
             scope={section.kind === 'gblock' ? { groupName: section.name } : { blockName: section.name }} />;
-        const fields = [...section.fields].sort((a, b) => (a.field_order ?? 0) - (b.field_order ?? 0));
+        const fields = section.fields.filter(field => !getCheckboxLinkSource(field, props.fields)).sort((a, b) => (a.field_order ?? 0) - (b.field_order ?? 0));
+        if (!fields.length) return null;
         return <section key={section.id} aria-label={`Field group ${section.name}`} className="min-w-0">
             <h4 className="mb-2 border-l-2 border-(--primary) bg-(--primary)/5 px-2 py-1 text-xs font-bold uppercase tracking-[0.2em] text-(--primary)">{section.name}</h4>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{fields.map((field, index) => <FieldRenderer key={field.id}

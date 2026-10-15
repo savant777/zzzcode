@@ -762,6 +762,7 @@ export default function EditTemplatePage() {
             >
                 {editingField && (
                     <FieldConfigurator 
+                        fields={fields}
                         field={editingField} 
                         onCancel={() => setIsFieldModalOpen(false)} 
                         onSave={(updated) => {

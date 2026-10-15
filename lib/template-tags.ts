@@ -24,6 +24,10 @@ const TEMPLATE_TAG_GROUP_ORDER = [
 
 export function sortedVisibleTemplateTags<T extends TagEntry>(entries?: T[] | null): T[] {
     return visibleTemplateTags(entries).sort((a, b) => {
+        const hogthaiA = a.tags?.slug?.trim().toLowerCase() === 'hogthai';
+        const hogthaiB = b.tags?.slug?.trim().toLowerCase() === 'hogthai';
+        if (hogthaiA !== hogthaiB) return hogthaiA ? -1 : 1;
+
         const groupA = getGroupSlug(a.tags?.tag_groups?.name);
         const groupB = getGroupSlug(b.tags?.tag_groups?.name);
 

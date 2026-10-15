@@ -7,11 +7,13 @@ const options = [
     ['newest', 'NEWEST'], ['oldest', 'OLDEST'],
 ];
 
-export default function TemplateSortFilter({ sortBy, onSortChange, noPassOnly, onNoPassChange }: {
+export default function TemplateSortFilter({ sortBy, onSortChange, noPassOnly, onNoPassChange, passOnly, onPassChange }: {
     sortBy: string;
     onSortChange: (value: string) => void;
     noPassOnly: boolean;
     onNoPassChange: (value: boolean) => void;
+    passOnly: boolean;
+    onPassChange: (value: boolean) => void;
 }) {
     const [open, setOpen] = useState(false);
     const root = useRef<HTMLDivElement>(null);
@@ -39,10 +41,11 @@ export default function TemplateSortFilter({ sortBy, onSortChange, noPassOnly, o
         }}>
             <button ref={trigger} type="button" aria-label="Sort and filter templates" aria-expanded={open}
                 onClick={() => setOpen(value => !value)}
-                className={`flex items-center gap-1.5 border h-[28px] px-2 cursor-pointer text-(--primary) hover:border-(--primary) ${noPassOnly ? 'border-(--primary) bg-(--primary)/10' : 'border-(--primary)/30'}`}>
+                className={`flex items-center gap-1.5 border h-[28px] px-2 cursor-pointer text-(--primary) hover:border-(--primary) ${noPassOnly || passOnly ? 'border-(--primary) bg-(--primary)/10' : 'border-(--primary)/30'}`}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
                 {options.find(([value]) => value === sortBy)?.[1]}
                 {noPassOnly && <span className="text-[10px]">· NO PASS</span>}
+                {passOnly && <span className="text-[10px]">· ONLY PASS</span>}
             </button>
             {open && <div className="absolute right-0 top-full z-30 min-w-full w-max border border-(--primary) bg-(--background) py-1 text-(--primary)">
                 <fieldset aria-label="Sort order">
@@ -62,6 +65,13 @@ export default function TemplateSortFilter({ sortBy, onSortChange, noPassOnly, o
                         {noPassOnly && <span className="h-[0.5em] w-[0.5em] bg-current" />}
                     </span>
                     NO PASS
+                </label>
+                <label className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-(--primary)/10">
+                    <input type="checkbox" checked={passOnly} onChange={event => onPassChange(event.target.checked)} className="peer sr-only" />
+                    <span aria-hidden="true" className="flex h-[1em] w-[1em] shrink-0 items-center justify-center border border-(--primary)/60 bg-(--primary)/10 peer-focus-visible:ring-1 peer-focus-visible:ring-(--primary) peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-(--background)">
+                        {passOnly && <span className="h-[0.5em] w-[0.5em] bg-current" />}
+                    </span>
+                    ONLY PASS
                 </label>
             </div>}
         </div>

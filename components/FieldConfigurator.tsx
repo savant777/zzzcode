@@ -4,12 +4,13 @@ import { useId, useMemo, useState, type ReactNode } from 'react';
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { FieldConfig, GradientValue, SelectOptionConfig, defaultGradientValue, getSelectDefaultValue, getSelectOptions } from '@/lib/template-parser';
+import { FieldConfig, GradientValue, SelectOptionConfig, defaultGradientValue, getSelectDefaultValue, getSelectOptions, getCheckboxLinkSource } from '@/lib/template-parser';
 import { parseColor } from '@/lib/colors';
 import ColorPicker from '@/components/ColorPicker';
 
 interface ConfiguratorProps {
     field: FieldConfig;
+    fields?: FieldConfig[];
     onSave: (updated: FieldConfig) => void;
     onApplyToSimilar?: (updated: FieldConfig) => void;
     onCancel: () => void;
@@ -33,7 +34,7 @@ const cssDeclarationFormat = (cssVariable: string) => {
 };
 const cssDeclarationValue = (cssVariable: string, value: string) => cssDeclarationFormat(cssVariable).replace('{{value}}', value);
 
-export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onCancel }: ConfiguratorProps) {
+export default function FieldConfigurator({ field, fields = [], onSave, onApplyToSimilar, onCancel }: ConfiguratorProps) {
     const [tempField, setTempField] = useState<FieldConfig>({ ...field });
 
     const selectOptions = useMemo(() => {
@@ -138,7 +139,7 @@ export default function FieldConfigurator({ field, onSave, onApplyToSimilar, onC
                 )}
 
                 {tempField.type === 'checkbox' && (
-                    <CheckboxConfig field={tempField} onChange={setTempField} />
+                    <CheckboxConfig field={tempField} fields={fields} onChange={setTempField} />
                 )}
 
                 {tempField.type !== 'color' &&
@@ -808,7 +809,7 @@ function SelectOptionDefaultConfig({
     );
 }
 
-function CheckboxConfig({ field, onChange }: { field: FieldConfig; onChange: (field: FieldConfig) => void }) {
+function CheckboxConfig({ field, fields, onChange }: { field: FieldConfig; fields: FieldConfig[]; onChange: (field: FieldConfig) => void }) {
     const trueValue = field.config?.true_value ?? 'true';
     const falseValue = field.config?.false_value ?? 'false';
     const defaultValue = field.default_value === trueValue ? trueValue : falseValue;
@@ -836,6 +837,18 @@ function CheckboxConfig({ field, onChange }: { field: FieldConfig; onChange: (fi
     return (
         <div className="mt-4 p-3 bg-black/40 border border-(--primary)/50 space-y-1 animate-in fade-in duration-300">
             <p className="text-[10px] text-(--primary) font-bold uppercase">Checkbox_Protocol</p>
+            <label className="flex min-w-0 flex-col gap-1 pt-2 text-xs">
+                <span className="text-[8px] opacity-40 uppercase">Linked_Checkbox</span>
+                <select aria-label="Linked checkbox" value={field.config?.checkbox_source_id || ''}
+                    onChange={event => updateCheckboxConfig({ checkbox_source_id: event.target.value || undefined })}
+                    className={`${compactInputClass} w-full min-w-0 max-w-full truncate text-(--primary)`}>
+                    <option value="" className="bg-black">None</option>
+                    {fields.filter(candidate => getCheckboxLinkSource({ ...field, config: { ...field.config, checkbox_source_id: candidate.id } }, fields.map(f => f.id === field.id ? field : f)))
+                        .map(candidate => <option key={candidate.id} value={candidate.id} className="bg-black">{candidate.variable_name} [GROUP:{candidate.group_name}]</option>)}
+                    {field.config?.checkbox_source_id && !getCheckboxLinkSource(field, fields) && <option value={field.config.checkbox_source_id}>Invalid link</option>}
+                </select>
+                <span className="opacity-60">สถานะ true/false จะเปลี่ยนตาม checkbox ที่เชื่อมและซ่อน field นี้ใน editor</span>
+            </label>
             <div className="grid grid-cols-2 gap-4 pt-2">
                 <div className="flex flex-col gap-1 col-span-2">
                     <label className="text-[8px] opacity-40 uppercase">Default_State</label>

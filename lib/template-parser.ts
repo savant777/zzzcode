@@ -59,6 +59,7 @@ export interface FieldConfig {
         false_label?: string;
         true_value?: string;
         false_value?: string;
+        checkbox_source_id?: string;
         separate_placeholder?: boolean;
         show_word_count?: boolean;
         bbcode_height?: 'compact' | 'normal';
@@ -615,8 +616,34 @@ export const parseHogthaiBBCode = (text: string): string => {
     return html.replace(new RegExp(`${prefix}(\\d+)\\u0000`, 'g'), (_, index: string) => literal[Number(index)]);
 };
 
+export function getCheckboxLinkSource(field: FieldConfig, fields: FieldConfig[]): FieldConfig | undefined {
+    const seen = new Set([field.id]);
+    let current = field;
+    let first: FieldConfig | undefined;
+    while (current.type === 'checkbox' && current.config?.checkbox_source_id) {
+        const source = fields.find(f => f.id === current.config!.checkbox_source_id && f.type === 'checkbox');
+        if (!source || seen.has(source.id)) return undefined;
+        const sameScope = source.block_name === current.block_name && source.parent_block_name === current.parent_block_name;
+        const ancestor = !source.block_name || (source.block_name === current.parent_block_name && !source.parent_block_name);
+        if (!sameScope && !ancestor) return undefined;
+        first ??= source;
+        seen.add(source.id);
+        current = source;
+    }
+    return first;
+}
+
+export function resolveCheckboxValue(field: FieldConfig, fields: FieldConfig[], read: (field: FieldConfig) => any): string {
+    const source = getCheckboxLinkSource(field, fields);
+    if (!source) return read(field) ?? field.default_value;
+    const checked = resolveCheckboxValue(source, fields, read) === (source.config?.true_value ?? 'true');
+    return checked ? (field.config?.true_value ?? 'true') : (field.config?.false_value ?? 'false');
+}
+
 export const generateFinalHTML = (blueprint: string, values: any, fields: FieldConfig[], isExport: boolean = false, profile: PreviewProfile = 'roleplayth'): string => {
-    const processTemplate = (content: string, currentValues: any, currentBlockName?: string, parentBlockName?: string): string => {
+    type Context = { blockName?: string; parentBlockName?: string; values: any };
+    const processTemplate = (content: string, currentValues: any, currentBlockName?: string, parentBlockName?: string, ancestors: Context[] = []): string => {
+        const contexts = [...ancestors, { blockName: currentBlockName, parentBlockName, values: currentValues }];
         let result = content;
 
         const renderBlocks = (input: string) => {
@@ -666,7 +693,7 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
                         if (!ranks.has(id)) ranks.set(id, index);
                     });
                     entries.sort((a, b) => (ranks.get(a.entry.__zzzcode_entry_id) ?? Infinity) - (ranks.get(b.entry.__zzzcode_entry_id) ?? Infinity));
-                    output += entries.map(({ member, entry }) => processTemplate(member.content, { ...currentValues, ...entry }, member.name)).join('');
+                    output += entries.map(({ member, entry }) => processTemplate(member.content, { ...currentValues, ...entry }, member.name, undefined, contexts)).join('');
                     cursor = group.end;
                     openRegex.lastIndex = group.end;
                     continue;
@@ -690,7 +717,8 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
                             blockContent,
                             { ...currentValues, ...entryValues },
                             blockName,
-                            currentBlockName
+                            currentBlockName,
+                            contexts
                         );
                     }).join('');
                 }
@@ -717,6 +745,13 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
             const varName = field.variable_name;
             const safeVarName = escapeRegExp(varName);
             let val = currentValues[varName] ?? values[varName] ?? field.default_value;
+            if (field.type === 'checkbox' && getCheckboxLinkSource(field, fields)) {
+                val = resolveCheckboxValue(field, fields, source => {
+                    const context = contexts.find(c => c.blockName === source.block_name && c.parentBlockName === source.parent_block_name);
+                    const sourceValues = source.block_name ? context?.values : values;
+                    return sourceValues?.[source.variable_name] ?? source.default_value;
+                });
+            }
 
             if (field.type === 'select' && val && typeof val === 'object' && !Array.isArray(val)) {
                 if (val.multiple && Array.isArray(val.selected)) {

@@ -69,6 +69,7 @@ function Dashboard() {
     }, []);
     const [sortBy, setSortBy] = useState('none');
     const [noPassOnly, setNoPassOnly] = useState(false);
+    const [passOnly, setPassOnly] = useState(false);
     
     // Modal & Security
     const [modalType, setModalType] = useState<'delete' | 'private' | null>(null);
@@ -133,6 +134,7 @@ function Dashboard() {
     const filteredTemplates = useMemo(() => {
         const result = templates.filter((item) => {
             if (noPassOnly && item.is_personal) return false;
+            if (passOnly && !item.is_personal) return false;
             const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
             const [group, tagSlug] = activeFilter.split(':'); 
             
@@ -174,7 +176,7 @@ function Dashboard() {
         }
 
         return sortedResult;
-    }, [templates, searchQuery, activeFilter, sortBy, noPassOnly]);
+    }, [templates, searchQuery, activeFilter, sortBy, noPassOnly, passOnly]);
 
     // --- 4. Event Handlers ---
 
@@ -341,7 +343,14 @@ function Dashboard() {
                                 </button>
                             </div>
                             <TemplateSortFilter sortBy={sortBy} onSortChange={setSortBy}
-                                noPassOnly={noPassOnly} onNoPassChange={setNoPassOnly} />
+                                noPassOnly={noPassOnly} onNoPassChange={value => {
+                                    setNoPassOnly(value);
+                                    if (value) setPassOnly(false);
+                                }}
+                                passOnly={passOnly} onPassChange={value => {
+                                    setPassOnly(value);
+                                    if (value) setNoPassOnly(false);
+                                }} />
                         </div>
                     </div>
                 </div>
