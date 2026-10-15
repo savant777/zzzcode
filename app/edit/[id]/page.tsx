@@ -5,6 +5,8 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { creatorTemplateRequest } from '@/lib/template-save';
 import { templateRoute, templateTagChanges } from '@/lib/template-tags';
+import { isHogthaiTemplate } from '@/lib/dashboard';
+import { useTemplateDashboard } from '@/components/DashboardContext';
 import { getGroupSlug, sortTagsByGroup } from '@/lib/routes';
 import { useTemplateDraft } from '@/lib/use-template-draft';
 import { creatorCreditChanges } from '@/lib/creator-credit';
@@ -48,6 +50,7 @@ export default function EditTemplatePage() {
     const fromGroup = searchParams.get('group') || 'category';
     const fromTag = searchParams.get('tag') || 'all';
     const [breadcrumbTags, setBreadcrumbTags] = useState<any[]>([]);
+    useTemplateDashboard(isHogthaiTemplate(breadcrumbTags));
     const breadcrumbRoute = templateRoute(breadcrumbTags, `${fromGroup}:${fromTag}`);
     const breadcrumbPath = `${breadcrumbRoute.group}:${breadcrumbRoute.tag}`;
 
@@ -390,7 +393,7 @@ export default function EditTemplatePage() {
 
     const finishEditing = () => {
         setActivationPromptOpen(false);
-        router.push('/?group=category&tag=all');
+        router.push(isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/?group=category&tag=all');
         router.refresh();
     };
 
@@ -423,7 +426,7 @@ export default function EditTemplatePage() {
         return (
             <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
                 <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDIT" />
+                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDIT" dashboardBase={isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/'} />
                     <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
                         <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
                         <span className="lg:hidden">&lt; BACK</span>
@@ -442,7 +445,7 @@ export default function EditTemplatePage() {
     return (
         <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
             <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDIT" />
+                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDIT" dashboardBase={isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/'} />
                 <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
                     <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
                     <span className="lg:hidden">&lt; BACK</span>

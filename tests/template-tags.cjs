@@ -44,6 +44,7 @@ const TemplateCard = loadTs('components/TemplateCard.tsx', {
     'next/navigation': { useRouter: () => ({ push(url) { navigations.push(url); } }) },
     '@/lib/routes': routes,
     '@/lib/template-tags': loaded.exports,
+    '@/lib/dashboard': loadTs('lib/dashboard.ts', { './routes': routes }),
 }).default;
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
@@ -100,6 +101,7 @@ for (const viewMode of ['line', 'grid']) {
     }
 }
 const Breadcrumbs = loadTs('components/Breadcrumbs.tsx', {
+    '@/lib/dashboard': loadTs('lib/dashboard.ts', { './routes': routes }),
     '@/lib/routes': routes,
     'next/link': { default: ({ children, ...props }) => React.createElement('a', props, children) },
 }).default;
@@ -204,3 +206,68 @@ for (const group of ['category', 'css', 'style']) {
 }
 assert.ok(routes.compareTagOrder('activity',{id:30,name:'Alpha'},{id:2,name:'Zulu'}) < 0);
 console.log('Category/CSS/style ID order, appended new tags and other groups alphabetical order passed.');
+
+const { isHogthaiTemplate, dashboardTagUrl, HOGTHAI_GROUPS } = loadTs('lib/dashboard.ts', { './routes': routes });
+const hogthaiTag = { tags: { is_active: true, name: 'Hogthai', slug: 'hogthai', tag_groups: { name: 'style' } } };
+assert.equal(isHogthaiTemplate([hogthaiTag, active]), true);
+assert.equal(isHogthaiTemplate([{ tags: null }, active]), false);
+assert.equal(isHogthaiTemplate(null), false);
+assert.equal(isHogthaiTemplate([{ tags: { slug: ' HOGTHAI ' } }]), true);
+assert.deepEqual(HOGTHAI_GROUPS, ['creators', 'category', 'css', 'style']);
+assert.equal(dashboardTagUrl('css', 'minimal', true), '/hogthai?group=css&tag=minimal');
+assert.equal(dashboardTagUrl('style', 'modern', true), '/hogthai?group=style&tag=modern');
+assert.equal(dashboardTagUrl('style', 'hogthai'), '/hogthai');
+assert.equal(dashboardTagUrl('category', 'etc', true), '/hogthai?group=category&tag=etc');
+assert.equal(dashboardTagUrl('creators', 'author', true), '/hogthai?group=creators&tag=author');
+assert.equal(dashboardTagUrl('activity', 'party', true), '/hogthai');
+assert.equal(dashboardTagUrl('category', 'food&drink'), '/?group=category&tag=food%26drink');
+// Exercise the actual dashboard filter, including search, tag and password filters.
+const dashboardSource = fs.readFileSync('components/TemplateDashboard.tsx', 'utf8');
+const filterBody = dashboardSource.slice(dashboardSource.indexOf('const result = templates.filter'), dashboardSource.indexOf('const sortedResult'));
+const filterCatalog = new Function('templates', 'hogthai', 'activeFilter', 'searchQuery', 'noPassOnly', 'passOnly', 'isHogthaiTemplate', 'getGroupSlug', ts.transpileModule(`${filterBody}\nreturn result;`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText);
+const catalog = [
+    { id: 1, title: 'Public Chat', is_personal: false, template_tags: [hogthaiTag, categoryTag, creatorTag] },
+    { id: 2, title: 'Private Chat', is_personal: true, template_tags: [hogthaiTag, categoryTag] },
+    { id: 3, title: 'Regular Chat', is_personal: false, template_tags: [categoryTag] },
+];
+const ids = (hogthai, path = 'category:all', query = '', noPass = false, pass = false) => filterCatalog(catalog, hogthai, path, query, noPass, pass, isHogthaiTemplate, routes.getGroupSlug).map(t => t.id);
+assert.deepEqual(ids(false), [3]);
+assert.deepEqual(ids(true), [1, 2]);
+assert.deepEqual(ids(true, 'creators:author'), [1]);
+assert.deepEqual(ids(true, 'category:etc', 'Private'), [2]);
+assert.deepEqual(ids(true, 'category:all', '', true), [1]);
+assert.deepEqual(ids(true, 'category:all', '', false, true), [2]);
+for (const viewMode of ['line', 'grid']) {
+    const card = TemplateCard({ item: { id: 1, template_tags: [hogthaiTag, categoryTag] }, viewMode });
+    findButton(card, 'Use Template').props.onClick({ stopPropagation() {} });
+    assert.equal(navigations.pop(), '/editor/1?group=category&tag=etc');
+    function tagButtons(element) {
+        if (!React.isValidElement(element)) return [];
+        return (element.type === 'button' && element.props.className?.includes('zzzcode-tag-btn') ? [element] : [])
+            .concat(React.Children.toArray(element.props.children).flatMap(tagButtons));
+    }
+    for (const button of tagButtons(card)) {
+        button.props.onClick({ stopPropagation() {} });
+        assert.equal(navigations.pop(), button.props.children === 'Hogthai' ? '/hogthai' : '/hogthai?group=category&tag=etc');
+    }
+}
+const hogthaiBreadcrumb = renderToStaticMarkup(React.createElement(Breadcrumbs, { path: 'category:etc', dashboardBase: '/hogthai' }));
+assert.ok(hogthaiBreadcrumb.includes('/hogthai?group=category&amp;tag=all'));
+assert.ok(hogthaiBreadcrumb.includes('href="/hogthai"'));
+const hogthaiEditorBreadcrumb = renderToStaticMarkup(React.createElement(Breadcrumbs, {
+    path: 'category:etc', currentFile: 'Chat', editorMode: 'EDITOR', dashboardBase: '/hogthai',
+}));
+assert.ok(hogthaiEditorBreadcrumb.includes('href="/hogthai"'));
+assert.ok(hogthaiEditorBreadcrumb.includes('href="/hogthai?group=category&amp;tag=etc"'));
+assert.ok(!hogthaiEditorBreadcrumb.includes('dashboard='));
+console.log('Hogthai catalog separation, combined filters, card navigation and breadcrumbs passed.');
+
+for (const contextHref of ['/hogthai', '/?group=category&tag=all']) {
+    const Header = loadTs('components/TypingHeader.tsx', {
+        react: { ...React, useState: () => ['', () => {}], useEffect: () => {} },
+        'next/link': { default: 'a' },
+        './DashboardContext': { useDashboardHref: () => contextHref },
+    }).default;
+    assert.equal(Header({ text: 'zzzcode editor' }).props.href, contextHref);
+}
+console.log('Header follows the template dashboard context without a dashboard query parameter.');

@@ -1,14 +1,16 @@
 "use client";
 import Link from 'next/link';
 import { getGroupSlug } from '@/lib/routes';
+import { dashboardTagUrl } from '@/lib/dashboard';
 
 interface BreadcrumbsProps {
     path?: string;
     currentFile?: string;
     editorMode?: string;
+    dashboardBase?: string;
 }
 
-export default function Breadcrumbs({ path, currentFile, editorMode }: BreadcrumbsProps) {
+export default function Breadcrumbs({ path, currentFile, editorMode, dashboardBase = '/' }: BreadcrumbsProps) {
     const [rawGroup, rawValue] = path ? path.split(':') : ['', ''];
     const group = getGroupSlug(rawGroup);
     const value = (rawValue || '').toLowerCase();
@@ -17,7 +19,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode }: Breadcrum
 
     return (
         <div className="flex flex-wrap items-center gap-2 gap-y-0 font-Google-Code text-[10px] md:text-xs uppercase select-none tracking-wider">
-            <Link href="/?group=category&tag=all" className="text-(--foreground)/75 hover:text-(--primary) transition-colors">
+            <Link href={dashboardBase === '/hogthai' ? '/hogthai' : '/?group=category&tag=all'} className="text-(--foreground)/75 hover:text-(--primary) transition-colors">
                 ZZZCODE_EDITOR
             </Link>
 
@@ -36,7 +38,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode }: Breadcrum
                         <>
                             <span className="text-(--foreground)/25">/</span>
                             <Link
-                                href={`/?${new URLSearchParams({ group, tag: 'all' })}`}
+                                href={dashboardTagUrl(group, 'all', dashboardBase === '/hogthai')}
                                 className="text-(--foreground)/75 hover:text-(--primary) transition-colors"
                             >
                                 {group.replace(/-/g, '_').toUpperCase()}
@@ -49,7 +51,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode }: Breadcrum
                     {/* in Editor Page */}
                     {!isDashboard ? (
                         <Link 
-                            href={`/?${new URLSearchParams({ group, tag: value })}`}
+                            href={dashboardTagUrl(group, value, dashboardBase === '/hogthai')}
                             className="text-(--foreground)/75 hover:text-(--primary) transition-colors"
                         >
                             {value.replace(/-/g, '_').toUpperCase()}

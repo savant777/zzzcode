@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import MainHeader from "@/components/MainHeader";
+import { DashboardProvider } from '@/components/DashboardContext';
 import { Toaster } from 'sonner';
 import { Monomaniac_One, Google_Sans, Google_Sans_Code } from 'next/font/google';
 
@@ -52,8 +53,10 @@ export default function RootLayout({
     return (
         <html lang="th" className={`${monomaniac.variable} ${googlecode.variable} ${googlesans.variable}`}>
             <body className="max-w-full grid body-grid-layout max-h-screen">
-                <MainHeader />
-                {children}
+                <DashboardProvider>
+                    <MainHeader />
+                    {children}
+                </DashboardProvider>
                 <footer className="footer-grid-area flex justify-between bg-(--background) border-t border-(--primary) p-2 text-xs text-(--primary) font-Google-Code">
                     <div className="select-none">© 2026 ZZZCODE</div>
                     <div className="flex items-center">

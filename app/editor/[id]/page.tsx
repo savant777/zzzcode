@@ -11,6 +11,8 @@ import EditorForm from '@/components/EditorForm';
 import { useUndoableState } from '@/lib/use-undoable-state';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { templateRoute, templatePreviewProfile } from '@/lib/template-tags';
+import { isHogthaiTemplate } from '@/lib/dashboard';
+import { useTemplateDashboard } from '@/components/DashboardContext';
 import { getRememberedTemplateUnlock } from '@/lib/template-unlock';
 import { getDefaultValue } from '@/lib/field-defaults';
 import { defaultBlockCount, canAddBlock, canRemoveBlock } from '@/lib/block-defaults';
@@ -120,6 +122,7 @@ export default function EditorPage() {
     const fromGroup = searchParams.get('group') || 'category';
     const fromTag = searchParams.get('tag') || 'all';
     const [breadcrumbTags, setBreadcrumbTags] = useState<any[]>([]);
+    useTemplateDashboard(isHogthaiTemplate(breadcrumbTags));
     const breadcrumbRoute = templateRoute(breadcrumbTags, `${fromGroup}:${fromTag}`);
     const breadcrumbPath = `${breadcrumbRoute.group}:${breadcrumbRoute.tag}`;
 
@@ -979,7 +982,7 @@ export default function EditorPage() {
         return (
             <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
                 <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" />
+                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" dashboardBase={isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/'} />
                     <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
                         <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
                         <span className="lg:hidden">&lt; BACK</span>
@@ -999,7 +1002,7 @@ export default function EditorPage() {
     return (
         <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
             <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" />
+                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" dashboardBase={isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/'} />
                 <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
                     <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
                     <span className="lg:hidden">&lt; BACK</span>

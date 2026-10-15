@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation'
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import SkeletonNav from '@/components/SkeletonNav';
 import { getGroupSlug, compareTagOrder, TAG_GROUP_ORDER as GROUP_ORDER } from '@/lib/routes';
+import { dashboardTagUrl, HOGTHAI_GROUPS } from '@/lib/dashboard';
 
-export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
+export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = false }: any) {
     const [isLoading, setIsLoading] = useState(true);
     const [menuData, setMenuData] = useState<any[]>([]);
     const activeGroup = (getGroupSlug(activeFilter?.split(':')[0]) || 'category').toUpperCase();
@@ -73,7 +75,7 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
     }, []);
 
     const handleFilterChange = (groupName: string, tagSlug: string) => {
-        router.push(`/?group=${getGroupSlug(groupName)}&tag=${tagSlug.toLowerCase()}`);
+        router.push(dashboardTagUrl(groupName, tagSlug, hogthai));
         
         if (window.innerWidth < 1024) {
             setIsOpen(false);
@@ -96,16 +98,22 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter }: any) {
             </button>
 
             <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col">
+                <Link href={hogthai ? '/?group=category&tag=all' : '/hogthai'}
+                    onClick={() => { if (window.innerWidth < 1024) setIsOpen(false); }}
+                    className="w-full p-2 px-3 border-b border-(--primary)/20 text-(--primary) hover:bg-(--primary)/5 font-black tracking-widest flex justify-between items-center bg-(--background) cursor-pointer uppercase">
+                    <span>{hogthai ? 'roleplayth' : 'hogthai'}</span>
+                    <span aria-hidden="true">→</span>
+                </Link>
                 {isLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
                         <SkeletonNav key={i} />
                     ))
                 ) : (
-                    menuData.map((group) => (
+                    menuData.filter(group => !hogthai || HOGTHAI_GROUPS.includes(getGroupSlug(group.name))).map((group) => (
                         <NavGroup 
                             key={group.id}
                             title={group.name} 
-                            tags={group.tags} 
+                            tags={group.tags.filter((tag: any) => !(getGroupSlug(group.name) === 'style' && tag.slug.toLowerCase() === 'hogthai'))}
                             activeFilter={activeFilter}
                             onSelect={(tagSlug: string) => handleFilterChange(group.name, tagSlug)} 
                             isExpanded={expandedGroup === getGroupSlug(group.name).toUpperCase()}

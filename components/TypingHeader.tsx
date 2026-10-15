@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useDashboardHref } from './DashboardContext';
 
 interface TypingHeaderProps {
     text: string;
@@ -8,6 +9,7 @@ interface TypingHeaderProps {
 }
 
 export default function TypingHeader({ text, speed = 150 }: TypingHeaderProps) {
+    const dashboardHref = useDashboardHref();
     const [displayedText, setDisplayedText] = useState("");
     const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -22,7 +24,7 @@ export default function TypingHeader({ text, speed = 150 }: TypingHeaderProps) {
     }, [currentIndex, text, speed]);
 
     return (
-        <Link href="/?group=category&tag=all" className="flex justify-center items-center py-2 md:py-0">
+        <Link href={dashboardHref} className="flex justify-center items-center py-2 md:py-0">
             <h1 className="text-2xl md:text-5xl leading-none uppercase">
                 {displayedText}
                 <span className="animate-cursor-blink">_</span>

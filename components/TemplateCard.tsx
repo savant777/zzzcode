@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { getGroupSlug } from '@/lib/routes';
 import { templateRoute, sortedVisibleTemplateTags } from '@/lib/template-tags';
+import { dashboardTagUrl, isHogthaiTemplate } from '@/lib/dashboard';
 
 function CreatorBadge({ name }: { name: string }) {
     return (
@@ -18,6 +19,7 @@ function CreatorBadge({ name }: { name: string }) {
 export default function TemplateCard({ item, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onOpenPrivateModal, onActivate, isActivating }: any) {
     const router = useRouter();
     const visibleTags = sortedVisibleTemplateTags(item.template_tags);
+    const hogthai = isHogthaiTemplate(item.template_tags);
     const inactive = item.is_active === false;
     if (inactive && !canManage) return null;
     const contentTone = inactive ? 'grayscale opacity-50' : '';
@@ -82,7 +84,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                                     e.stopPropagation();
                                     const group = getGroupSlug(t.tags.tag_groups.name);
                                     const tagSlug = t.tags.slug.toLowerCase();
-                                    router.push(`/?group=${group}&tag=${tagSlug}`);
+                                    router.push(dashboardTagUrl(group, tagSlug, hogthai));
                                 }}
                                 className={`zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase ${inactive ? '' : 'hover:bg-(--background) hover:text-(--foreground)'} transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap`}
                             >
@@ -178,7 +180,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                             e.stopPropagation();
                             const group = getGroupSlug(t.tags.tag_groups.name);
                             const tagSlug = t.tags.slug.toLowerCase();
-                            router.push(`/?group=${group}&tag=${tagSlug}`);
+                            router.push(dashboardTagUrl(group, tagSlug, hogthai));
                         }}
                         className={`zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase ${inactive ? '' : 'hover:bg-(--background) hover:text-(--foreground)'} transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap`}
                     >
@@ -206,7 +208,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                                             e.stopPropagation();
                                             const group = getGroupSlug(t.tags.tag_groups.name);
                                             const tagSlug = t.tags.slug.toLowerCase();
-                                            router.push(`/?group=${group}&tag=${tagSlug}`);
+                                            router.push(dashboardTagUrl(group, tagSlug, hogthai));
                                         }}
                                         className="cursor-pointer text-(--primary) text-[10px] font-bold text-left"
                                     >
