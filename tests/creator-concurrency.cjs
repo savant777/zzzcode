@@ -19,7 +19,7 @@ const exportsObject = {};
 new Function('exports', 'require', ts.transpileModule(fs.readFileSync('lib/creator.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText)(exportsObject, () => ({ supabase }));
-const { getCurrentCreator } = exportsObject;
+const { getCurrentCreator, getCreatorForDisplay } = exportsObject;
 const signedIn = { data: { user: { id: 'one', identities: [] } }, error: null };
 const signedOut = { data: { user: null }, error: null };
 (async () => {
@@ -49,5 +49,43 @@ const signedOut = { data: { user: null }, error: null };
     const retry = getCurrentCreator();
     waiting.shift().resolve(signedIn);
     assert.equal((await retry).isCreator, true);
+    let sessionCalls = 0;
+    supabase.auth.getSession = async () => {
+        sessionCalls++;
+        return { data: { session: { user: signedIn.data.user } }, error: null };
+    };
+    const verifiedCalls = calls;
+    const displayHeader = getCreatorForDisplay(), displayDashboard = getCreatorForDisplay();
+    assert.equal(displayHeader, displayDashboard, 'Display callers share one request');
+    assert.equal((await displayHeader).isCreator, true);
+    await getCreatorForDisplay();
+    assert.equal(sessionCalls, 1, 'Navigation reuses the recent display result');
+    assert.equal(calls, verifiedCalls, 'Display does not make a getUser network request');
+    authChanged('INITIAL_SESSION');
+    await getCreatorForDisplay();
+    assert.equal(sessionCalls, 1);
+    const originalNow = Date.now;
+    try {
+        const later = originalNow() + 31_000;
+        Date.now = () => later;
+        await getCreatorForDisplay();
+        assert.equal(sessionCalls, 2, 'Expired display results are checked again');
+    } finally { Date.now = originalNow; }
+    authChanged('SIGNED_OUT');
+    supabase.auth.getSession = async () => ({ data: { session: null }, error: null });
+    assert.equal((await getCreatorForDisplay()).user, null, 'Sign-out clears the display cache');
+    authChanged('SIGNED_IN');
+    let local = deferred();
+    supabase.auth.getSession = () => local.promise;
+    const staleDisplay = getCreatorForDisplay();
+    authChanged('SIGNED_OUT');
+    supabase.auth.getSession = async () => ({ data: { session: null }, error: null });
+    local.resolve({ data: { session: { user: signedIn.data.user } }, error: null });
+    assert.equal((await staleDisplay).user, null, 'An old display check cannot restore signed-out identity');
+    authChanged('TOKEN_REFRESHED');
+    supabase.auth.getSession = async () => ({ data: { session: null }, error: { name: 'AuthRetryableFetchError' } });
+    assert.equal((await getCreatorForDisplay()).checkFailed, true);
+    supabase.auth.getSession = async () => ({ data: { session: null }, error: null });
+    assert.equal((await getCreatorForDisplay()).checkFailed, undefined, 'Failed display checks are not cached');
     console.log('Concurrent checks share requests; completed, failed and changed sessions are rechecked.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

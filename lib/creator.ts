@@ -87,10 +87,13 @@ const syncDiscordIdentity = async (user: User, creator: CreatorProfile) => {
     };
 };
 
-const readCurrentCreator = async (): Promise<CreatorSession> => {
+const readCurrentCreator = async (forDisplay = false): Promise<CreatorSession> => {
     const unavailable = { user: null, creator: null, isCreator: false, isOwner: false, checkFailed: true };
     try {
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        // Display can use the SDK's local session. Mutations still verify getUser.
+        const { user, userError } = forDisplay
+            ? await supabase.auth.getSession().then(({ data, error }) => ({ user: data.session?.user ?? null, userError: error }))
+            : await supabase.auth.getUser().then(({ data, error }) => ({ user: data.user, userError: error }));
         if (userError && userError.name !== 'AuthSessionMissingError') return unavailable;
 
         if (!user) {
@@ -110,7 +113,7 @@ const readCurrentCreator = async (): Promise<CreatorSession> => {
         if (creatorError) return { ...unavailable, user };
 
         const activeCreator = creator?.is_active
-            ? await syncDiscordIdentity(user, creator as CreatorProfile)
+            ? forDisplay ? creator as CreatorProfile : await syncDiscordIdentity(user, creator as CreatorProfile)
             : null;
 
         return {
@@ -127,18 +130,47 @@ const readCurrentCreator = async (): Promise<CreatorSession> => {
 let pendingCreatorCheck: Promise<CreatorSession> | null = null;
 let authGeneration = 0;
 let observingAuth = false;
+let pendingDisplayCheck: Promise<CreatorSession> | null = null;
+let displayCache: { session: CreatorSession; expires: number } | null = null;
 
-export const getCurrentCreator = (): Promise<CreatorSession> => {
-    // Never share requests across users during server rendering.
-    if (typeof window === 'undefined') return readCurrentCreator();
+const observeAuth = () => {
     if (!observingAuth) {
         observingAuth = true;
         supabase.auth.onAuthStateChange(event => {
             if (event === 'INITIAL_SESSION') return;
             authGeneration++;
             pendingCreatorCheck = null;
+            pendingDisplayCheck = null;
+            displayCache = null;
         });
     }
+};
+
+/** UI hint only; API/RLS and getCurrentCreator remain the authority for writes. */
+export const getCreatorForDisplay = (): Promise<CreatorSession> => {
+    if (typeof window === 'undefined') return readCurrentCreator();
+    observeAuth();
+    if (displayCache && displayCache.expires > Date.now()) return Promise.resolve(displayCache.session);
+    if (pendingDisplayCheck) return pendingDisplayCheck;
+    const generation = authGeneration;
+    const request: Promise<CreatorSession> = readCurrentCreator(true)
+        .then(session => {
+            if (generation !== authGeneration) return getCreatorForDisplay();
+            if (!session.checkFailed) displayCache = { session, expires: Date.now() + 30_000 };
+            return session;
+        })
+        .finally(() => {
+            if (pendingDisplayCheck === request) pendingDisplayCheck = null;
+        });
+    pendingDisplayCheck = request;
+    return request;
+};
+
+export const getCurrentCreator = (): Promise<CreatorSession> => {
+    // Never share requests across users during server rendering.
+    if (typeof window === 'undefined') return readCurrentCreator();
+    observeAuth();
+    displayCache = null;
     if (pendingCreatorCheck) return pendingCreatorCheck;
     const generation = authGeneration;
     const request: Promise<CreatorSession> = readCurrentCreator()

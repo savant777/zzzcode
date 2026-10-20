@@ -86,7 +86,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
         'next/link': {}, 'next/navigation': { usePathname: () => '/create' },
         sonner: { toast: {} }, './TypingHeader': {}, './Modal': {},
         '@/lib/auth-diagnostics': { recordAuthEvent() {} },
-        '@/lib/creator': { getCurrentCreator: () => { const d = deferred(); requests.push(d); return d.promise; } },
+        '@/lib/creator': { getCreatorForDisplay: () => { const d = deferred(); requests.push(d); return d.promise; } },
         '@/lib/supabase': { supabase: { auth: {
             onAuthStateChange(fn) { authEvent = fn; return { data: { subscription: { unsubscribe() {} } } }; },
             signOut() { throw new Error('Must not sign out automatically'); },
@@ -95,10 +95,12 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
     state.render(Header);
     requests.shift().resolve(active); await tick();
     assert.equal(state.slots[1], active);
+    authEvent('INITIAL_SESSION');
+    assert.equal(timers.size, 0, 'Initial auth event must not duplicate the mount check');
     authEvent('TOKEN_REFRESHED'); await runTimer(0);
     requests.shift().resolve({ checkFailed: true }); await tick();
     assert.equal(state.slots[1], active, 'Temporary failure preserves current identity');
-    assert.ok(state.slots[5], 'Persistent notice on check failure');
+    assert.ok(state.slots[7], 'Persistent notice on check failure');
     await runTimer(3000);
     const stale = requests.shift();
     authEvent('SIGNED_OUT');
@@ -106,10 +108,10 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
     assert.equal(state.slots[1], null, 'Stale request cannot restore signed-out identity');
     await runTimer(0);
     requests.shift().resolve({ user: null, isCreator: false }); await tick();
-    assert.ok(state.slots[5]);
+    assert.ok(state.slots[7]);
     authEvent('SIGNED_IN'); await runTimer(0);
     requests.shift().resolve({ user, isCreator: false }); await tick();
-    assert.ok(state.slots[5], 'Confirmed denial stays on form without forced sign-out');
+    assert.ok(state.slots[7], 'Confirmed denial stays on form without forced sign-out');
     authEvent('TOKEN_REFRESHED'); await runTimer(0);
     requests.shift().resolve({ checkFailed: true }); await tick();
     for (let i = 0; i < 2; i++) {

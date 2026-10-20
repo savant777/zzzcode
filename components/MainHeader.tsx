@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { CreatorSession, getCurrentCreator } from '@/lib/creator';
+import { CreatorSession, getCreatorForDisplay } from '@/lib/creator';
 import { recordAuthEvent } from '@/lib/auth-diagnostics';
 import TypingHeader from './TypingHeader';
 import Modal from './Modal';
@@ -65,7 +65,7 @@ export default function MainHeader() {
                 setAuthNotice(null);
                 return;
             }
-            const session = await getCurrentCreator();
+            const session = await getCreatorForDisplay();
             if (disposed || version !== requestVersion.current) return;
             if (session.checkFailed) {
                 recordAuthEvent('CHECK_UNAVAILABLE');
@@ -96,6 +96,7 @@ export default function MainHeader() {
         void load();
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
             recordAuthEvent(event);
+            if (event === 'INITIAL_SESSION') return;
             if (event === 'SIGNED_OUT') setCreatorSession(null);
             schedule();
         });

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { CreatorSession, canManageTemplate, getCurrentCreator } from '@/lib/creator';
+import { CreatorSession, canManageTemplate, getCurrentCreator, getCreatorForDisplay } from '@/lib/creator';
 import { getGroupSlug } from '@/lib/routes';
 import { templateRoute, visibleTemplateTags } from '@/lib/template-tags';
 import { dashboardTagUrl, HOGTHAI_GROUPS, isHogthaiTemplate } from '@/lib/dashboard';
@@ -89,7 +89,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
         const initDashboard = async () => {
             setIsLoading(true);
             // Identity and badges must not hold the catalog skeleton open.
-            void getCurrentCreator().then(session => {
+            void getCreatorForDisplay().then(session => {
                 if (!disposed) setCreatorSession(session);
             });
             void (async () => {
