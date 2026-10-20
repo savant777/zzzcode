@@ -94,6 +94,9 @@ const readCurrentCreator = async (forDisplay = false): Promise<CreatorSession> =
         const { user, userError } = forDisplay
             ? await supabase.auth.getSession().then(({ data, error }) => ({ user: data.session?.user ?? null, userError: error }))
             : await supabase.auth.getUser().then(({ data, error }) => ({ user: data.user, userError: error }));
+        if (typeof window !== 'undefined' && observedAuthUser === undefined && !userError) {
+            observedAuthUser = user?.id ?? null;
+        }
         if (userError && userError.name !== 'AuthSessionMissingError') return unavailable;
 
         if (!user) {
@@ -132,12 +135,23 @@ let authGeneration = 0;
 let observingAuth = false;
 let pendingDisplayCheck: Promise<CreatorSession> | null = null;
 let displayCache: { session: CreatorSession; expires: number } | null = null;
+let observedAuthUser: string | null | undefined;
 
 const observeAuth = () => {
     if (!observingAuth) {
         observingAuth = true;
-        supabase.auth.onAuthStateChange(event => {
-            if (event === 'INITIAL_SESSION') return;
+        supabase.auth.onAuthStateChange((event, session) => {
+            const userId = session?.user.id ?? null;
+            if (event === 'INITIAL_SESSION') {
+                if (observedAuthUser === undefined) observedAuthUser = userId;
+                return;
+            }
+            if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+                // Reconfirmation/focus and token renewal for the same account must
+                // keep the in-flight check and its short-lived display result.
+                if (observedAuthUser === userId) return;
+                observedAuthUser = userId;
+            }
             authGeneration++;
             pendingCreatorCheck = null;
             pendingDisplayCheck = null;
