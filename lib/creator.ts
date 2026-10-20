@@ -1,6 +1,14 @@
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
+// Temporary request tracing. Contains no account IDs, credentials or profile data.
+const traceInstance = Math.random().toString(36).slice(2, 8);
+let traceRequest = 0;
+function traceCreator(event: string, details: Record<string, string | number | boolean> = {}) {
+    if (typeof window === 'undefined') return;
+    console.debug('[creator-auth]', { instance: traceInstance, event, ...details });
+}
+
 export type CreatorRole = 'owner' | 'creator';
 
 export type CreatorProfile = {
@@ -88,6 +96,8 @@ const syncDiscordIdentity = async (user: User, creator: CreatorProfile) => {
 };
 
 const readCurrentCreator = async (forDisplay = false): Promise<CreatorSession> => {
+    const request = ++traceRequest;
+    traceCreator('check-start', { request, mode: forDisplay ? 'display' : 'verified' });
     const unavailable = { user: null, creator: null, isCreator: false, isOwner: false, checkFailed: true };
     try {
         // Display can use the SDK's local session. Mutations still verify getUser.
@@ -108,11 +118,13 @@ const readCurrentCreator = async (forDisplay = false): Promise<CreatorSession> =
             };
         }
 
+        traceCreator('profile-request', { request, generation: authGeneration });
         const { data: creator, error: creatorError } = await supabase
             .from('creators')
             .select('user_id, discord_id, discord_username, display_name, slug, role, is_active, created_at, updated_at')
             .eq('user_id', user.id)
             .maybeSingle();
+        traceCreator('profile-response', { request, failed: !!creatorError });
         if (creatorError) return { ...unavailable, user };
 
         const activeCreator = creator?.is_active
@@ -142,6 +154,8 @@ const observeAuth = () => {
         observingAuth = true;
         supabase.auth.onAuthStateChange((event, session) => {
             const userId = session?.user.id ?? null;
+            traceCreator('auth-event', { authEvent: event, knownAccount: observedAuthUser !== undefined,
+                sameAccount: observedAuthUser === userId, generation: authGeneration });
             if (event === 'INITIAL_SESSION') {
                 if (observedAuthUser === undefined) observedAuthUser = userId;
                 return;
@@ -153,6 +167,7 @@ const observeAuth = () => {
                 observedAuthUser = userId;
             }
             authGeneration++;
+            traceCreator('invalidate', { authEvent: event, generation: authGeneration });
             pendingCreatorCheck = null;
             pendingDisplayCheck = null;
             displayCache = null;
@@ -161,15 +176,25 @@ const observeAuth = () => {
 };
 
 /** UI hint only; API/RLS and getCurrentCreator remain the authority for writes. */
-export const getCreatorForDisplay = (): Promise<CreatorSession> => {
+export const getCreatorForDisplay = (source = 'unspecified'): Promise<CreatorSession> => {
     if (typeof window === 'undefined') return readCurrentCreator();
     observeAuth();
-    if (displayCache && displayCache.expires > Date.now()) return Promise.resolve(displayCache.session);
-    if (pendingDisplayCheck) return pendingDisplayCheck;
+    if (displayCache && displayCache.expires > Date.now()) {
+        traceCreator('display-cache-hit', { source });
+        return Promise.resolve(displayCache.session);
+    }
+    if (pendingDisplayCheck) {
+        traceCreator('display-join', { source });
+        return pendingDisplayCheck;
+    }
+    traceCreator('display-new', { source, generation: authGeneration });
     const generation = authGeneration;
     const request: Promise<CreatorSession> = readCurrentCreator(true)
         .then(session => {
-            if (generation !== authGeneration) return getCreatorForDisplay();
+            if (generation !== authGeneration) {
+                traceCreator('display-restart', { generation, currentGeneration: authGeneration });
+                return getCreatorForDisplay('stale-result');
+            }
             if (!session.checkFailed) displayCache = { session, expires: Date.now() + 30_000 };
             return session;
         })
@@ -181,6 +206,7 @@ export const getCreatorForDisplay = (): Promise<CreatorSession> => {
 };
 
 export const getCurrentCreator = (): Promise<CreatorSession> => {
+    traceCreator('verified-call');
     // Never share requests across users during server rendering.
     if (typeof window === 'undefined') return readCurrentCreator();
     observeAuth();

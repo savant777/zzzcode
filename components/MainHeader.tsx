@@ -65,7 +65,7 @@ export default function MainHeader() {
                 setAuthNotice(null);
                 return;
             }
-            const session = await getCreatorForDisplay();
+            const session = await getCreatorForDisplay('MainHeader');
             if (disposed || version !== requestVersion.current) return;
             if (session.checkFailed) {
                 recordAuthEvent('CHECK_UNAVAILABLE');
