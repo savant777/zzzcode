@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import Modal from '@/components/Modal';
 import { supabase } from '@/lib/supabase';
+import { invalidateDashboardCache } from '@/lib/dashboard-cache';
 import { CreatorSession, getCurrentCreator, requireCreator } from '@/lib/creator';
 
 type ProfileForm = {
@@ -196,6 +197,7 @@ export default function CreatorProfilePage() {
             if (!nextSession.checkFailed) setCreatorSession(nextSession);
             setForm(nextProfile);
             setIsEditOpen(false);
+            invalidateDashboardCache();
             toast.success("PROFILE_UPDATED", { id: toastId });
             router.refresh();
         } catch (error: any) {

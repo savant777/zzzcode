@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { dashboardRequest, invalidateDashboardCache } from '@/lib/dashboard-cache';
+import { useDashboardCacheVersion } from '@/lib/use-dashboard-cache';
 import { CreatorSession, canManageTemplate, getCurrentCreator, getCreatorForDisplay } from '@/lib/creator';
 import { getGroupSlug } from '@/lib/routes';
 import { templateRoute, visibleTemplateTags } from '@/lib/template-tags';
@@ -83,29 +85,34 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
     const [isDeleting, setIsDeleting] = useState(false);
     const [activatingId, setActivatingId] = useState<string | null>(null);
     
+    const cacheVersion = useDashboardCacheVersion();
+
     // --- 2. Effects ---
     useEffect(() => {
         let disposed = false;
         const initDashboard = async () => {
             setIsLoading(true);
+            setCreatorSession(null);
+            setTemplates([]);
+            setCreatorNames({});
             // Identity and badges must not hold the catalog skeleton open.
             void getCreatorForDisplay().then(session => {
                 if (!disposed) setCreatorSession(session);
             });
             void (async () => {
-                const { data: creators } = await supabase
+                const { data: creators } = await dashboardRequest('creator-names', () => supabase
                     .from('creators')
                     .select('user_id, display_name')
-                    .eq('is_active', true);
+                    .eq('is_active', true));
                 if (disposed || !creators) return;
                 setCreatorNames(creators.reduce((acc: Record<string, string>, creator: any) => {
                     acc[creator.user_id] = creator.display_name;
                     return acc;
                 }, {}));
             })();
-            const { data, error: catalogError } = await supabase
+            const { data, error: catalogError } = await dashboardRequest('catalog', () => supabase
                 .rpc('template_catalog')
-                .overrideTypes<DashboardTemplate[], { merge: false }>();
+                .overrideTypes<DashboardTemplate[], { merge: false }>());
             if (disposed) return;
             if (catalogError) toast.error('Unable to load templates. Please retry.', {
                 duration: Infinity, action: { label: 'Retry', onClick: () => window.location.reload() },
@@ -130,7 +137,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
             disposed = true;
             window.removeEventListener('resize', handleResize);
         };
-    }, []);
+    }, [cacheVersion]);
 
     // --- UI ---
     const getPageTitle = () => {
@@ -276,6 +283,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
                 throw new Error('คุณไม่มีสิทธิ์ลบเทมเพลตนี้ หรือเซสชันหมดอายุแล้ว');
             }
             await deactivateTemplate(supabase, item.id);
+            invalidateDashboardCache();
             toast.success(`MODULE_${item.id}_DEACTIVATED`, { id: toastId });
             setTemplates(prev => prev.map(t => t.id === item.id ? { ...t, is_active: false } : t));
             setModalType(null);
@@ -297,6 +305,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
             setCreatorSession(session);
             if (!canManageTemplate(session, item.user_id)) throw new Error('คุณไม่มีสิทธิ์แก้ไขเทมเพลตนี้');
             await setTemplateActive(supabase, item.id, true);
+            invalidateDashboardCache();
             setTemplates(prev => prev.map(t => t.id === item.id ? { ...t, is_active: true } : t));
             toast.success('เปิดใช้งานเทมเพลตแล้ว', { id: toastId });
         } catch (error: any) {

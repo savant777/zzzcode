@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { invalidateDashboardCache } from '@/lib/dashboard-cache';
 import { creatorTemplateRequest } from '@/lib/template-save';
 import { templateRoute, templateTagChanges } from '@/lib/template-tags';
 import { isHogthaiTemplate } from '@/lib/dashboard';
@@ -375,6 +376,7 @@ export default function EditTemplatePage() {
             skipDraftSaveRef.current = true;
             localStorage.removeItem(STORAGE_KEY);
 
+            invalidateDashboardCache();
             toast.success("PROTOCOL_SUCCESS: MODULE_UPDATED", { id: toastId });
             
             if (savedTemplate.is_active === false) {
@@ -406,6 +408,7 @@ export default function EditTemplatePage() {
                 throw new Error('ไม่สามารถยืนยันสิทธิ์แก้ไขเทมเพลตได้ กรุณาลองใหม่');
             }
             await setTemplateActive(supabase, String(templateId), true);
+            invalidateDashboardCache();
             toast.success('TEMPLATE_ACTIVATED');
             finishEditing();
         } catch (error: any) {

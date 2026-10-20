@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { invalidateDashboardCache } from '@/lib/dashboard-cache';
 import { creatorTemplateRequest } from '@/lib/template-save';
 import { toast } from 'sonner';
 import { KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -290,6 +291,7 @@ export default function AddTemplatePage() {
 
             skipDraftSaveRef.current = true;
             localStorage.removeItem(STORAGE_KEY);
+            invalidateDashboardCache();
             toast.success("PROTOCOL_SUCCESS", { id: toastId });
             router.push(`/edit/${templateData.id}?group=${targetGroup}&tag=${targetTag}`);
         } catch (error: any) {

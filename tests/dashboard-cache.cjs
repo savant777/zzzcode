@@ -1,0 +1,53 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const ts = require('typescript');
+global.window = new EventTarget();
+let authEvent;
+const api = {};
+new Function('exports', 'require', ts.transpileModule(fs.readFileSync('lib/dashboard-cache.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText)(api, () => ({ supabase: { auth: { onAuthStateChange(fn) { authEvent = fn; } } } }));
+const { dashboardRequest: read, invalidateDashboardCache: invalidate } = api;
+const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+(async () => {
+    let calls = 0;
+    const load = async () => ({ data: ++calls, error: null });
+    const first = read('catalog', load);
+    assert.equal(first, read('catalog', load), 'Concurrent mounts share the request');
+    await first;
+    assert.equal((await read('catalog', load)).data, 1, 'Dashboard and Hogthai reuse completed data');
+    const now = Date.now;
+    try {
+        const later = now() + 31_000;
+        Date.now = () => later;
+        assert.equal((await read('catalog', load)).data, 2, 'Cache expires');
+    } finally { Date.now = now; }
+    authEvent('INITIAL_SESSION');
+    await read('catalog', load);
+    assert.equal(calls, 2);
+    authEvent('SIGNED_OUT');
+    assert.equal((await read('catalog', load)).data, 3, 'Logout invalidates account-dependent catalog');
+    authEvent('SIGNED_IN');
+    assert.equal((await read('catalog', load)).data, 4);
+    invalidate();
+    assert.equal((await read('catalog', load)).data, 5, 'Successful writes invalidate cache');
+    let attempt = 0;
+    const failing = async () => ({ error: ++attempt === 1 ? 'offline' : null });
+    await read('failure', failing);
+    await read('failure', failing);
+    assert.equal(attempt, 2, 'Error responses are not cached');
+    await assert.rejects(read('exception', async () => { throw Error('offline'); }));
+    assert.equal((await read('exception', load)).error, null);
+    const old = deferred();
+    let staleCalls = 0;
+    const stale = read('stale', () => ++staleCalls === 1 ? old.promise : Promise.resolve({ data: 'new account', error: null }));
+    await Promise.resolve();
+    authEvent('SIGNED_OUT');
+    old.resolve({ data: 'old account', error: null });
+    assert.equal((await stale).data, 'new account', 'In-flight old account data cannot return after logout');
+    delete global.window;
+    const beforeServer = calls;
+    await read('catalog', load); await read('catalog', load);
+    assert.equal(calls, beforeServer + 2, 'Server calls never use shared cache');
+    console.log('Dashboard cache sharing, expiry, account changes, writes, errors and stale responses passed.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

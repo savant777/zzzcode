@@ -9,6 +9,7 @@ import Modal from '@/components/Modal';
 import { CreatorSession, requireCreator } from '@/lib/creator';
 import { getGroupSlug } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
+import { invalidateDashboardCache } from '@/lib/dashboard-cache';
 
 type TagGroup = {
     id: number;
@@ -358,6 +359,7 @@ export default function ManageTagsPage() {
                     }]);
 
                 if (error) throw error;
+                invalidateDashboardCache();
                 toast.success("TAG_CREATED", { id: toastId });
             }
 
@@ -379,6 +381,7 @@ export default function ManageTagsPage() {
                     .single();
 
                 if (error) throw error;
+                invalidateDashboardCache();
                 toast.success("TAG_UPDATED", { id: toastId });
             }
 
@@ -408,6 +411,7 @@ export default function ManageTagsPage() {
             if (error) throw error;
 
             closeModal();
+            invalidateDashboardCache();
             toast.success("TAG_DEACTIVATED", { id: toastId });
             await loadTags();
         } catch (error: any) {

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation'
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { dashboardRequest } from '@/lib/dashboard-cache';
+import { useDashboardCacheVersion } from '@/lib/use-dashboard-cache';
 import SkeletonNav from '@/components/SkeletonNav';
 import { getGroupSlug, compareTagOrder, TAG_GROUP_ORDER as GROUP_ORDER } from '@/lib/routes';
 import { dashboardTagUrl, HOGTHAI_GROUPS } from '@/lib/dashboard';
@@ -14,25 +16,28 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = fal
     const [expandedGroup, setExpandedGroup] = useState<string | null>(activeGroup);
     
     const router = useRouter();
+    const cacheVersion = useDashboardCacheVersion();
 
     useEffect(() => {
         setExpandedGroup(activeGroup);
     }, [activeFilter, activeGroup]);
 
     useEffect(() => {
+        let disposed = false;
         const fetchMenu = async () => {
             setIsLoading(true);
             const [{ data: groups, error: groupsError }, { data: tags, error: tagsError }] = await Promise.all([
-                supabase
+                dashboardRequest('menu-groups', () => supabase
                 .from('tag_groups')
                     .select('id, name')
-                    .order('id', { ascending: true }),
-                supabase
+                    .order('id', { ascending: true })),
+                dashboardRequest('menu-tags', () => supabase
                     .from('tags')
                     .select('id, group_id, name, slug, is_active')
                     .eq('is_active', true)
-                    .order('id', { ascending: true })
+                    .order('id', { ascending: true }))
             ]);
+            if (disposed) return;
 
             if (groupsError || tagsError) {
                 console.error('SideNav menu load error:', groupsError || tagsError);
@@ -72,7 +77,8 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = fal
             setIsLoading(false);
         };
         fetchMenu();
-    }, []);
+        return () => { disposed = true; };
+    }, [cacheVersion]);
 
     const handleFilterChange = (groupName: string, tagSlug: string) => {
         router.push(dashboardTagUrl(groupName, tagSlug, hogthai));
