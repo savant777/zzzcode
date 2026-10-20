@@ -13,7 +13,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import { templateRoute, templatePreviewProfile } from '@/lib/template-tags';
 import { isHogthaiTemplate } from '@/lib/dashboard';
 import { useTemplateDashboard } from '@/components/DashboardContext';
-import { getRememberedTemplateUnlock } from '@/lib/template-unlock';
+import { getRememberedTemplateUnlock, forgetTemplateUnlock } from '@/lib/template-unlock';
 import { getDefaultValue } from '@/lib/field-defaults';
 import { defaultBlockCount, canAddBlock, canRemoveBlock } from '@/lib/block-defaults';
 import { BLOCK_ENTRY_ID, BLOCK_GROUPS, renewBlockIds, reconcileBlockGroups } from '@/lib/block-state';
@@ -243,8 +243,10 @@ export default function EditorPage() {
                     });
                     if (cancelled) return;
                     if (result.status === 403) {
+                        forgetTemplateUnlock(String(templateId));
                         toast.error('ACCESS_DENIED: Please unlock this template from the dashboard.');
-                        router.replace('/?group=category&tag=all');
+                        const query = new URLSearchParams({ group: fromGroup, tag: fromTag, unlock: String(templateId) });
+                        router.replace(`/?${query}`);
                         return;
                     }
                     if (!result.ok) throw new Error(result.status === 429

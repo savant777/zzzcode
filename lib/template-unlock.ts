@@ -3,6 +3,13 @@
 const currentPageUnlocks = new Map<string, string>();
 const unlockKey = (id: string) => `zzzcode_template_unlock_v1_${id}`;
 
+export function forgetTemplateUnlock(id: string) {
+    currentPageUnlocks.delete(id);
+    for (const kind of ['localStorage', 'sessionStorage'] as const) {
+        try { window[kind].removeItem(unlockKey(id)); } catch { /* Storage may be blocked. */ }
+    }
+}
+
 // This fingerprint is a credential: send it only to our verification endpoint.
 export async function getRememberedTemplateUnlock(id: string): Promise<string | null> {
     const remembered = currentPageUnlocks.get(id);

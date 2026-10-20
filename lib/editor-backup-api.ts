@@ -51,24 +51,36 @@ async function authorizeTemplate(request: Request, db: SupabaseClient, id: strin
 
 /** Server-only entry points; injected dependencies are never accepted from HTTP input. */
 export async function handleTemplateRequest(request: Request, operation: 'unlock' | 'read', injected?: Dependencies): Promise<Response> {
+    const started = performance.now();
+    const timings: string[] = [];
+    const measure = async <T>(name: string, task: () => Promise<T>): Promise<T> => {
+        const phase = performance.now();
+        try { return await task(); }
+        finally { timings.push(`${name};dur=${(performance.now() - phase).toFixed(1)}`); }
+    };
+    const timedResponse = (body: unknown, status = 200, retryAfter?: number) => {
+        const result = response(body, status, retryAfter);
+        result.headers.set('Server-Timing', [...timings, `total;dur=${(performance.now() - started).toFixed(1)}`].join(', '));
+        return result;
+    };
     try {
         guardRequest(request, 'template-access');
         const deps = injected ?? dependencies();
-        await sharedRateLimit(request, 'read', { ...deps, secret: `${deps.secret}:template-access` });
+        await measure('rate_limit', () => sharedRateLimit(request, 'read', { ...deps, secret: `${deps.secret}:template-access` }));
         const body = await readBody(request);
         const id = templateId(body.templateId);
         const fingerprint = typeof body.password === 'string'
             ? digest(JSON.stringify([id, body.password])) : body.fingerprint;
         // An explicit password check must validate the credential even for owners.
-        await authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup }, operation !== 'unlock');
-        if (operation === 'unlock') return response({ unlocked: true });
-        const { data, error } = await deps.db.from('templates')
+        await measure('authorize', () => authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup }, operation !== 'unlock'));
+        if (operation === 'unlock') return timedResponse({ unlocked: true });
+        const { data, error } = await measure('template_read', async () => deps.db.from('templates')
             .select('id,title,description,is_personal,supports_multiple_drafts,html_blueprint,fields_config,template_tags(tags(id,slug,is_active,tag_groups(name)))')
-            .eq('id', id).maybeSingle();
+            .eq('id', id).maybeSingle());
         if (error || !data) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
-        return response({ template: data });
+        return timedResponse({ template: data });
     } catch (error) {
-        return response({ error: error instanceof ApiError ? error.message : 'TEMPLATE_UNAVAILABLE' },
+        return timedResponse({ error: error instanceof ApiError ? error.message : 'TEMPLATE_UNAVAILABLE' },
             error instanceof ApiError ? error.status : 503,
             error instanceof ApiError ? error.retryAfter : undefined);
     }

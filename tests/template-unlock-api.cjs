@@ -56,6 +56,7 @@ async function run() {
     const valid = await check({ password });
     assert.equal(valid.status, 200);
     assert.equal(valid.headers.get('cache-control'), 'no-store');
+    assert.match(valid.headers.get('server-timing'), /rate_limit;dur=[\d.]+, authorize;dur=[\d.]+, total;dur=[\d.]+/);
     assert.deepEqual(await valid.json(), { unlocked: true });
     assert.equal((await check({ password: 'wrong' }, {}, 'read')).status, 403);
     assert.equal((await check({ unlocked: true }, {}, 'read')).status, 403);
@@ -63,6 +64,7 @@ async function run() {
     const remembered = fingerprint('1', password);
     const content = await check({ fingerprint: remembered }, {}, 'read');
     assert.equal(content.status, 200);
+    assert.match(content.headers.get('server-timing'), /template_read;dur=[\d.]+/);
     assert.deepEqual(await content.json(), { template: { id: '1', html_blueprint: 'protected code', fields_config: [] } });
     assert.equal((await check({ fingerprint: fingerprint('2', password) })).status, 403);
     password = 'changed';

@@ -11,7 +11,7 @@ function load() {
 }
 function storage() {
     const entries = new Map();
-    return { entries, getItem: key => entries.get(key) ?? null, setItem: (key, value) => entries.set(key, value) };
+    return { entries, getItem: key => entries.get(key) ?? null, setItem: (key, value) => entries.set(key, value), removeItem: key => entries.delete(key) };
 }
 async function main() {
     const expected = (id, password) => require('node:crypto').createHash('sha256').update(JSON.stringify([id, password])).digest('hex');
@@ -34,6 +34,10 @@ async function main() {
     assert.equal(await matches('1', 'changed'), true);
     assert.equal(await matches('1', 'secret'), false);
     assert.ok([...disk.entries.values()].every(value => /^[a-f0-9]{64}$/.test(value)));
+    unlock.forgetTemplateUnlock('1');
+    assert.equal(await unlock.getRememberedTemplateUnlock('1'), null);
+    unlock = load();
+    assert.equal(await unlock.getRememberedTemplateUnlock('1'), null, 'Revoked credentials cannot return from either storage');
     // Legacy boolean flags cannot validate the current password.
     window.sessionStorage.setItem('unlocked_3', 'true');
     assert.equal(await matches('3', 'secret'), false);
@@ -49,6 +53,8 @@ async function main() {
     assert.equal(await matches('5', 'secret'), true);
     assert.equal(await matches('5', 'changed'), false);
     assert.equal(await matches('6', 'secret'), false);
+    unlock.forgetTemplateUnlock('5');
+    assert.equal(await unlock.getRememberedTemplateUnlock('5'), null, 'Forget works even when storage is blocked');
     console.log('Template unlock persistence, password changes, isolation and blocked storage passed.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

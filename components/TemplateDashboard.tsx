@@ -82,6 +82,19 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
     const [modalType, setModalType] = useState<'delete' | 'private' | null>(null);
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [password, setPassword] = useState('');
+    useEffect(() => {
+        const requested = searchParams.get('unlock');
+        if (!requested || isLoading) return;
+        const item = templates.find(template => String(template.id) === requested && template.is_personal);
+        if (item) {
+            setSelectedItem(item);
+            setPassword('');
+            setModalType('private');
+        }
+        const query = new URLSearchParams(searchParams.toString());
+        query.delete('unlock');
+        router.replace(`${hogthai ? '/hogthai' : '/'}?${query}`);
+    }, [searchParams, isLoading, templates, hogthai, router]);
     const [isDeleting, setIsDeleting] = useState(false);
     const [activatingId, setActivatingId] = useState<string | null>(null);
     
@@ -228,14 +241,8 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
 
     const handleOpenPrivate = async (item: any) => {
         const remembered = await getRememberedTemplateUnlock(String(item.id));
-        let unlocked = false;
-        try {
-            if (remembered) unlocked = await verifyTemplateAccess(String(item.id), { fingerprint: remembered });
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Unable to verify access.');
-            return;
-        }
-        if (unlocked) {
+        // The editor validates the remembered credential on its protected read.
+        if (remembered) {
             const query = new URLSearchParams(templateRoute(item.template_tags, activeFilter));
             router.push(`/editor/${item.id}?${query}`);
             return;
@@ -259,9 +266,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
                 toast.success(`ACCESS_GRANTED: DECRYPT_SUCCESS`, { id: toastId });
                 if (!persisted) toast.info('เปิดเทมเพลตได้แล้ว แต่เบราว์เซอร์ไม่สามารถจำการปลดล็อกไว้ถาวรได้');
                 closeModal();
-                setTimeout(() => {
-                    router.push(`/editor/${selectedItem.id}?${routeQuery}`);
-                }, 800);
+                router.push(`/editor/${selectedItem.id}?${routeQuery}`);
             } else {
                 toast.error(`ACCESS_DENIED: INVALID_SECRET_KEY`, { id: toastId });
                 setPassword('');
