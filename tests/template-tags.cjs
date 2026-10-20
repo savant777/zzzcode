@@ -224,14 +224,20 @@ assert.equal(dashboardTagUrl('category', 'food&drink'), '/?group=category&tag=fo
 // Exercise the actual dashboard filter, including search, tag and password filters.
 const dashboardSource = fs.readFileSync('components/TemplateDashboard.tsx', 'utf8');
 const filterBody = dashboardSource.slice(dashboardSource.indexOf('const result = templates.filter'), dashboardSource.indexOf('const sortedResult'));
-const filterCatalog = new Function('templates', 'hogthai', 'activeFilter', 'searchQuery', 'noPassOnly', 'passOnly', 'isHogthaiTemplate', 'getGroupSlug', ts.transpileModule(`${filterBody}\nreturn result;`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText);
+const filterCatalog = new Function('templates', 'hogthai', 'activeFilter', 'searchQuery', 'noPassOnly', 'passOnly', 'isHogthaiTemplate', 'getGroupSlug', 'creatorSession', 'canManageTemplate', ts.transpileModule(`${filterBody}\nreturn result;`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText);
 const catalog = [
-    { id: 1, title: 'Public Chat', is_personal: false, template_tags: [hogthaiTag, categoryTag, creatorTag] },
-    { id: 2, title: 'Private Chat', is_personal: true, template_tags: [hogthaiTag, categoryTag] },
-    { id: 3, title: 'Regular Chat', is_personal: false, template_tags: [categoryTag] },
+    { id: 1, title: 'Public Chat', is_active: true, is_personal: false, template_tags: [hogthaiTag, categoryTag, creatorTag] },
+    { id: 2, title: 'Private Chat', is_active: true, is_personal: true, template_tags: [hogthaiTag, categoryTag] },
+    { id: 3, title: 'Regular Chat', is_active: true, is_personal: false, template_tags: [categoryTag] },
 ];
-const ids = (hogthai, path = 'category:all', query = '', noPass = false, pass = false) => filterCatalog(catalog, hogthai, path, query, noPass, pass, isHogthaiTemplate, routes.getGroupSlug).map(t => t.id);
+const ids = (hogthai, path = 'category:all', query = '', noPass = false, pass = false) => filterCatalog(catalog, hogthai, path, query, noPass, pass, isHogthaiTemplate, routes.getGroupSlug, null, () => false).map(t => t.id);
 assert.deepEqual(ids(false), [3]);
+const inactiveCatalog = [{ ...catalog[2], is_active: false, user_id: 'owner' }];
+const visibility = (session) => filterCatalog(inactiveCatalog, false, 'category:all', '', false, false,
+    isHogthaiTemplate, routes.getGroupSlug, session, (current, owner) => current.userId === owner);
+assert.equal(visibility(null).length, 0, 'Inactive templates stay hidden while identity loads');
+assert.equal(visibility({ userId: 'other' }).length, 0);
+assert.equal(visibility({ userId: 'owner' }).length, 1, 'Owner templates appear after identity resolves');
 assert.deepEqual(ids(true), [1, 2]);
 assert.deepEqual(ids(true, 'creators:author'), [1]);
 assert.deepEqual(ids(true, 'category:etc', 'Private'), [2]);

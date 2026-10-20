@@ -85,33 +85,36 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
     
     // --- 2. Effects ---
     useEffect(() => {
+        let disposed = false;
         const initDashboard = async () => {
             setIsLoading(true);
-            const [session, { data, error: catalogError }, { data: creators }] = await Promise.all([
-                getCurrentCreator(),
-                supabase
-                .rpc('template_catalog')
-                    .overrideTypes<DashboardTemplate[], { merge: false }>(),
-                supabase
+            // Identity and badges must not hold the catalog skeleton open.
+            void getCurrentCreator().then(session => {
+                if (!disposed) setCreatorSession(session);
+            });
+            void (async () => {
+                const { data: creators } = await supabase
                     .from('creators')
                     .select('user_id, display_name')
-                    .eq('is_active', true)
-            ]);
-            setCreatorSession(session);
-            if (catalogError) toast.error('Unable to load templates. Please retry.', {
-                duration: Infinity, action: { label: 'Retry', onClick: () => window.location.reload() },
-            });
-
-            if (Array.isArray(data)) setTemplates(data.filter(item => item.is_active === true || canManageTemplate(session, item.user_id)).map(item => ({
-                ...item,
-                template_tags: visibleTemplateTags(item.template_tags),
-            })));
-            if (creators) {
+                    .eq('is_active', true);
+                if (disposed || !creators) return;
                 setCreatorNames(creators.reduce((acc: Record<string, string>, creator: any) => {
                     acc[creator.user_id] = creator.display_name;
                     return acc;
                 }, {}));
-            }
+            })();
+            const { data, error: catalogError } = await supabase
+                .rpc('template_catalog')
+                .overrideTypes<DashboardTemplate[], { merge: false }>();
+            if (disposed) return;
+            if (catalogError) toast.error('Unable to load templates. Please retry.', {
+                duration: Infinity, action: { label: 'Retry', onClick: () => window.location.reload() },
+            });
+
+            if (Array.isArray(data)) setTemplates(data.map(item => ({
+                ...item,
+                template_tags: visibleTemplateTags(item.template_tags),
+            })));
             setIsLoading(false);
         };
 
@@ -123,7 +126,10 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
 
         window.addEventListener('resize', handleResize);
         handleResize();
-        return () => window.removeEventListener('resize', handleResize);
+        return () => {
+            disposed = true;
+            window.removeEventListener('resize', handleResize);
+        };
     }, []);
 
     // --- UI ---
@@ -138,6 +144,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
 
     const filteredTemplates = useMemo(() => {
         const result = templates.filter((item) => {
+            if (item.is_active !== true && (!creatorSession || !canManageTemplate(creatorSession, item.user_id))) return false;
             if (isHogthaiTemplate(item.template_tags) !== hogthai) return false;
             if (noPassOnly && item.is_personal) return false;
             if (passOnly && !item.is_personal) return false;
@@ -182,7 +189,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
         }
 
         return sortedResult;
-    }, [templates, searchQuery, activeFilter, sortBy, noPassOnly, passOnly, hogthai]);
+    }, [templates, creatorSession, searchQuery, activeFilter, sortBy, noPassOnly, passOnly, hogthai]);
 
     // --- 4. Event Handlers ---
 
