@@ -56,7 +56,9 @@ async function run() {
     const valid = await check({ password });
     assert.equal(valid.status, 200);
     assert.equal(valid.headers.get('cache-control'), 'no-store');
-    assert.match(valid.headers.get('server-timing'), /rate_limit;dur=[\d.]+, authorize;dur=[\d.]+, total;dur=[\d.]+/);
+    for (const phase of ['rate_limit', 'template_meta', 'authorize', 'total']) {
+        assert.match(valid.headers.get('server-timing'), new RegExp(`${phase};dur=[\\d.]+`));
+    }
     assert.deepEqual(await valid.json(), { unlocked: true });
     assert.equal((await check({ password: 'wrong' }, {}, 'read')).status, 403);
     assert.equal((await check({ unlocked: true }, {}, 'read')).status, 403);
@@ -106,6 +108,36 @@ async function run() {
     const unavailable = await check();
     assert.equal(unavailable.status, 503);
     assert.ok(!(await unavailable.text()).includes('private database details'));
+    let releaseQuota, markMetadata;
+    const quotaGate = new Promise(resolve => { releaseQuota = resolve; });
+    const metadataStarted = new Promise(resolve => { markMetadata = resolve; });
+    let credentialCalls = 0;
+    const beforeLimitedRead = contentReads;
+    const parallelDb = {
+        ...db,
+        rpc(name, args) {
+            if (name === 'consume_editor_backup_rate_limit') return quotaGate;
+            credentialCalls++;
+            return db.rpc(name, args);
+        },
+        from(table) { markMetadata(); return db.from(table); },
+    };
+    const blocked = loaded.exports.handleTemplateRequest(new Request('http://localhost/api/templates/read', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ templateId: '1', password }),
+    }), 'read', { db: parallelDb, secret: 'test-only' });
+    let deadline;
+    try {
+        await Promise.race([metadataStarted, new Promise((_, reject) => {
+            deadline = setTimeout(() => reject(Error('Metadata must start while quota is pending')), 1000);
+        })]);
+    } finally { clearTimeout(deadline); }
+    assert.equal(credentialCalls, 0, 'No password verification before quota passes');
+    assert.equal(contentReads, beforeLimitedRead, 'No HTML read before quota passes');
+    releaseQuota({ data: { allowed: false, retryAfter: 30 } });
+    assert.equal((await blocked).status, 429);
+    assert.equal(credentialCalls, 0);
+    assert.equal(contentReads, beforeLimitedRead, 'Quota rejection never reads content');
     console.log('PASS: server template access, credential rotation/binding, backups, inactive/owner access, no pre-auth content, quotas and fail-closed errors.');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

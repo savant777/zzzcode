@@ -9,6 +9,15 @@ type JsonObject = Record<string, unknown>;
 type Dependencies = { db: SupabaseClient; secret: string };
 
 type TemplateCredential = { fingerprint?: unknown; backup?: unknown };
+type TemplateAccess = { id: number | string; is_personal: boolean; is_active: boolean; user_id: string | null };
+
+async function readTemplateAccess(db: SupabaseClient, id: string): Promise<TemplateAccess> {
+    const { data, error } = await db.from('templates')
+        .select('id,is_personal,is_active,user_id').eq('id', id).maybeSingle();
+    if (error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
+    if (!data) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
+    return data;
+}
 
 async function canManageTemplate(request: Request, db: SupabaseClient, userId: string | null) {
     const bearer = request.headers.get('authorization');
@@ -21,11 +30,8 @@ async function canManageTemplate(request: Request, db: SupabaseClient, userId: s
     return !!creator?.is_active && (creator.role === 'owner' || userId === auth.user.id);
 }
 
-async function authorizeTemplate(request: Request, db: SupabaseClient, id: string, credential: TemplateCredential, allowManagerBypass = true) {
-    const { data, error } = await db.from('templates')
-        .select('id,is_personal,is_active,user_id').eq('id', id).maybeSingle();
-    if (error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
-    if (!data) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
+async function authorizeTemplate(request: Request, db: SupabaseClient, id: string, credential: TemplateCredential, allowManagerBypass = true, access?: TemplateAccess) {
+    const data = access ?? await readTemplateAccess(db, id);
     if (data.is_active !== true || data.is_personal === true) {
         const manager = await canManageTemplate(request, db, data.user_id);
         if (manager && allowManagerBypass) return;
@@ -66,13 +72,20 @@ export async function handleTemplateRequest(request: Request, operation: 'unlock
     try {
         guardRequest(request, 'template-access');
         const deps = injected ?? dependencies();
-        await measure('rate_limit', () => sharedRateLimit(request, 'read', { ...deps, secret: `${deps.secret}:template-access` }));
         const body = await readBody(request);
         const id = templateId(body.templateId);
+        // Metadata contains no template content. Overlap this read with the shared
+        // quota check, but never verify credentials or read HTML before it passes.
+        const [quota, metadata] = await Promise.allSettled([
+            measure('rate_limit', () => sharedRateLimit(request, 'read', { ...deps, secret: `${deps.secret}:template-access` })),
+            measure('template_meta', () => readTemplateAccess(deps.db, id)),
+        ]);
+        if (quota.status === 'rejected') throw quota.reason;
+        if (metadata.status === 'rejected') throw metadata.reason;
         const fingerprint = typeof body.password === 'string'
             ? digest(JSON.stringify([id, body.password])) : body.fingerprint;
         // An explicit password check must validate the credential even for owners.
-        await measure('authorize', () => authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup }, operation !== 'unlock'));
+        await measure('authorize', () => authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup }, operation !== 'unlock', metadata.value));
         if (operation === 'unlock') return timedResponse({ unlocked: true });
         const { data, error } = await measure('template_read', async () => deps.db.from('templates')
             .select('id,title,description,is_personal,supports_multiple_drafts,html_blueprint,fields_config,template_tags(tags(id,slug,is_active,tag_groups(name)))')
