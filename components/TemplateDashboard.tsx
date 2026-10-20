@@ -96,7 +96,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
             setTemplates([]);
             setCreatorNames({});
             // Identity and badges must not hold the catalog skeleton open.
-            void getCreatorForDisplay('TemplateDashboard').then(session => {
+            void getCreatorForDisplay().then(session => {
                 if (!disposed) setCreatorSession(session);
             });
             void (async () => {

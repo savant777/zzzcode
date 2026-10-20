@@ -41,9 +41,9 @@ const signedOut = { data: { user: null }, error: null };
     new Function('exports', 'require', ts.transpileModule(fs.readFileSync('lib/creator.ts', 'utf8'), {
         compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText)(bootApi, () => ({ supabase: bootDb }));
-    const bootHeader = bootApi.getCreatorForDisplay('MainHeader');
+    const bootHeader = bootApi.getCreatorForDisplay();
     bootEvent('SIGNED_IN', { user: signedIn.data.user });
-    const bootDashboard = bootApi.getCreatorForDisplay('TemplateDashboard');
+    const bootDashboard = bootApi.getCreatorForDisplay();
     bootEvent('INITIAL_SESSION', { user: signedIn.data.user });
     bootWaiting.forEach(item => item.resolve({ data: { session: { user: signedIn.data.user } }, error: null }));
     const bootResults = await Promise.all([bootHeader, bootDashboard]);
