@@ -23,6 +23,32 @@ const { getCurrentCreator, getCreatorForDisplay } = exportsObject;
 const signedIn = { data: { user: { id: 'one', identities: [] } }, error: null };
 const signedOut = { data: { user: null }, error: null };
 (async () => {
+    // Reproduce the production trace: SIGNED_IN arrives before INITIAL_SESSION
+    // while the first local session read is still pending.
+    let bootEvent, bootProfiles = 0, bootSessions = 0;
+    const bootWaiting = [deferred(), deferred()];
+    const bootApi = {};
+    const bootDb = {
+        auth: {
+            onAuthStateChange(fn) { bootEvent = fn; },
+            getSession() { return bootWaiting[bootSessions++].promise; },
+        },
+        from() { return {
+            select() { return this; }, eq() { return this; },
+            async maybeSingle() { bootProfiles++; return { data: { is_active: true }, error: null }; },
+        }; },
+    };
+    new Function('exports', 'require', ts.transpileModule(fs.readFileSync('lib/creator.ts', 'utf8'), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    }).outputText)(bootApi, () => ({ supabase: bootDb }));
+    const bootHeader = bootApi.getCreatorForDisplay('MainHeader');
+    bootEvent('SIGNED_IN', { user: signedIn.data.user });
+    const bootDashboard = bootApi.getCreatorForDisplay('TemplateDashboard');
+    bootEvent('INITIAL_SESSION', { user: signedIn.data.user });
+    bootWaiting.forEach(item => item.resolve({ data: { session: { user: signedIn.data.user } }, error: null }));
+    const bootResults = await Promise.all([bootHeader, bootDashboard]);
+    assert.equal(bootProfiles, 1, 'Startup SIGNED_IN must not cause two creator queries');
+    assert.equal(bootResults[0], bootResults[1], 'Startup callers receive the same current identity');
     const header = getCurrentCreator(), dashboard = getCurrentCreator();
     assert.equal(header, dashboard);
     assert.equal(calls, 1);

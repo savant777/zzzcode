@@ -95,7 +95,7 @@ const syncDiscordIdentity = async (user: User, creator: CreatorProfile) => {
     };
 };
 
-const readCurrentCreator = async (forDisplay = false): Promise<CreatorSession> => {
+const readCurrentCreator = async (forDisplay = false, generation?: number): Promise<CreatorSession> => {
     const request = ++traceRequest;
     traceCreator('check-start', { request, mode: forDisplay ? 'display' : 'verified' });
     const unavailable = { user: null, creator: null, isCreator: false, isOwner: false, checkFailed: true };
@@ -104,6 +104,12 @@ const readCurrentCreator = async (forDisplay = false): Promise<CreatorSession> =
         const { user, userError } = forDisplay
             ? await supabase.auth.getSession().then(({ data, error }) => ({ user: data.session?.user ?? null, userError: error }))
             : await supabase.auth.getUser().then(({ data, error }) => ({ user: data.user, userError: error }));
+        // Auth initialization can emit SIGNED_IN before getSession resolves.
+        // Join the replacement check before sending an obsolete profile query.
+        if (forDisplay && generation !== undefined && generation !== authGeneration) {
+            traceCreator('session-join-current', { request, generation, currentGeneration: authGeneration });
+            return getCreatorForDisplay('session-changed');
+        }
         if (typeof window !== 'undefined' && observedAuthUser === undefined && !userError) {
             observedAuthUser = user?.id ?? null;
         }
@@ -189,7 +195,7 @@ export const getCreatorForDisplay = (source = 'unspecified'): Promise<CreatorSes
     }
     traceCreator('display-new', { source, generation: authGeneration });
     const generation = authGeneration;
-    const request: Promise<CreatorSession> = readCurrentCreator(true)
+    const request: Promise<CreatorSession> = readCurrentCreator(true, generation)
         .then(session => {
             if (generation !== authGeneration) {
                 traceCreator('display-restart', { generation, currentGeneration: authGeneration });
