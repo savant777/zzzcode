@@ -4,6 +4,7 @@ const TTL = 30_000;
 const entries = new Map<string, { expires: number; promise: Promise<unknown> }>();
 let generation = 0;
 let observing = false;
+let observedUser: string | null | undefined;
 export const DASHBOARD_CACHE_CHANGED = 'zzzcode-dashboard-cache-changed';
 
 export function invalidateDashboardCache() {
@@ -17,8 +18,20 @@ export function dashboardRequest<T extends { error: unknown }>(key: string, load
     if (typeof window === 'undefined') return Promise.resolve(load());
     if (!observing) {
         observing = true;
-        supabase.auth.onAuthStateChange(event => {
-            if (event !== 'INITIAL_SESSION') invalidateDashboardCache();
+        supabase.auth.onAuthStateChange((event, session) => {
+            const user = session?.user.id ?? null;
+            if (event === 'INITIAL_SESSION') {
+                if (observedUser === undefined) observedUser = user;
+                return;
+            }
+            // SDK emits SIGNED_IN again on tab focus and refreshes tokens in the
+            // background. Neither means the catalog's account has changed.
+            if (event === 'TOKEN_REFRESHED') return;
+            if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+                if (observedUser === user) return;
+                observedUser = user;
+            }
+            invalidateDashboardCache();
         });
     }
     const cached = entries.get(key);

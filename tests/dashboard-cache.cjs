@@ -22,12 +22,19 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
         Date.now = () => later;
         assert.equal((await read('catalog', load)).data, 2, 'Cache expires');
     } finally { Date.now = now; }
-    authEvent('INITIAL_SESSION');
+    authEvent('INITIAL_SESSION', { user: { id: 'first' } });
     await read('catalog', load);
     assert.equal(calls, 2);
+    let refreshes = 0;
+    window.addEventListener(api.DASHBOARD_CACHE_CHANGED, () => refreshes++);
+    authEvent('SIGNED_IN', { user: { id: 'first' } });
+    authEvent('TOKEN_REFRESHED', { user: { id: 'first' } });
+    await read('catalog', load);
+    assert.equal(calls, 2, 'Tab focus and token refresh reuse cached data');
+    assert.equal(refreshes, 0, 'Background auth events must not restart the dashboard skeleton');
     authEvent('SIGNED_OUT');
     assert.equal((await read('catalog', load)).data, 3, 'Logout invalidates account-dependent catalog');
-    authEvent('SIGNED_IN');
+    authEvent('SIGNED_IN', { user: { id: 'second' } });
     assert.equal((await read('catalog', load)).data, 4);
     invalidate();
     assert.equal((await read('catalog', load)).data, 5, 'Successful writes invalidate cache');
