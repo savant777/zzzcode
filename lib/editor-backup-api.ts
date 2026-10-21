@@ -19,7 +19,7 @@ async function readTemplateAccess(db: SupabaseClient, id: string): Promise<Templ
     return data;
 }
 
-async function canManageTemplate(request: Request, db: SupabaseClient, userId: string | null) {
+async function canManageTemplate(request: Request, db: SupabaseClient, userId: string | null, templateId: string) {
     const bearer = request.headers.get('authorization');
     if (!bearer?.startsWith('Bearer ')) return false;
     const { data: auth, error } = await db.auth.getUser(bearer.slice(7));
@@ -27,13 +27,17 @@ async function canManageTemplate(request: Request, db: SupabaseClient, userId: s
     const { data: creator, error: creatorError } = await db.from('creators')
         .select('role,is_active').eq('user_id', auth.user.id).maybeSingle();
     if (creatorError) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
-    return !!creator?.is_active && (creator.role === 'owner' || userId === auth.user.id);
+    if (!creator?.is_active) return false;
+    if (creator.role === 'owner' || userId === auth.user.id) return true;
+    const permission = await db.rpc('is_template_editor', { check_user_id: auth.user.id, p_template_id: templateId });
+    if (permission.error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
+    return permission.data === true;
 }
 
 async function authorizeTemplate(request: Request, db: SupabaseClient, id: string, credential: TemplateCredential, allowManagerBypass = true, access?: TemplateAccess) {
     const data = access ?? await readTemplateAccess(db, id);
     if (data.is_active !== true || data.is_personal === true) {
-        const manager = await canManageTemplate(request, db, data.user_id);
+        const manager = await canManageTemplate(request, db, data.user_id, id);
         if (manager && allowManagerBypass) return;
         if (data.is_active !== true && !manager) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
     }

@@ -12,6 +12,7 @@ let password = 'secret';
 let row = { id: '1', is_active: true, is_personal: true, user_id: 'creator' };
 let limiter = { data: { allowed: true } };
 let role = 'creator';
+let credited = false;
 let activeCreator = true;
 let contentReads = 0;
 let backupValid = false;
@@ -21,6 +22,7 @@ const db = {
     auth: { getUser: async token => ({ data: { user: token === 'valid-session' ? { id: 'creator' } : null } }) },
     async rpc(name, args) {
         if (name === 'consume_editor_backup_rate_limit') return limiter;
+        if (name === 'is_template_editor') return { data: credited };
         assert.equal(name, 'verify_template_credential');
         return verifyError ? { error: { message: 'private database details' } }
             : { data: args.p_fingerprint === fingerprint(args.p_template_id, password) };
@@ -93,6 +95,12 @@ async function run() {
     activeCreator = false;
     assert.equal((await check({}, auth, 'read')).status, 403);
     assert.equal((await check({}, { authorization: 'Bearer forged' }, 'read')).status, 403);
+    activeCreator = true;
+    role = 'creator';
+    credited = true;
+    assert.equal((await check({}, auth, 'read')).status, 200);
+    credited = false;
+    assert.equal((await check({}, auth, 'read')).status, 403);
     row.is_active = true;
     verifyError = true;
     assert.equal((await check({ password }, {}, 'read')).status, 503);

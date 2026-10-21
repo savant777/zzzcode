@@ -127,6 +127,81 @@ async function run() {
     for (const result of checks) for (const row of result.rows) {
         for (const [name, passed] of Object.entries(row)) assert.equal(passed, true, name);
     }
+
+    await pg.exec(sql('shared-creator-credit.sql'));
+    await pg.exec(sql('shared-creator-credit.sql'));
+    const stranger = '00000000-0000-4000-8000-000000000004';
+    await pg.query('INSERT INTO auth.users VALUES ($1)', [stranger]);
+    await pg.query("INSERT INTO public.creators(user_id,display_name) VALUES ($1,'stranger')", [stranger]);
+    const group = (await pg.query("INSERT INTO public.tag_groups(name) VALUES ('creators') RETURNING id")).rows[0].id;
+    const tag = (await pg.query("INSERT INTO public.tags(group_id,user_id,name,slug) VALUES ($1,$2,'Credit friend','credit-friend') RETURNING id", [group,other])).rows[0].id;
+    const ownTag = (await pg.query("INSERT INTO public.tags(group_id,user_id,name,slug) VALUES ($1,$2,'Uploader','uploader') RETURNING id",[group,creator])).rows[0].id;
+    const strangerTag = (await pg.query("INSERT INTO public.tags(group_id,user_id,name,slug) VALUES ($1,$2,'Stranger','stranger') RETURNING id",[group,stranger])).rows[0].id;
+    const options = async (id=null) => (await pg.query('SELECT public.creator_credit_options($1) AS ids',[id])).rows[0].ids.map(Number);
+    const setCredit = id => pg.query('SELECT public.set_template_creator_credit($1,$2)',[global.rpcTemplateId,id]);
+    await as('authenticated', creator, async () => {
+        assert.deepEqual(await options(),[Number(ownTag)]);
+        await assert.rejects(pg.query('INSERT INTO public.template_tags(template_id,tags_id) VALUES ($1,$2)',[global.rpcTemplateId,tag]),/CREATOR_CREDIT_NOT_ALLOWED/);
+        await assert.rejects(pg.query('INSERT INTO public.creator_credit_links(uploader_id,credited_creator_id) VALUES ($1,$2)',[creator,other]),/row-level security/);
+    });
+    await pg.query('INSERT INTO public.creator_credit_links(uploader_id,credited_creator_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',[creator,other]);
+    await pg.query('INSERT INTO public.creator_credit_links(uploader_id,credited_creator_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',[creator,other]);
+    await pg.query('INSERT INTO public.creator_credit_links(uploader_id,credited_creator_id) VALUES ($1,$2)',[other,stranger]);
+    await as('authenticated', other, async () => {
+        assert.ok(!(await options()).includes(Number(ownTag)), 'Direction is not reciprocal');
+        assert.ok((await options()).includes(Number(strangerTag)));
+    });
+    await as('authenticated', creator, async () => {
+        assert.ok((await options()).includes(Number(tag)));
+        assert.ok(!(await options()).includes(Number(strangerTag)));
+        await pg.query('INSERT INTO public.template_tags(template_id,tags_id) VALUES ($1,$2)',[global.rpcTemplateId,ownTag]);
+        await assert.rejects(pg.query('INSERT INTO public.template_tags(template_id,tags_id) VALUES ($1,$2)',[global.rpcTemplateId,tag]),/ONE_CREATOR_CREDIT_REQUIRED/);
+        await setCredit(tag);
+        await assert.rejects(setCredit(strangerTag),/CREATOR_CREDIT_NOT_ALLOWED/);
+    });
+    await as('authenticated', other, async () => {
+        assert.equal((await pg.query('SELECT public.can_edit_template($1) AS ok',[global.rpcTemplateId])).rows[0].ok,true);
+        assert.equal((await pg.query('SELECT user_id FROM public.templates WHERE id=$1',[global.rpcTemplateId])).rows[0].user_id,creator);
+        const catalog=(await pg.query('SELECT public.template_catalog() AS data')).rows[0].data;
+        const item=catalog.find(t=>t.id===global.rpcTemplateId);
+        assert.ok(item.editor_ids.includes(other));
+        assert.deepEqual(item.template_tags.filter(t=>t.tags.tag_groups.name==='creators').map(t=>t.tags.slug), ['credit-friend']);
+        assert.ok(!(await options(global.rpcTemplateId)).includes(Number(strangerTag)), 'Editor uses original uploader permissions');
+        await assert.rejects(setCredit(strangerTag),/CREATOR_CREDIT_NOT_ALLOWED/);
+        await saveEncrypted(global.rpcTemplateId, null, null);
+        await pg.query('UPDATE public.templates SET is_active=false WHERE id=$1',[global.rpcTemplateId]);
+        assert.equal((await pg.query('SELECT id FROM public.templates WHERE id=$1',[global.rpcTemplateId])).rows.length,1);
+        assert.ok((await pg.query('SELECT public.template_catalog() AS data')).rows[0].data.some(t=>t.id===global.rpcTemplateId));
+        await assert.rejects(pg.query('UPDATE public.templates SET user_id=$1 WHERE id=$2',[other,global.rpcTemplateId]), /TEMPLATE_UPLOADER_IMMUTABLE/);
+    });
+    await as('authenticated', stranger, async () => {
+        assert.equal((await pg.query('SELECT id FROM public.templates WHERE id=$1',[global.rpcTemplateId])).rows.length,0);
+        await assert.rejects(saveEncrypted(global.rpcTemplateId,null,null),/TEMPLATE_OWNER_REQUIRED/);
+        await assert.rejects(pg.query('INSERT INTO public.template_tags(template_id,tags_id) VALUES ($1,$2)',[global.rpcTemplateId,1]),/row-level security/);
+    });
+    await pg.query('DELETE FROM public.creator_credit_links WHERE uploader_id=$1 AND credited_creator_id=$2',[creator,other]);
+    await as('authenticated', other, async () => {
+        assert.equal((await pg.query('SELECT public.can_edit_template($1) AS ok',[global.rpcTemplateId])).rows[0].ok,false);
+    });
+    await pg.query('INSERT INTO public.creator_credit_links(uploader_id,credited_creator_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',[creator,other]);
+    await as('authenticated', other, async () => { await setCredit(ownTag); });
+    await as('authenticated', creator, async () => { await saveEncrypted(global.rpcTemplateId,null,null); });
+    await as('authenticated', other, async () => {
+        assert.equal((await pg.query('SELECT public.can_edit_template($1) AS ok',[global.rpcTemplateId])).rows[0].ok,false);
+        await assert.rejects(saveEncrypted(global.rpcTemplateId,null,null),/TEMPLATE_OWNER_REQUIRED/);
+    });
+    const globalTag = (await pg.query("INSERT INTO public.tags(group_id,name,slug) VALUES ($1,'Legacy credit','legacy-credit') RETURNING id",[group])).rows[0].id;
+    await as('authenticated', stranger, async () => {
+        assert.ok((await options()).includes(Number(globalTag)), 'Legacy accountless credits remain available to all creators');
+    });
+    await as('authenticated', creator, async () => {
+        await setCredit(globalTag);
+        const item=(await pg.query('SELECT public.template_catalog() AS data')).rows[0].data.find(t=>t.id===global.rpcTemplateId);
+        assert.equal(item.user_id,creator);
+        assert.deepEqual(item.editor_ids,[]);
+        assert.deepEqual(item.template_tags.filter(t=>t.tags.tag_groups.name==='creators').map(t=>t.tags.slug),['legacy-credit']);
+    });
+    console.log('PASS: directional mapped credit, option filtering, single attribution, atomic replacement, link revocation, uploader preservation, both editors, protected/inactive access, stranger denial, revoked credit and rerunnable migration.');
     console.log('PASS: PostgreSQL migration/re-run, Unicode hash compatibility, private-table permissions, catalog allowlist, RLS, creator/owner edits, credential rotation and password-free writes.');
 }
 run().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => pg.close());

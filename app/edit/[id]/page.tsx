@@ -23,7 +23,7 @@ import BlueprintGuide from '@/components/BlueprintGuide';
 import FieldConfigurator from '@/components/FieldConfigurator';
 import TemplateFormSections from '@/components/TemplateFormSections';
 import { syncFormFields } from '@/lib/form-layout';
-import { CreatorSession, canManageTemplate, requireCreator } from '@/lib/creator';
+import { CreatorSession, canEditTemplate, requireCreator } from '@/lib/creator';
 import { FieldConfig, reorderFields, reorderGroups, normalizeFieldConfig } from '@/lib/template-parser';
 
 const getSimilarFieldKey = (field: FieldConfig) => {
@@ -123,26 +123,18 @@ export default function EditTemplatePage() {
 
             setCreatorSession(session);
 
-            const { data: allTags } = session.isOwner
-                ? await supabase
-                    .from('tags')
-                    .select('id, name, slug, user_id, tag_groups(name)')
-                    .eq('is_active', true)
-                : await supabase
-                    .from('tags')
-                    .select('id, name, slug, user_id, tag_groups(name)')
-                    .eq('is_active', true)
-                    .or(`user_id.is.null,user_id.eq.${session.user.id}`);
+            const { data: allTags } = await supabase.from('tags')
+                .select('id, name, slug, user_id, tag_groups(name)').eq('is_active', true);
 
             if (allTags) {
-                setAvailableTags(sortTagsByGroup(allTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators')));
+                setAvailableTags(sortTagsByGroup(allTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators' && (session.isOwner || tag.user_id === null || tag.user_id === session.user?.id))));
             }
 
             if (templateId) {
                 const { data: template, error } = await supabase.from('templates').select(`*, template_tags(tags_id, tags(id, name, slug, is_active, tag_groups(name)))`).eq('id', templateId).single();
 
                 if (template) {
-                    if (!canManageTemplate(session, template.user_id)) {
+                    if (!await canEditTemplate(String(templateId))) {
                         toast.error("ERROR_ACCESS_DENIED: TEMPLATE_OWNER_REQUIRED");
                         router.replace('/?group=category&tag=all');
                         return;
@@ -159,8 +151,10 @@ export default function EditTemplatePage() {
                     }
                     setTemplateOwnerId(template.user_id);
                     setHasStoredPassword(template.is_personal === true);
-                    setCreditOptions((allTags || []).filter((tag: any) => getGroupSlug(tag.tag_groups?.name) === 'creators'
-                        && (tag.user_id === null || tag.user_id === template.user_id))
+                    const { data: allowedCredits, error: creditError } = await supabase.rpc('creator_credit_options', { p_template_id: templateId });
+                    if (creditError) throw creditError;
+                    const allowedCreditIds = (allowedCredits || []).map(String);
+                    setCreditOptions((allTags || []).filter((tag: any) => allowedCreditIds.includes(String(tag.id)))
                         .map((tag: any) => ({ id: String(tag.id), name: tag.name })));
                     const creditLink = template.template_tags?.find((link: any) => getGroupSlug(link.tags?.tag_groups?.name) === 'creators');
                     setCurrentCredit(creditLink ? { id: String(creditLink.tags_id), name: creditLink.tags?.name || 'เครดิตเดิม' } : null);
@@ -317,7 +311,7 @@ export default function EditTemplatePage() {
                 throw new Error('Unable to verify your session. Please try saving again. Locally saved drafts are still available.');
             }
             setCreatorSession(creatorSession);
-            if (!creatorSession || !canManageTemplate(creatorSession, templateOwnerId)) {
+            if (!creatorSession || !await canEditTemplate(String(templateId))) {
                 throw new Error("TEMPLATE_OWNER_REQUIRED");
             }
 
@@ -333,11 +327,9 @@ export default function EditTemplatePage() {
             if (linksError) throw linksError;
 
             // Refresh active IDs in case a tag was disabled while this form was open.
-            let activeTagsQuery = supabase
+            const activeTagsQuery = supabase
                 .from('tags').select('id, user_id, tag_groups(name)').eq('is_active', true);
-            if (!creatorSession.isOwner) {
-                activeTagsQuery = activeTagsQuery.or(`user_id.is.null,user_id.eq.${creatorSession.user!.id}`);
-            }
+
             const { data: activeTags, error: activeTagsError } = await activeTagsQuery;
             if (activeTagsError) throw activeTagsError;
             const activeIds = new Set((activeTags || []).map(tag => String(tag.id)));
@@ -348,20 +340,16 @@ export default function EditTemplatePage() {
                 selectableIds,
             );
             if (creditOverride !== null) {
+                const { data: allowedCredits, error: creditError } = await supabase.rpc('creator_credit_options', { p_template_id: templateId });
+                if (creditError) throw creditError;
+                const allowedCreditIds = (allowedCredits || []).map(String);
+                if (!allowedCreditIds.includes(creditOverride)) throw new Error('ไม่มีสิทธิ์ใช้เครดิตนี้แล้ว กรุณาเลือกเครดิตใหม่');
                 const existingCredits = (currentLinks || [])
                     .filter((link: any) => getGroupSlug(link.tags?.tag_groups?.name) === 'creators')
                     .map(link => String(link.tags_id));
-                const creditChanges = creatorCreditChanges((activeTags || []).map((tag: any) => ({
+                creatorCreditChanges((activeTags || []).map((tag: any) => ({
                     id: tag.id, user_id: tag.user_id, tag_groups: tag.tag_groups,
-                })), existingCredits, creditOverride, templateOwnerId || '');
-                changes.remove.push(...creditChanges.remove);
-                changes.add.push(...creditChanges.add);
-            }
-
-            if (changes.remove.length > 0) {
-                const { error: deleteError } = await supabase.from('template_tags')
-                    .delete().eq('template_id', templateId).in('tags_id', changes.remove);
-                if (deleteError) throw deleteError;
+                })), existingCredits, creditOverride, templateOwnerId || '', allowedCreditIds);
             }
 
             if (changes.add.length > 0) {
@@ -373,13 +361,26 @@ export default function EditTemplatePage() {
                 if (tagError) throw tagError;
             }
 
+            if (changes.remove.length > 0) {
+                const { error: deleteError } = await supabase.from('template_tags')
+                    .delete().eq('template_id', templateId).in('tags_id', changes.remove);
+                if (deleteError) throw deleteError;
+            }
+
+            if (creditOverride !== null) {
+                const { error: creditError } = await supabase.rpc('set_template_creator_credit', {
+                    p_template_id: templateId, p_credit_tag_id: creditOverride,
+                });
+                if (creditError) throw creditError;
+            }
+
             skipDraftSaveRef.current = true;
             localStorage.removeItem(STORAGE_KEY);
 
             invalidateDashboardCache();
             toast.success("PROTOCOL_SUCCESS: MODULE_UPDATED", { id: toastId });
             
-            if (savedTemplate.is_active === false) {
+            if (savedTemplate.is_active === false && await canEditTemplate(String(templateId))) {
                 setActivationPromptOpen(true);
             } else {
                 finishEditing();
@@ -404,7 +405,7 @@ export default function EditTemplatePage() {
         setActivating(true);
         try {
             const session = await requireCreator();
-            if (session.checkFailed || !canManageTemplate(session, templateOwnerId)) {
+            if (session.checkFailed || !await canEditTemplate(String(templateId))) {
                 throw new Error('ไม่สามารถยืนยันสิทธิ์แก้ไขเทมเพลตได้ กรุณาลองใหม่');
             }
             await setTemplateActive(supabase, String(templateId), true);
@@ -522,7 +523,7 @@ export default function EditTemplatePage() {
                                         && <option value={creditOverride} disabled>แท็กเดิมใช้ไม่ได้แล้ว — กรุณาเลือกใหม่</option>}
                                     {creditOptions.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
                                 </select>
-                                <p className="text-xs text-(--foreground)/60">เลือกแท็กครีเอเตอร์หนึ่งคน การเปลี่ยนเครดิตไม่เปลี่ยนเจ้าของหรือสิทธิ์จัดการเทมเพลต</p>
+                                <p className="text-xs text-(--foreground)/60">เลือกเครดิตที่ผู้ลงได้รับอนุญาต งานจะแสดงในแท็กของผู้ได้รับเครดิต ผู้ลงยังเป็นเจ้าของเดิม และบัญชีที่ผูกกับเครดิตมีสิทธิ์แก้ไขด้วย</p>
                             </div>
 
                             <div className="flex flex-col gap-1">

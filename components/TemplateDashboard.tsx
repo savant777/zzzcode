@@ -28,6 +28,7 @@ type DashboardTemplate = {
     description: string | null;
     preview_url: string | null;
     user_id: string | null;
+    editor_ids?: string[];
     is_active: boolean;
     is_personal: boolean;
     template_tags: { tags: {
@@ -164,7 +165,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
 
     const filteredTemplates = useMemo(() => {
         const result = templates.filter((item) => {
-            if (item.is_active !== true && (!creatorSession || !canManageTemplate(creatorSession, item.user_id))) return false;
+            if (item.is_active !== true && (!creatorSession || !canManageTemplate(creatorSession, item.user_id, item.editor_ids))) return false;
             if (isHogthaiTemplate(item.template_tags) !== hogthai) return false;
             if (noPassOnly && item.is_personal) return false;
             if (passOnly && !item.is_personal) return false;
@@ -284,7 +285,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
         try {
             const session = await getCurrentCreator();
             setCreatorSession(session);
-            if (!canManageTemplate(session, item.user_id)) {
+            if (!canManageTemplate(session, item.user_id, item.editor_ids)) {
                 throw new Error('คุณไม่มีสิทธิ์ลบเทมเพลตนี้ หรือเซสชันหมดอายุแล้ว');
             }
             await deactivateTemplate(supabase, item.id);
@@ -308,7 +309,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
         try {
             const session = await getCurrentCreator();
             setCreatorSession(session);
-            if (!canManageTemplate(session, item.user_id)) throw new Error('คุณไม่มีสิทธิ์แก้ไขเทมเพลตนี้');
+            if (!canManageTemplate(session, item.user_id, item.editor_ids)) throw new Error('คุณไม่มีสิทธิ์แก้ไขเทมเพลตนี้');
             await setTemplateActive(supabase, item.id, true);
             invalidateDashboardCache();
             setTemplates(prev => prev.map(t => t.id === item.id ? { ...t, is_active: true } : t));
@@ -414,7 +415,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
                                             user: null,
                                             isCreator: false,
                                             isOwner: false
-                                        }, item.user_id)}
+                                        }, item.user_id, item.editor_ids)}
                                         creatorName={creatorNames[item.user_id] || 'Unknown Creator'}
                                         onTagClick={handleTagClick} 
                                         onDelete={() => {

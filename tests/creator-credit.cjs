@@ -17,6 +17,8 @@ assert.deepEqual(tagsWithCreatorCredit(tags, ['4'], '1', 'zoe'), ['4', '1']);
 assert.deepEqual(tagsWithCreatorCredit(tags, ['4', '1', '1'], '3', 'zoe'), ['4', '3']);
 assert.deepEqual(tagsWithCreatorCredit(tags, ['4', '2'], '3', 'tissue'), ['4', '3']);
 assert.throws(() => tagsWithCreatorCredit(tags, [], '2', 'zoe'));
+assert.deepEqual(tagsWithCreatorCredit(tags, ['1', '4'], '2', 'zoe', ['2']), ['4', '2']);
+assert.throws(() => tagsWithCreatorCredit(tags, [], '1', 'tissue')); // Link is directional.
 assert.throws(() => tagsWithCreatorCredit(tags, [], '4', 'zoe'));
 assert.throws(() => tagsWithCreatorCredit(tags, [], 'missing', 'zoe'));
 assert.throws(() => tagsWithCreatorCredit(tags, ['missing'], '1', 'zoe'));
@@ -27,5 +29,6 @@ assert.deepEqual(creatorCreditChanges(tags, ['3'], '3', 'zoe'), { remove: [], ad
 assert.deepEqual(creatorCreditChanges(tags, ['1', '3'], '3', 'zoe'), { remove: ['1'], add: [] });
 assert.deepEqual(creatorCreditChanges(tags, [], '3', 'tissue'), { remove: [], add: ['3'] });
 assert.throws(() => creatorCreditChanges(tags, ['1'], '2', 'zoe'));
+assert.deepEqual(creatorCreditChanges(tags, ['1'], '2', 'zoe', ['2']), { remove: ['1'], add: ['2'] });
 assert.throws(() => creatorCreditChanges(tags.filter(tag => tag.id !== 3), ['1'], '3', 'zoe'));
 console.log('Edit credit replacement, existing credit and unavailable choices passed.');

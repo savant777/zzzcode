@@ -26,7 +26,9 @@ export async function handleTemplatePasswordRequest(request: Request, operation:
         if (id !== null) {
             const { data: template, error } = await deps.db.from('templates').select('user_id,is_personal').eq('id', id).maybeSingle();
             if (error) throw error;
-            if (!template || (creator.role !== 'owner' && template.user_id !== auth.user.id)) return reply({ error: 'TEMPLATE_OWNER_REQUIRED' }, 403);
+            const permission = await deps.db.rpc('is_template_editor', { check_user_id: auth.user.id, p_template_id: id });
+            if (permission.error) throw permission.error;
+            if (!template || permission.data !== true) return reply({ error: 'TEMPLATE_OWNER_REQUIRED' }, 403);
         }
         if (operation === 'read') {
             const { data, error } = await deps.db.rpc('read_template_password_encrypted', { p_template_id: id });

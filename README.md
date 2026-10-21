@@ -207,11 +207,28 @@ For an older database, apply missing migrations in this order:
    password column, installing atomic creator writes.
 7. `display-template-passwords.sql` to add encrypted password storage and the
    current save/read RPCs. Configure the encryption env key with matching app code.
-8. Run `verify-template-access.sql`; all boolean results should be true.
+8. `shared-creator-credit.sql` to enable explicitly linked creator credits.
+   Keep `tags.user_id`. `creator_credit_links` stores directional permissions:
+   `uploader_id → credited_creator_id`. Only owners/admin SQL may manage links.
+   Creators may select their own credit, existing global credits (no linked account),
+   or a linked active creator. Other registered creators are not selectable.
+   Configure pairs in Supabase Table Editor by inserting verified creator user IDs
+   into `creator_credit_links`: the uploader in `uploader_id` and the credited
+   creator in `credited_creator_id`. No account-specific SQL file is required.
+   The uploader stays the owner. Only the selected creator tag is attached, so work
+   credited to idkaf appears under idkaf rather than the uploader's creator tag.
+   The uploader and linked credited creator can edit protected/inactive templates
+   and activate/deactivate them. Permissions follow the original uploader's links,
+   even when the credited creator edits. Credit replacement is atomic; replacing
+   credit or removing a link revokes the former credited editor's access while
+   preserving uploader access. Linking is not reciprocal and grants no access to
+   templates that do not credit that linked creator.
+9. Run `verify-template-access.sql`; all boolean results should be true.
 
 **For a database already at step 7, do not rerun steps 5 or 6.** Step 5 expects the
 removed password column; step 6 reinstalls the older save function. The latest
-`display-template-passwords.sql` can be rerun with the current definition.
+`display-template-passwords.sql` can be rerun, followed by
+`shared-creator-credit.sql` to restore the shared editing save function.
 No `preview_profile` database column is required: preview follows tags.
 
 Coordinate database migrations and deployment of their matching app version.

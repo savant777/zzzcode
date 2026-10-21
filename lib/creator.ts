@@ -209,11 +209,12 @@ export const getCurrentCreator = (): Promise<CreatorSession> => {
 
 export const canManageTemplate = (
     session: Pick<CreatorSession, 'user' | 'isCreator' | 'isOwner'>,
-    templateUserId?: string | null
+    templateUserId?: string | null,
+    editorIds: string[] = []
 ) => {
     if (!session.user || !session.isCreator) return false;
     if (session.isOwner) return true;
-    return templateUserId === session.user.id;
+    return templateUserId === session.user.id || editorIds.includes(session.user.id);
 };
 
 export const requireCreator = async () => {
@@ -223,4 +224,11 @@ export const requireCreator = async () => {
         ...session,
         canAccessCreatorTools: session.isCreator,
     };
+};
+
+/** Fresh database authorization, including credited creators. */
+export const canEditTemplate = async (templateId: string | number) => {
+    const { data, error } = await supabase.rpc('can_edit_template', { p_template_id: templateId });
+    if (error) throw error;
+    return data === true;
 };

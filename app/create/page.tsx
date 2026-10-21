@@ -85,8 +85,7 @@ export default function AddTemplatePage() {
             const { data } = await supabase
                 .from('tags')
                 .select('id, group_id, name, slug, user_id, tag_groups(name)')
-                .eq('is_active', true)
-                .or(`user_id.is.null,user_id.eq.${session.user.id}`);
+                .eq('is_active', true);
 
             let nextTags = data || [];
             let creatorTag = nextTags.find((tag: any) =>
@@ -124,10 +123,12 @@ export default function AddTemplatePage() {
             }
 
             if (creatorTag) setCreatorTagId(String(creatorTag.id));
-            setCreditOptions(nextTags.filter((tag: any) => tag.user_id === null
-                && getGroupSlug(tag.tag_groups?.name) === 'creators')
+            const { data: allowedCredits, error: creditError } = await supabase.rpc('creator_credit_options');
+            if (creditError) throw creditError;
+            const allowedCreditIds = (allowedCredits || []).map(String);
+            setCreditOptions(nextTags.filter((tag: any) => allowedCreditIds.includes(String(tag.id)) && String(tag.id) !== String(creatorTag?.id))
                 .map((tag: any) => ({ id: String(tag.id), name: tag.name })));
-            setAvailableTags(sortTagsByGroup(nextTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators')));
+            setAvailableTags(sortTagsByGroup(nextTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators' && (tag.user_id === null || tag.user_id === session.user?.id))));
 
             const savedDraft = localStorage.getItem(STORAGE_KEY);
             if (savedDraft) {
@@ -240,11 +241,14 @@ export default function AddTemplatePage() {
                 .from('tags')
                 .select('id, slug, user_id, tag_groups(name)')
                 .eq('is_active', true)
-                .or(`user_id.is.null,user_id.eq.${creatorSession.user.id}`)
                 .returns<{ id: number; slug: string | null; user_id: string | null; tag_groups: { name: string } | null }[]>();
             if (currentTagsError) throw currentTagsError;
             const activeTagIds = new Set((currentTags || []).map(tag => String(tag.id)));
+            const { data: allowedCredits, error: creditError } = await supabase.rpc('creator_credit_options');
+            if (creditError) throw creditError;
+            const allowedCreditIds = (allowedCredits || []).map(String);
             const chosenCreditId = creditOverride || creatorTagId || '';
+            if (!allowedCreditIds.includes(chosenCreditId)) throw new Error('ไม่มีสิทธิ์ใช้เครดิตนี้แล้ว กรุณาเลือกเครดิตใหม่');
             let templateTagIds = [...selectedTags.map(String), chosenCreditId];
             if (templateTagIds.some(id => !activeTagIds.has(id))) {
                 setSelectedTags(prev => prev.filter(id => activeTagIds.has(String(id))));
@@ -252,7 +256,7 @@ export default function AddTemplatePage() {
                 throw new Error('บางแท็กถูกปิดใช้งาน ลบ หรือเปลี่ยนสิทธิ์แล้ว กรุณาตรวจแท็กและบันทึกอีกครั้ง');
             }
             templateTagIds = tagsWithCreatorCredit(currentTags || [], selectedTags.map(String),
-                chosenCreditId, creatorSession.user.id);
+                chosenCreditId, creatorSession.user.id, allowedCreditIds);
             
             const { password, ...templateMetadata } = formData;
             const { template: templateData } = await creatorTemplateRequest('save', {
@@ -402,7 +406,7 @@ export default function AddTemplatePage() {
                                     {creditOverride && !creditOptions.some(tag => tag.id === creditOverride) && <option value={creditOverride} disabled>แท็กเดิมใช้ไม่ได้แล้ว — กรุณาเลือกใหม่</option>}
                                     {creditOptions.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
                                 </select>
-                                <p className="text-xs text-(--foreground)/60">เลือกครีเอเตอร์ที่ต้องการให้เครดิต หากอัปแทนคนอื่นจะใช้แท็กนี้แทนแท็กของคุณ คุณยังเป็นผู้จัดการเทมเพลตนี้</p>
+                                <p className="text-xs text-(--foreground)/60">เลือกเครดิตของตนเองหรือครีเอเตอร์ที่ได้รับอนุญาตให้ลงแทน งานจะแสดงในแท็กของผู้ได้รับเครดิต ผู้ลงและบัญชีที่ผูกไว้แก้ไขงานได้ทั้งคู่</p>
                             </div>
 
                             <div className="flex flex-col gap-1">
