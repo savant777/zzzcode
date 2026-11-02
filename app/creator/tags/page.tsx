@@ -23,6 +23,7 @@ type ManagedTag = {
     name: string;
     slug: string;
     is_active: boolean;
+    display_on: string[];
     tag_groups?: TagGroup | null;
 };
 
@@ -35,6 +36,7 @@ type TagForm = {
     slug: string;
     is_global: boolean;
     is_active: boolean;
+    display_on: string[];
 };
 
 const GROUP_ORDER = ['category', 'css', 'style', 'activity', 'sapiens', 'houses', 'shops', 'commission'];
@@ -45,6 +47,7 @@ const emptyForm: TagForm = {
     slug: '',
     is_global: false,
     is_active: true,
+    display_on: ['roleplayth'],
 };
 
 const slugify = (value: string) => {
@@ -132,6 +135,7 @@ export default function ManageTagsPage() {
     const [tagGroups, setTagGroups] = useState<TagGroup[]>([]);
     const [tags, setTags] = useState<ManagedTag[]>([]);
     const [modalType, setModalType] = useState<'add' | 'edit' | 'delete' | null>(null);
+    const canManageNavigation = creatorSession?.isOwner || creatorSession?.creator?.can_manage_secret === true;
     const [selectedTag, setSelectedTag] = useState<ManagedTag | null>(null);
     const [isSlugEdited, setIsSlugEdited] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -261,10 +265,10 @@ export default function ManageTagsPage() {
         const tagQuery = session.isOwner
             ? supabase
                 .from('tags')
-                .select('id, group_id, user_id, name, slug, is_active, tag_groups(id, name)')
+                .select('id, group_id, user_id, name, slug, is_active, display_on, tag_groups(id, name)')
             : supabase
                 .from('tags')
-                .select('id, group_id, user_id, name, slug, is_active, tag_groups(id, name)')
+                .select('id, group_id, user_id, name, slug, is_active, display_on, tag_groups(id, name)')
                 .or(`user_id.is.null,user_id.eq.${session.user.id}`);
 
         const { data: tagsData, error: tagsError } = await tagQuery;
@@ -313,6 +317,7 @@ export default function ManageTagsPage() {
             slug: tag.slug || '',
             is_global: tag.user_id === null,
             is_active: tag.is_active,
+            display_on: tag.display_on,
         });
         setModalType('edit');
     };
@@ -339,6 +344,10 @@ export default function ManageTagsPage() {
             name: form.name.trim(),
             slug: slugify(form.slug || form.name),
             is_active: form.is_active,
+            display_on: canManageNavigation ? form.display_on : [
+                ...form.display_on.filter(page => page === 'roleplayth' || page === 'hogthai'),
+                ...(selectedTag?.display_on || []).filter(page => page === 'bin' || page === 'hogthai_bin'),
+            ],
         };
 
         if (!nextTag.group_id || !nextTag.name || !nextTag.slug) {
@@ -683,7 +692,26 @@ export default function ManageTagsPage() {
                         />
                     </div>
 
-                    <label className="block mt-6 flex items-center gap-3 text-xs uppercase text-(--foreground)/75 cursor-pointer">
+                    <fieldset className="space-y-3 mt-6">
+                        <legend className="text-xs uppercase text-(--primary) mb-3">Show in navigation</legend>
+                        {[
+                            ['roleplayth', 'RoleplayTH'], ['hogthai', 'Hogthai'],
+                            ['bin', '.bin / RoleplayTH'], ['hogthai_bin', '.bin / Hogthai'],
+                        ].filter(([key]) => canManageNavigation || key === 'roleplayth' || key === 'hogthai').map(([key, label]) => (
+                            <label key={key} className="flex items-center gap-3 text-xs cursor-pointer">
+                                <input type="checkbox" className="sr-only peer" checked={form.display_on.includes(key)}
+                                    onChange={event => setForm(prev => ({ ...prev, display_on: event.target.checked ? [...prev.display_on, key] : prev.display_on.filter(page => page !== key) }))} />
+                                <span className="flex h-5 w-5 items-center justify-center border border-(--primary)/50 bg-black/20 peer-focus-visible:border-(--primary)">
+                                    {form.display_on.includes(key) && <span className="h-3 w-3 bg-(--primary)" />}
+                                </span>
+                                {label}
+                            </label>
+                        ))}
+                    </fieldset>
+
+                    <div className="mt-6 space-y-3">
+                    <h3 className="text-xs uppercase text-(--primary)">Tag status</h3>
+                    <label className="block flex items-center gap-3 text-xs uppercase text-(--foreground)/75 cursor-pointer">
                         <input
                             type="checkbox"
                             className="sr-only"
@@ -696,7 +724,11 @@ export default function ManageTagsPage() {
                         Active_Tag
                     </label>
 
+                    </div>
+
                     {canToggleGlobalOwner && (
+                        <div className="space-y-3">
+                        <h3 className="text-xs uppercase text-(--primary)">Tag visibility</h3>
                         <label className="block flex items-center gap-3 text-xs uppercase text-(--foreground)/75 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -709,6 +741,7 @@ export default function ManageTagsPage() {
                             </span>
                             Global_Tag
                         </label>
+                        </div>
                     )}
 
                     <div className="flex gap-2 pt-2">

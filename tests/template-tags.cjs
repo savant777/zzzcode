@@ -219,7 +219,7 @@ assert.equal(dashboardTagUrl('style', 'modern', true), '/hogthai?group=style&tag
 assert.equal(dashboardTagUrl('style', 'hogthai'), '/hogthai');
 assert.equal(dashboardTagUrl('category', 'etc', true), '/hogthai?group=category&tag=etc');
 assert.equal(dashboardTagUrl('creators', 'author', true), '/hogthai?group=creators&tag=author');
-assert.equal(dashboardTagUrl('activity', 'party', true), '/hogthai');
+assert.equal(dashboardTagUrl('activity', 'party', true), '/hogthai?group=activity&tag=party');
 assert.equal(dashboardTagUrl('category', 'food&drink'), '/?group=category&tag=food%26drink');
 // Exercise the actual dashboard filter, including search, tag and password filters.
 const dashboardSource = fs.readFileSync('components/TemplateDashboard.tsx', 'utf8');
@@ -277,3 +277,12 @@ for (const contextHref of ['/hogthai', '/?group=category&tag=all']) {
     assert.equal(Header({ text: 'zzzcode editor' }).props.href, contextHref);
 }
 console.log('Header follows the template dashboard context without a dashboard query parameter.');
+
+for (const base of ['/bin', '/hogthai/bin']) {
+    const secretCrumb = renderToStaticMarkup(React.createElement(Breadcrumbs, {
+        path: 'category:etc', currentFile: 'Secret template', editorMode: 'EDITOR', dashboardBase: base,
+    }));
+    assert.ok(secretCrumb.includes('href="' + base + '"'));
+    assert.ok(secretCrumb.includes('href="' + base + '?group=category&amp;tag=etc"'));
+    assert.ok(!secretCrumb.includes('href="/?'));
+}

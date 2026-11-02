@@ -123,6 +123,7 @@ export default function EditorPage() {
     const STORAGE_KEY = `zzzcode_draft_editor_${templateId}`;
     const fromGroup = searchParams.get('group') || 'category';
     const fromTag = searchParams.get('tag') || 'all';
+    const [secretTemplate, setSecretTemplate] = useState(false);
     const [breadcrumbTags, setBreadcrumbTags] = useState<any[]>([]);
     useTemplateDashboard(isHogthaiTemplate(breadcrumbTags));
     const breadcrumbRoute = templateRoute(breadcrumbTags, `${fromGroup}:${fromTag}`);
@@ -314,6 +315,7 @@ export default function EditorPage() {
 
                 if (template) {
                     setBreadcrumbTags(template.template_tags || []);
+                    setSecretTemplate(template.is_secret === true);
                     let remote: BackupConnection | null = null;
                     let storedConnection: BackupConnection | null = null;
                     let linkFailed = false;
@@ -1027,7 +1029,7 @@ export default function EditorPage() {
         return (
             <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
                 <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" dashboardBase={isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/'} />
+                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" dashboardBase={secretTemplate ? (isHogthaiTemplate(breadcrumbTags) ? '/hogthai/bin' : '/bin') : (isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/')} />
                     <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
                         <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
                         <span className="lg:hidden">&lt; BACK</span>
@@ -1067,7 +1069,7 @@ export default function EditorPage() {
     return (
         <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
             <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" dashboardBase={isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/'} />
+                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDITOR" dashboardBase={secretTemplate ? (isHogthaiTemplate(breadcrumbTags) ? '/hogthai/bin' : '/bin') : (isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/')} />
                 <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
                     <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
                     <span className="lg:hidden">&lt; BACK</span>

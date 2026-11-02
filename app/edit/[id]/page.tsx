@@ -398,7 +398,9 @@ export default function EditTemplatePage() {
 
     const finishEditing = () => {
         setActivationPromptOpen(false);
-        router.push(isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/?group=category&tag=all');
+        router.push(formData.is_secret
+            ? (isHogthaiTemplate(breadcrumbTags) ? '/hogthai/bin' : '/bin')
+            : (isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/?group=category&tag=all'));
         router.refresh();
     };
 
@@ -432,7 +434,7 @@ export default function EditTemplatePage() {
         return (
             <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
                 <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDIT" dashboardBase={isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/'} />
+                    <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDIT" dashboardBase={formData.is_secret ? (isHogthaiTemplate(breadcrumbTags) ? '/hogthai/bin' : '/bin') : (isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/')} />
                     <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
                         <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
                         <span className="lg:hidden">&lt; BACK</span>
@@ -451,7 +453,7 @@ export default function EditTemplatePage() {
     return (
         <div className="flex flex-col h-full overflow-hidden relative font-Google-Code">
             <div className="z-10 bg-(--background) p-4 pt-1 flex flex-wrap">
-                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDIT" dashboardBase={isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/'} />
+                <Breadcrumbs path={breadcrumbPath} currentFile={formData.title} editorMode="EDIT" dashboardBase={formData.is_secret ? (isHogthaiTemplate(breadcrumbTags) ? '/hogthai/bin' : '/bin') : (isHogthaiTemplate(breadcrumbTags) ? '/hogthai' : '/')} />
                 <button onClick={() => router.back()} className="ml-auto text-[10px] md:text-xs cursor-pointer flex items-center gap-1 hover:translate-x-[-4px] transition-all text-(--foreground)/75">
                     <span className="hidden lg:inline">&lt; BACK_TO_DASHBOARD</span>
                     <span className="lg:hidden">&lt; BACK</span>

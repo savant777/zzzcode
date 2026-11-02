@@ -15,11 +15,15 @@ export default function Breadcrumbs({ path, currentFile, editorMode, dashboardBa
     const group = getGroupSlug(rawGroup);
     const value = (rawValue || '').toLowerCase();
 
+    const isBin = dashboardBase === '/bin' || dashboardBase === '/hogthai/bin';
+    const tagUrl = (tag: string) => isBin
+        ? dashboardBase + '?' + new URLSearchParams({ group, tag })
+        : dashboardTagUrl(group, tag, dashboardBase === '/hogthai');
     const isDashboard = path && !currentFile && !editorMode;
 
     return (
         <div className="flex flex-wrap items-center gap-2 gap-y-0 font-Google-Code text-[10px] md:text-xs uppercase select-none tracking-wider">
-            <Link href={dashboardBase === '/hogthai' ? '/hogthai' : '/?group=category&tag=all'} className="text-(--foreground)/75 hover:text-(--primary) transition-colors">
+            <Link href={dashboardBase === '/' ? '/?group=category&tag=all' : dashboardBase} className="text-(--foreground)/75 hover:text-(--primary) transition-colors">
                 ZZZCODE_EDITOR
             </Link>
 
@@ -38,7 +42,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode, dashboardBa
                         <>
                             <span className="text-(--foreground)/25">/</span>
                             <Link
-                                href={dashboardTagUrl(group, 'all', dashboardBase === '/hogthai')}
+                                href={tagUrl('all')}
                                 className="text-(--foreground)/75 hover:text-(--primary) transition-colors"
                             >
                                 {group.replace(/-/g, '_').toUpperCase()}
@@ -51,7 +55,7 @@ export default function Breadcrumbs({ path, currentFile, editorMode, dashboardBa
                     {/* in Editor Page */}
                     {!isDashboard ? (
                         <Link 
-                            href={dashboardTagUrl(group, value, dashboardBase === '/hogthai')}
+                            href={tagUrl(value)}
                             className="text-(--foreground)/75 hover:text-(--primary) transition-colors"
                         >
                             {value.replace(/-/g, '_').toUpperCase()}

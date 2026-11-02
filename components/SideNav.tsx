@@ -8,7 +8,7 @@ import { useDashboardCacheVersion } from '@/lib/use-dashboard-cache';
 import SkeletonNav from '@/components/SkeletonNav';
 import { getGroupSlug, compareTagOrder, TAG_GROUP_ORDER as GROUP_ORDER } from '@/lib/routes';
 import { binHeaders } from '@/lib/bin-client';
-import { dashboardTagUrl, HOGTHAI_GROUPS } from '@/lib/dashboard';
+import { dashboardTagUrl } from '@/lib/dashboard';
 
 export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = false, bin = false }: any) {
     const [binUnlocked, setBinUnlocked] = useState(false);
@@ -41,7 +41,7 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = fal
                     .order('id', { ascending: true })),
                 dashboardRequest('menu-tags', () => supabase
                     .from('tags')
-                    .select('id, group_id, name, slug, is_active')
+                    .select('id, group_id, name, slug, is_active, display_on')
                     .eq('is_active', true)
                     .order('id', { ascending: true }))
             ]);
@@ -54,7 +54,8 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = fal
             }
 
             if (groups && tags) {
-                const tagsByGroup = tags.reduce((acc: Record<string, any[]>, tag: any) => {
+                const page = bin ? (hogthai ? 'hogthai_bin' : 'bin') : (hogthai ? 'hogthai' : 'roleplayth');
+                const tagsByGroup = tags.filter(tag => tag.display_on?.includes(page)).reduce((acc: Record<string, any[]>, tag: any) => {
                     const key = String(tag.group_id);
                     if (!acc[key]) acc[key] = [];
                     acc[key].push(tag);
@@ -86,7 +87,7 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = fal
         };
         fetchMenu();
         return () => { disposed = true; };
-    }, [cacheVersion]);
+    }, [cacheVersion, bin, hogthai]);
 
     const handleFilterChange = (groupName: string, tagSlug: string) => {
         router.push(bin ? (hogthai ? '/hogthai/bin?' : '/bin?') + new URLSearchParams({ group: getGroupSlug(groupName), tag: tagSlug }) : dashboardTagUrl(groupName, tagSlug, hogthai));
@@ -123,7 +124,7 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = fal
                         <SkeletonNav key={i} />
                     ))
                 ) : (
-                    menuData.filter(group => !hogthai || HOGTHAI_GROUPS.includes(getGroupSlug(group.name))).map((group) => (
+                    menuData.map((group) => (
                         <NavGroup 
                             key={group.id}
                             title={group.name} 

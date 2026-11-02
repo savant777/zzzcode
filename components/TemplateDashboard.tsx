@@ -8,7 +8,7 @@ import { useDashboardCacheVersion } from '@/lib/use-dashboard-cache';
 import { CreatorSession, canManageTemplate, getCurrentCreator, getCreatorForDisplay } from '@/lib/creator';
 import { getGroupSlug } from '@/lib/routes';
 import { templateRoute, visibleTemplateTags } from '@/lib/template-tags';
-import { dashboardTagUrl, HOGTHAI_GROUPS, isHogthaiTemplate } from '@/lib/dashboard';
+import { dashboardTagUrl, isHogthaiTemplate } from '@/lib/dashboard';
 import { getRememberedTemplateUnlock, rememberTemplateUnlock } from '@/lib/template-unlock';
 import { deactivateTemplate, setTemplateActive } from '@/lib/template-actions';
 import { toast } from 'sonner';
@@ -63,7 +63,7 @@ function Dashboard({ hogthai, bin }: { hogthai: boolean; bin: boolean }) {
     const [isOpen, setIsOpen] = useState(true);
     const activeFilter = useMemo(() => {
         const requestedGroup = getGroupSlug(searchParams.get('group')) || 'category';
-        const group = hogthai && !HOGTHAI_GROUPS.includes(requestedGroup) ? 'category' : requestedGroup;
+        const group = requestedGroup;
         const tag = group !== requestedGroup ? 'all' : searchParams.get('tag')?.toLowerCase() || 'all';
         return `${group}:${tag}`;
     }, [searchParams, hogthai]);
@@ -411,7 +411,7 @@ function Dashboard({ hogthai, bin }: { hogthai: boolean; bin: boolean }) {
                                 ))}</>
                             ) : (
                                 filteredTemplates.map(item => (
-                                    <TemplateCard 
+                                    <TemplateCard bin={bin}
                                         key={item.id} 
                                         item={item}
                                         activeFilter={activeFilter}

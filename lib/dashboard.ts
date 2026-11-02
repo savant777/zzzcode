@@ -10,6 +10,5 @@ export function dashboardTagUrl(groupName: string, tagSlug: string, hogthai = fa
     const group = getGroupSlug(groupName);
     const tag = tagSlug.trim().toLowerCase();
     if (group === 'style' && tag === 'hogthai') return '/hogthai';
-    if (hogthai && !HOGTHAI_GROUPS.includes(group)) return '/hogthai';
     return `${hogthai ? '/hogthai' : '/'}?${new URLSearchParams({ group, tag })}`;
 }

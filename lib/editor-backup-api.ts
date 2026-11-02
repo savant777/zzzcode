@@ -105,7 +105,7 @@ export async function handleTemplateRequest(request: Request, operation: 'unlock
         }
         if (operation === 'unlock') return timedResponse({ unlocked: true });
         const { data, error } = await measure('template_read', async () => deps.db.from('templates')
-            .select('id,title,description,is_personal,supports_multiple_drafts,html_blueprint,fields_config,template_tags(tags(id,slug,is_active,tag_groups(name)))')
+            .select('id,title,description,is_secret,is_personal,supports_multiple_drafts,html_blueprint,fields_config,template_tags(tags(id,slug,is_active,tag_groups(name)))')
             .eq('id', id).maybeSingle());
         if (error || !data) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
         return timedResponse({ template: data });
