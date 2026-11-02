@@ -296,12 +296,13 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
                     style={{
                         position: 'absolute',
                         top: 0,
-                        left: `-${cropOffset * scale}px`,
+                        left: profile === 'hogthai' ? `-${cropOffset * scale}px` : '50%',
                         width: `${renderWidth}px`,
+                        minWidth: profile === 'hogthai' ? undefined : '980px',
                         height: `${iframeHeight}px`,
                         border: 'none',
                         display: 'block',
-                        transform: `scale(${scale})`,
+                        transform: profile === 'hogthai' ? `scale(${scale})` : `scale(${scale}) translateX(-50%)`,
                         transformOrigin: 'top left',
                     }}
                 />
