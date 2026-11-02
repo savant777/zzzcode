@@ -6,6 +6,39 @@ import { FieldConfig, GradientValue, defaultGradientValue, getSelectOptions } fr
 import BBCodeEditor from './BBCodeEditor';
 import ColorPicker from './ColorPicker';
 
+function SliderNumber({ value, slider, onChange }: {
+    value: number | string;
+    slider: { label: string; min: number; max: number; step?: number; unit?: string };
+    onChange: (value: number) => void;
+}) {
+    const commit = (input: HTMLInputElement) => {
+        if (!input.value.trim() || !Number.isFinite(Number(input.value))) {
+            input.value = String(value);
+            return;
+        }
+        const min = Number(slider.min), max = Number(slider.max);
+        const step = Number(slider.step) > 0 ? Number(slider.step) : 1;
+        const bounded = Math.max(min, Math.min(max, Number(input.value)));
+        const steps = Math.min(Math.round((bounded - min) / step), Math.floor(Number(((max - min) / step).toFixed(10))));
+        const next = Number((min + steps * step).toFixed(10));
+        input.value = String(next);
+        if (next !== Number(value)) onChange(next);
+    };
+    return <span className="inline-flex items-center gap-0.5">
+        <input key={String(value)} type="number" defaultValue={value} min={slider.min} max={slider.max} step={slider.step || 1}
+            aria-label={slider.label + ' value'} title="Click to enter a value"
+            onFocus={event => event.currentTarget.select()}
+            onBlur={event => commit(event.currentTarget)}
+            onKeyDown={event => {
+                if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
+                if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.currentTarget.value = String(value); event.currentTarget.blur(); }
+            }}
+            className="min-w-[3ch] bg-transparent text-right outline-none cursor-text border-b border-transparent hover:border-current focus:border-(--primary) focus:text-(--primary) selection:bg-(--primary) selection:text-(--background) [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            style={{ width: Math.max(3, String(value).length + 1) + 'ch' }} />
+        <span>{slider.unit}</span>
+    </span>;
+}
+
 interface FieldRendererProps {
     field: FieldConfig;
     value: any;
@@ -380,9 +413,13 @@ export default function FieldRenderer({ field, value, onChange, className, hideL
 
                                                     return (
                                                         <div key={i} className="flex flex-col gap-1">
-                                                            <div className="flex justify-between text-[9px] uppercase opacity-50">
+                                                            <div className="flex justify-between text-[9px] uppercase opacity-50 focus-within:opacity-100">
                                                                 <span>{s.label}</span>
-                                                                <span>{safeValue}{s.unit}</span>
+                                                                <SliderNumber value={safeValue} slider={s} onChange={(next) => {
+                                                                    const nextValues = [...sliderValues];
+                                                                    nextValues[i] = next;
+                                                                    updateMultipleEntries(selectedMultipleEntries.map((item: any) => item.option_index === index ? { ...item, custom_value: nextValues } : item));
+                                                                }} />
                                                             </div>
                                                             <input
                                                                 type="range"
@@ -485,9 +522,9 @@ export default function FieldRenderer({ field, value, onChange, className, hideL
 
                                 return (
                                     <div key={i} className="flex flex-col gap-1">
-                                        <div className="flex justify-between text-[9px] uppercase opacity-50">
+                                        <div className="flex justify-between text-[9px] uppercase opacity-50 focus-within:opacity-100">
                                             <span>{s.label}</span>
-                                            <span>{safeValue}{s.unit}</span>
+                                            <SliderNumber value={safeValue} slider={s} onChange={(next) => handleSelectCustomSliderChange(i, next)} />
                                         </div>
                                         <input
                                             type="range"
@@ -539,9 +576,9 @@ export default function FieldRenderer({ field, value, onChange, className, hideL
 
                         return (
                             <div key={i} className="flex flex-col gap-1">
-                                <div className="flex justify-between text-[9px] uppercase opacity-50">
+                                <div className="flex justify-between text-[9px] uppercase opacity-50 focus-within:opacity-100">
                                     <span>{s.label}</span>
-                                    <span>{safeValue}{s.unit}</span>
+                                    <SliderNumber value={safeValue} slider={s} onChange={(next) => handleSliderChange(i, next)} />
                                 </div>
                                 <input
                                     type="range"
