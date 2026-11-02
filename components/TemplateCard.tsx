@@ -16,7 +16,7 @@ function CreatorBadge({ name }: { name: string }) {
     );
 }
 
-export default function TemplateCard({ item, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onOpenPrivateModal, onActivate, isActivating }: any) {
+export default function TemplateCard({ item, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onActivate, isActivating }: any) {
     const router = useRouter();
     const visibleTags = sortedVisibleTemplateTags(item.template_tags);
     const hogthai = isHogthaiTemplate(item.template_tags);
@@ -33,15 +33,15 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
 
     const routeQuery = new URLSearchParams(templateRoute(visibleTags, activeFilter)).toString();
 
+    const UseTemplateAction = 'a';
+    const useTemplateHref = `/editor/${item.id}?${routeQuery}`;
+
     const handleUseTemplate = (e: React.MouseEvent) => {
         e.stopPropagation();
         
-        if (item.is_personal) {
-            onOpenPrivateModal(item);
-            return;
-        }
-
-        router.push(`/editor/${item.id}?${routeQuery}`);
+if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
+        e.preventDefault();
+        router.push(useTemplateHref);
     };
 
     const handleEditClick = (e: React.MouseEvent) => {
@@ -106,7 +106,8 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                             </div>
                         )}
                     </div>
-                    <button 
+                    <UseTemplateAction
+                        href={useTemplateHref}
                         onClick={handleUseTemplate}
                         title="Use Template"
                         className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black focus:bg-(--primary) focus:text-black transition-colors duration-300 ease cursor-pointer"
@@ -115,7 +116,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                             <polyline points="16 18 22 12 16 6"></polyline>
                             <polyline points="8 6 2 12 8 18"></polyline>
                         </svg>
-                    </button>
+                    </UseTemplateAction>
 
                     {canManage && (
                         <>
@@ -236,7 +237,8 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                 </div>
 
                 <div className="flex gap-1">
-                    <button 
+                    <UseTemplateAction
+                        href={useTemplateHref}
                         onClick={handleUseTemplate}
                         title="Use Template"
                         className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black transition-colors duration-300 ease cursor-pointer leading-[0] flex gap-2 items-center"
@@ -246,7 +248,7 @@ export default function TemplateCard({ item, viewMode, canManage, creatorName, a
                             <polyline points="8 6 2 12 8 18"></polyline>
                         </svg>
                         <span className="text-xs -mt-px">use_this</span>
-                    </button>
+                    </UseTemplateAction>
 
                     {canManage && (
                         <>

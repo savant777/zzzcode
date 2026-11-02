@@ -9,11 +9,11 @@ type JsonObject = Record<string, unknown>;
 type Dependencies = { db: SupabaseClient; secret: string };
 
 type TemplateCredential = { fingerprint?: unknown; backup?: unknown };
-type TemplateAccess = { id: number | string; is_personal: boolean; is_active: boolean; user_id: string | null };
+type TemplateAccess = { title?: string; id: number | string; is_personal: boolean; is_active: boolean; user_id: string | null };
 
 async function readTemplateAccess(db: SupabaseClient, id: string): Promise<TemplateAccess> {
     const { data, error } = await db.from('templates')
-        .select('id,is_personal,is_active,user_id').eq('id', id).maybeSingle();
+        .select('id,title,is_personal,is_active,user_id').eq('id', id).maybeSingle();
     if (error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
     if (!data) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
     return data;
@@ -89,7 +89,16 @@ export async function handleTemplateRequest(request: Request, operation: 'unlock
         const fingerprint = typeof body.password === 'string'
             ? digest(JSON.stringify([id, body.password])) : body.fingerprint;
         // An explicit password check must validate the credential even for owners.
-        await measure('authorize', () => authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup }, operation !== 'unlock', metadata.value));
+        try {
+            await measure('authorize', () => authorizeTemplate(request, deps.db, id, { fingerprint, backup: body.backup }, operation !== 'unlock' && typeof body.password !== 'string', metadata.value));
+        } catch (error) {
+            // Only catalog-visible metadata may be returned before authorization.
+            if (operation === 'read' && error instanceof ApiError && error.status === 403
+                && metadata.value.is_active === true && metadata.value.is_personal === true) {
+                return timedResponse({ error: error.message, templateTitle: metadata.value.title }, 403);
+            }
+            throw error;
+        }
         if (operation === 'unlock') return timedResponse({ unlocked: true });
         const { data, error } = await measure('template_read', async () => deps.db.from('templates')
             .select('id,title,description,is_personal,supports_multiple_drafts,html_blueprint,fields_config,template_tags(tags(id,slug,is_active,tag_groups(name)))')

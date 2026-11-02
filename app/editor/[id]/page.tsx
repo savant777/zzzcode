@@ -13,7 +13,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import { templateRoute, templatePreviewProfile } from '@/lib/template-tags';
 import { isHogthaiTemplate } from '@/lib/dashboard';
 import { useTemplateDashboard } from '@/components/DashboardContext';
-import { getRememberedTemplateUnlock, forgetTemplateUnlock } from '@/lib/template-unlock';
+import { getRememberedTemplateUnlock, forgetTemplateUnlock, rememberTemplateUnlock } from '@/lib/template-unlock';
 import { getDefaultValue } from '@/lib/field-defaults';
 import { defaultBlockCount, canAddBlock, canRemoveBlock } from '@/lib/block-defaults';
 import { BLOCK_ENTRY_ID, BLOCK_GROUPS, renewBlockIds, reconcileBlockGroups } from '@/lib/block-state';
@@ -126,6 +126,30 @@ export default function EditorPage() {
     const breadcrumbRoute = templateRoute(breadcrumbTags, `${fromGroup}:${fromTag}`);
     const breadcrumbPath = `${breadcrumbRoute.group}:${breadcrumbRoute.tag}`;
 
+    const handleUnlock = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (unlockBusy) return;
+        setUnlockBusy(true);
+        setUnlockError('');
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const result = await fetch('/api/templates/read', {
+                method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(30_000),
+                headers: { 'Content-Type': 'application/json',
+                    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+                body: JSON.stringify({ templateId: String(templateId), password: unlockPassword }),
+            });
+            if (!result.ok) throw new Error(result.status === 403 ? 'รหัสไม่ถูกต้อง' : result.status === 429 ? 'ลองหลายครั้งเกินไป กรุณารอสักครู่' : 'ไม่สามารถตรวจสอบรหัสได้ กรุณาลองอีกครั้ง');
+            const unlocked = await result.json();
+            unlockedTemplateRef.current = { id: String(templateId), template: unlocked.template };
+            await rememberTemplateUnlock(String(templateId), unlockPassword);
+            setUnlockPassword('');
+            setUnlockVersion(value => value + 1);
+        } catch (error) {
+            setUnlockError(error instanceof Error ? error.message : 'ไม่สามารถปลดล็อกได้');
+        } finally { setUnlockBusy(false); }
+    };
+
     // --- 1. States ---
     const [modalType, setModalType] = useState<'clear_draft' | 'clear_current_draft' | 'delete_draft' | 'rename_draft' | 'backup_link' | 'backup_conflict' | 'backup_open' | 'backup_unavailable' | null>(null);
     const [pendingRemoteBackup, setPendingRemoteBackup] = useState<BackupConnection | null>(null);
@@ -140,11 +164,18 @@ export default function EditorPage() {
     const [backupReady, setBackupReady] = useState(false);
     const [conflictRevision, setConflictRevision] = useState<number | null>(null);
     const backupBusyRef = useRef(false);
+    const unlockedTemplateRef = useRef<{ id: string; template: any } | null>(null);
     const templateAccessRef = useRef<{ fingerprint?: string; backup?: { id: string; token: string } }>({});
     const currentTemplateRef = useRef(templateId);
     currentTemplateRef.current = templateId;
     const [backupLinkCopied, setBackupLinkCopied] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [lockedTemplateTitle, setLockedTemplateTitle] = useState('');
+    const [needsUnlock, setNeedsUnlock] = useState(false);
+    const [unlockPassword, setUnlockPassword] = useState('');
+    const [unlockBusy, setUnlockBusy] = useState(false);
+    const [unlockError, setUnlockError] = useState('');
+    const [unlockVersion, setUnlockVersion] = useState(0);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [renameDraftName, setRenameDraftName] = useState('');
 
@@ -223,6 +254,8 @@ export default function EditorPage() {
         const initEditorPage = async () => {
             setLoading(true);
             setLoadError(null);
+            setNeedsUnlock(false);
+            setLockedTemplateTitle('');
             if (templateId) {
                 const fingerprint = await getRememberedTemplateUnlock(String(templateId));
                 let backupCredential: { id: string; token: string } | undefined;
@@ -234,6 +267,11 @@ export default function EditorPage() {
                 templateAccessRef.current = { fingerprint: fingerprint || undefined, backup: backupCredential };
                 let template;
                 try {
+                    const unlocked = unlockedTemplateRef.current;
+                    unlockedTemplateRef.current = null;
+                    if (unlocked?.id === String(templateId)) {
+                        template = unlocked.template;
+                    } else {
                     const { data: { session } } = await supabase.auth.getSession();
                     const result = await fetch('/api/templates/read', {
                         method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(30_000),
@@ -244,14 +282,15 @@ export default function EditorPage() {
                     if (cancelled) return;
                     if (result.status === 403) {
                         forgetTemplateUnlock(String(templateId));
-                        toast.error('ACCESS_DENIED: Please unlock this template from the dashboard.');
-                        const query = new URLSearchParams({ group: fromGroup, tag: fromTag, unlock: String(templateId) });
-                        router.replace(`/?${query}`);
+                        setNeedsUnlock(true);
+                        const metadata = await result.json();
+                        if (!cancelled) setLockedTemplateTitle(typeof metadata.templateTitle === 'string' ? metadata.templateTitle : '');
                         return;
                     }
                     if (!result.ok) throw new Error(result.status === 429
                         ? 'Too many requests. Please try again later.' : 'Unable to load template. Please retry.');
                     template = (await result.json()).template;
+                    }
                     if (!template || typeof template.html_blueprint !== 'string' || !Array.isArray(template.fields_config)) {
                         throw new Error('Template data is incomplete. Please retry or contact the template creator.');
                     }
@@ -379,7 +418,7 @@ export default function EditorPage() {
         initEditorPage();
 
         return () => { cancelled = true; };
-    }, [templateId, router]);
+    }, [templateId, router, unlockVersion]);
 
     useEffect(() => {
         if (loading || !activeDraftId) return;
@@ -993,7 +1032,27 @@ export default function EditorPage() {
 
                 <div className="flex-1 lg:flex overflow-y-auto lg:overflow-hidden px-4 mb-4 scrollbar-hide">
                     <div role={loadError ? 'alert' : 'status'} className="min-h-full flex-1 flex flex-col gap-4 items-center justify-center border border-dashed border-(--primary)/20 text-xs tracking-widest p-4 text-center">
-                        <span className={loadError ? 'text-(--foreground)/75' : 'opacity-20 uppercase'}>{loadError || 'Fetching_Stored_Data...'}</span>
+                        {needsUnlock ? <Modal isOpen={needsUnlock} onClose={() => router.push(`/?group=${encodeURIComponent(fromGroup)}&tag=${encodeURIComponent(fromTag)}`)} title="Authentication Required">
+                            <form onSubmit={handleUnlock} className="space-y-4 text-left tracking-normal">
+                                <div className="flex items-center gap-2 text-(--primary) mb-2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                    </svg>
+                                    <span className="text-xs uppercase font-bold tracking-widest">Security_Check</span>
+                                </div>
+                                <p className="text-white/60 text-xs leading-relaxed">
+                                    เทมเพลต{lockedTemplateTitle ? <> <span className="text-(--primary)">&quot;{lockedTemplateTitle}&quot;</span> </> : 'นี้'}ถูกล็อกไว้ <br />
+                                    กรุณาระบุรหัสผ่านเพื่อเข้าถึง Source Code
+                                </p>
+                                <input aria-label="Secret key" autoFocus type="password" autoComplete="current-password" required value={unlockPassword} onChange={event => setUnlockPassword(event.target.value)} placeholder="ENTER_SECRET_KEY..." className="w-full bg-black/20 border border-(--primary)/50 p-2 outline-none focus:border-(--primary)/75" />
+                                {unlockError && <p role="alert" className="text-xs text-red-500">{unlockError}</p>}
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => router.push(`/?group=${encodeURIComponent(fromGroup)}&tag=${encodeURIComponent(fromTag)}`)} className="cursor-pointer flex-1 py-2 border border-(--primary)/20 uppercase text-xs hover:bg-(--primary)/5 transition-colors">Abort</button>
+                                    <button type="submit" disabled={unlockBusy} className="cursor-pointer flex-1 py-2 bg-(--primary) text-black font-bold uppercase text-xs hover:brightness-110 disabled:opacity-50">{unlockBusy ? 'Verifying...' : 'Unlock_Access'}</button>
+                                </div>
+                            </form>
+                        </Modal> : <span className={loadError ? 'text-(--foreground)/75' : 'opacity-20 uppercase'}>{loadError || 'Fetching_Stored_Data...'}</span>}
                         {loadError && <button type="button" onClick={() => window.location.reload()} className="border border-(--primary)/50 px-4 py-2 text-(--primary) hover:bg-(--primary) hover:text-black cursor-pointer">RETRY</button>}
                     </div>
                 </div>

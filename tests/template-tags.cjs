@@ -121,7 +121,7 @@ const dashboard = renderToStaticMarkup(React.createElement(Breadcrumbs, { path: 
 assert.ok(dashboard.includes('SHOPS'));
 function findButton(element, title) {
     if (!React.isValidElement(element)) return;
-    if (element.type === 'button' && element.props.title === title) return element;
+    if (['button', 'a'].includes(element.type) && element.props.title === title) return element;
     for (const child of React.Children.toArray(element.props.children)) {
         const found = findButton(child, title);
         if (found) return found;
@@ -139,7 +139,7 @@ for (const [group, slug, title] of [
     for (const viewMode of ['line', 'grid']) {
         const card = TemplateCard({ item: { id: 42, template_tags: links }, viewMode,
             activeFilter: `${group}:${slug}`, canManage: true });
-        findButton(card, 'Use Template').props.onClick({ stopPropagation() {} });
+        findButton(card, 'Use Template').props.onClick({ stopPropagation() {}, preventDefault() {} });
         assert.equal(navigations.pop(), `/editor/42?group=${group}&tag=${slug}`);
         findButton(card, 'Edit Template').props.onClick({ stopPropagation() {} });
         assert.equal(navigations.pop(), `/edit/42?group=${group}&tag=${slug}`);
@@ -245,7 +245,7 @@ assert.deepEqual(ids(true, 'category:all', '', true), [1]);
 assert.deepEqual(ids(true, 'category:all', '', false, true), [2]);
 for (const viewMode of ['line', 'grid']) {
     const card = TemplateCard({ item: { id: 1, template_tags: [hogthaiTag, categoryTag] }, viewMode });
-    findButton(card, 'Use Template').props.onClick({ stopPropagation() {} });
+    findButton(card, 'Use Template').props.onClick({ stopPropagation() {}, preventDefault() {} });
     assert.equal(navigations.pop(), '/editor/1?group=category&tag=etc');
     function tagButtons(element) {
         if (!React.isValidElement(element)) return [];
