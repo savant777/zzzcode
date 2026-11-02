@@ -1,3 +1,4 @@
+import { binAllowed } from './bin-server';
 import { createHash, createHmac } from 'node:crypto';
 import { isIP } from 'node:net';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -9,11 +10,11 @@ type JsonObject = Record<string, unknown>;
 type Dependencies = { db: SupabaseClient; secret: string };
 
 type TemplateCredential = { fingerprint?: unknown; backup?: unknown };
-type TemplateAccess = { title?: string; id: number | string; is_personal: boolean; is_active: boolean; user_id: string | null };
+type TemplateAccess = { title?: string; is_secret?: boolean; id: number | string; is_personal: boolean; is_active: boolean; user_id: string | null };
 
 async function readTemplateAccess(db: SupabaseClient, id: string): Promise<TemplateAccess> {
     const { data, error } = await db.from('templates')
-        .select('id,title,is_personal,is_active,user_id').eq('id', id).maybeSingle();
+        .select('id,title,is_secret,is_personal,is_active,user_id').eq('id', id).maybeSingle();
     if (error) throw new ApiError(503, 'TEMPLATE_UNAVAILABLE');
     if (!data) throw new ApiError(403, 'TEMPLATE_ACCESS_REQUIRED');
     return data;
@@ -36,6 +37,9 @@ async function canManageTemplate(request: Request, db: SupabaseClient, userId: s
 
 async function authorizeTemplate(request: Request, db: SupabaseClient, id: string, credential: TemplateCredential, allowManagerBypass = true, access?: TemplateAccess) {
     const data = access ?? await readTemplateAccess(db, id);
+    if (data.is_secret === true && !binAllowed(request)) {
+        if (!await canManageTemplate(request, db, data.user_id, id)) throw new ApiError(403, 'BIN_ACCESS_REQUIRED');
+    }
     if (data.is_active !== true || data.is_personal === true) {
         const manager = await canManageTemplate(request, db, data.user_id, id);
         if (manager && allowManagerBypass) return;
@@ -94,7 +98,7 @@ export async function handleTemplateRequest(request: Request, operation: 'unlock
         } catch (error) {
             // Only catalog-visible metadata may be returned before authorization.
             if (operation === 'read' && error instanceof ApiError && error.status === 403
-                && metadata.value.is_active === true && metadata.value.is_personal === true) {
+                && metadata.value.is_personal === true && (!metadata.value.is_secret || binAllowed(request))) {
                 return timedResponse({ error: error.message, templateTitle: metadata.value.title }, 403);
             }
             throw error;
@@ -227,10 +231,11 @@ function tokenFrom(request: Request) {
     return match[1];
 }
 
-async function checkTemplate(db: SupabaseClient, id: string) {
-    const { data, error } = await db.from('templates').select('id,is_active').eq('id', id).maybeSingle();
+async function checkTemplate(db: SupabaseClient, id: string, request: Request) {
+    const { data, error } = await db.from('templates').select('id,is_active,is_secret').eq('id', id).maybeSingle();
     if (error) throw new ApiError(503, 'BACKUP_UNAVAILABLE');
     if (!data || data.is_active !== true) throw new ApiError(404, 'BACKUP_NOT_FOUND');
+    if (data.is_secret === true && !binAllowed(request)) throw new ApiError(403, 'BIN_ACCESS_REQUIRED');
 }
 
 function publicBackup(row: JsonObject) {
@@ -259,7 +264,7 @@ export async function handleBackupRequest(request: Request, operation: 'create' 
             await authorizeTemplate(request, db, tid, { fingerprint: body?.fingerprint, backup: body?.backup });
             // Backups remain unavailable for inactive templates, including new
             // backups created by a manager who is allowed to open the Editor.
-            await checkTemplate(db, tid);
+            await checkTemplate(db, tid, request);
             const idHex = createHmac('sha256', secret).update(`editor-backup-id:v1:${tid}:${requestKey}`).digest('hex');
             const requestId = `${idHex.slice(0, 8)}-${idHex.slice(8, 12)}-4${idHex.slice(13, 16)}-8${idHex.slice(17, 20)}-${idHex.slice(20, 32)}`;
             const newToken = createHmac('sha256', secret).update(`editor-backup-token:v1:${tid}:${requestKey}`).digest('base64url');
@@ -282,7 +287,7 @@ export async function handleBackupRequest(request: Request, operation: 'create' 
             .eq('template_id', tid).eq('access_token_hash', digest(token!)).maybeSingle();
         if (found.error) throw new ApiError(503, 'BACKUP_UNAVAILABLE');
         if (!found.data) throw new ApiError(404, 'BACKUP_NOT_FOUND');
-        await checkTemplate(db, tid);
+        await checkTemplate(db, tid, request);
         if (operation === 'read') return response(publicBackup(found.data));
 
         if (!Number.isSafeInteger(body?.expectedRevision) || (body!.expectedRevision as number) < 1) throw new ApiError(400, 'INVALID_REVISION');

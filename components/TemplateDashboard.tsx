@@ -19,6 +19,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import TemplateCard from '@/components/TemplateCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import PageLoading from '@/components/PageLoading';
+import { binHeaders } from '@/lib/bin-client';
 import Modal from '@/components/Modal';
 import TemplateSortFilter from '@/components/TemplateSortFilter';
 
@@ -40,15 +41,15 @@ type DashboardTemplate = {
     } | null }[];
 };
 
-export default function TemplateDashboard({ hogthai = false }: { hogthai?: boolean }) {
+export default function TemplateDashboard({ hogthai = false, bin = false }: { hogthai?: boolean; bin?: boolean }) {
     return (
         <Suspense fallback={<PageLoading label="Loading_Dashboard..." />}>
-            <Dashboard hogthai={hogthai} />
+            <Dashboard hogthai={hogthai} bin={bin} />
         </Suspense>
     )
 }
 
-function Dashboard({ hogthai }: { hogthai: boolean }) {
+function Dashboard({ hogthai, bin }: { hogthai: boolean; bin: boolean }) {
     const searchParams = useSearchParams();
     const router = useRouter();
 
@@ -124,9 +125,12 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
                     return acc;
                 }, {}));
             })();
-            const { data, error: catalogError } = await dashboardRequest('catalog', () => supabase
-                .rpc('template_catalog')
-                .overrideTypes<DashboardTemplate[], { merge: false }>());
+            const { data, error: catalogError } = bin
+                ? await fetch('/api/bin?catalog=' + (hogthai ? 'hogthai' : 'roleplayth'), { headers: binHeaders(), cache: 'no-store' }).then(async result => {
+                    if (result.status === 403) { localStorage.removeItem('zzzcode_bin'); window.location.reload(); }
+                    return { data: result.ok ? (await result.json()).templates : null, error: !result.ok };
+                })
+                : await dashboardRequest('catalog', () => supabase.rpc('template_catalog').overrideTypes<DashboardTemplate[], { merge: false }>());
             if (disposed) return;
             if (catalogError) toast.error('Unable to load templates. Please retry.', {
                 duration: Infinity, action: { label: 'Retry', onClick: () => window.location.reload() },
@@ -151,10 +155,11 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
             disposed = true;
             window.removeEventListener('resize', handleResize);
         };
-    }, [cacheVersion]);
+    }, [cacheVersion, bin, hogthai]);
 
     // --- UI ---
     const getPageTitle = () => {
+        if (bin && activeFilter.endsWith(':all')) return '.bin';
         const parts = activeFilter.split(':');
         if (parts[1] == 'all') {
             return `${parts[1]} ${parts[0]}`;
@@ -215,7 +220,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
     // --- 4. Event Handlers ---
 
     const handleTagClick = (groupName: string, tagSlug: string) => {
-        router.push(dashboardTagUrl(groupName, tagSlug, hogthai));
+        router.push(bin ? (hogthai ? '/hogthai/bin?' : '/bin?') + new URLSearchParams({ group: getGroupSlug(groupName), tag: tagSlug }) : dashboardTagUrl(groupName, tagSlug, hogthai));
     };
 
     const closeModal = () => {
@@ -323,7 +328,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
 
     return (
         <main className="grid main-grid-layout main-grid-area relative h-full overflow-hidden">
-            <SideNav isOpen={isOpen} setIsOpen={setIsOpen} activeFilter={activeFilter} hogthai={hogthai} />
+            <SideNav isOpen={isOpen} setIsOpen={setIsOpen} activeFilter={activeFilter} hogthai={hogthai} bin={bin} />
             
             <section className="section-grid-area flex flex-col h-full overflow-hidden relative font-Google-Code">
                 <div className="z-10 bg-(--background) p-4 pt-1">
@@ -332,7 +337,7 @@ function Dashboard({ hogthai }: { hogthai: boolean }) {
                             <span>►</span>
                         </button>
                     )}
-                    <Breadcrumbs path={activeFilter} dashboardBase={hogthai ? '/hogthai' : '/'} />
+                    <Breadcrumbs path={activeFilter} dashboardBase={bin ? (hogthai ? '/hogthai/bin' : '/bin') : (hogthai ? '/hogthai' : '/')} />
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 py-4 max-lg:py-2 border-b border-(--primary)">
                         {/* Title */}
                         <h1 className="text-3xl md:text-5xl font-Monomaniac-One text-(--primary) uppercase leading-none">

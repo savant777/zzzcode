@@ -7,9 +7,17 @@ import { dashboardRequest } from '@/lib/dashboard-cache';
 import { useDashboardCacheVersion } from '@/lib/use-dashboard-cache';
 import SkeletonNav from '@/components/SkeletonNav';
 import { getGroupSlug, compareTagOrder, TAG_GROUP_ORDER as GROUP_ORDER } from '@/lib/routes';
+import { binHeaders } from '@/lib/bin-client';
 import { dashboardTagUrl, HOGTHAI_GROUPS } from '@/lib/dashboard';
 
-export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = false }: any) {
+export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = false, bin = false }: any) {
+    const [binUnlocked, setBinUnlocked] = useState(false);
+    useEffect(() => {
+        const sync = () => setBinUnlocked(!!binHeaders()['X-Bin-Token']);
+        sync();
+        window.addEventListener('storage', sync);
+        return () => window.removeEventListener('storage', sync);
+    }, [bin, activeFilter]);
     const [isLoading, setIsLoading] = useState(true);
     const [menuData, setMenuData] = useState<any[]>([]);
     const activeGroup = (getGroupSlug(activeFilter?.split(':')[0]) || 'category').toUpperCase();
@@ -81,7 +89,7 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = fal
     }, [cacheVersion]);
 
     const handleFilterChange = (groupName: string, tagSlug: string) => {
-        router.push(dashboardTagUrl(groupName, tagSlug, hogthai));
+        router.push(bin ? (hogthai ? '/hogthai/bin?' : '/bin?') + new URLSearchParams({ group: getGroupSlug(groupName), tag: tagSlug }) : dashboardTagUrl(groupName, tagSlug, hogthai));
         
         if (window.innerWidth < 1024) {
             setIsOpen(false);
@@ -131,6 +139,13 @@ export default function SideNav({ isOpen, setIsOpen, activeFilter, hogthai = fal
                     ))
                 )}
             </div>
+            <Link href={bin ? (hogthai ? '/hogthai' : '/') : (hogthai ? '/hogthai/bin' : '/bin')} onClick={() => { if (window.innerWidth < 1024) setIsOpen(false); }}
+                className="mt-auto w-full p-2 px-3 border-t border-b border-(--primary)/20 text-(--primary) hover:bg-(--primary)/5 font-black tracking-widest flex justify-between items-center bg-(--background) cursor-pointer uppercase">
+                <span>{bin ? '.exit' : '.bin'}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="16" width="16" fill="currentColor" aria-label={binUnlocked ? 'Unlocked' : 'Locked'} className="shrink-0">
+                    <path d={binUnlocked ? 'M6,20H18V10H6V20Zm7.41-3.59Q14,15.83 14,15t-0.59-1.41T12,13t-1.41,0.59Q10,14.18 10,15t0.59,1.41T12,17t1.41-0.59ZM6,20V10V20Zm0,2q-0.82,0-1.41-0.59T4,20V10Q4,9.17 4.59,8.59T6,8h7V6q0-2.08 1.46-3.54T18,1t3.54,1.46T23,6H21q0-1.25-0.88-2.13T18,3T15.88,3.88T15,6V8h3q0.82,0 1.41,0.59T20,10V20q0,0.82-0.59,1.41T18,22H6Z' : 'M6,22q-0.82,0-1.41-0.59T4,20V10Q4,9.17 4.59,8.59T6,8H7V6Q7,3.92 8.46,2.46T12,1t3.54,1.46T17,6V8h1q0.82,0 1.41,0.59T20,10V20q0,0.82-0.59,1.41T18,22H6Zm0-2H18V10H6V20Zm7.41-3.59Q14,15.83 14,15t-0.59-1.41T12,13t-1.41,0.59Q10,14.18 10,15t0.59,1.41T12,17t1.41-0.59ZM9,8h6V6q0-1.25-0.88-2.13T12,3T9.88,3.88T9,6V8ZM6,20V10V20Z'} />
+                </svg>
+            </Link>
         </nav>
     );
 }

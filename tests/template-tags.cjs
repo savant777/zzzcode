@@ -224,7 +224,7 @@ assert.equal(dashboardTagUrl('category', 'food&drink'), '/?group=category&tag=fo
 // Exercise the actual dashboard filter, including search, tag and password filters.
 const dashboardSource = fs.readFileSync('components/TemplateDashboard.tsx', 'utf8');
 const filterBody = dashboardSource.slice(dashboardSource.indexOf('const result = templates.filter'), dashboardSource.indexOf('const sortedResult'));
-const filterCatalog = new Function('templates', 'hogthai', 'activeFilter', 'searchQuery', 'noPassOnly', 'passOnly', 'isHogthaiTemplate', 'getGroupSlug', 'creatorSession', 'canManageTemplate', ts.transpileModule(`${filterBody}\nreturn result;`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText);
+const filterCatalog = new Function('templates', 'hogthai', 'activeFilter', 'searchQuery', 'noPassOnly', 'passOnly', 'isHogthaiTemplate', 'getGroupSlug', 'creatorSession', 'canManageTemplate', ts.transpileModule(`const bin = false;\n${filterBody}\nreturn result;`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText);
 const catalog = [
     { id: 1, title: 'Public Chat', is_active: true, is_personal: false, template_tags: [hogthaiTag, categoryTag, creatorTag] },
     { id: 2, title: 'Private Chat', is_active: true, is_personal: true, template_tags: [hogthaiTag, categoryTag] },

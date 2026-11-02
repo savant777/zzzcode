@@ -6,7 +6,9 @@ const compiled = ts.transpileModule(fs.readFileSync('lib/editor-backup-api.ts', 
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const loaded = { exports: {} };
-new Function('exports', 'require', 'module', compiled)(loaded.exports, require, loaded);
+const binModule = { exports: {} };
+new Function('exports', 'require', 'module', ts.transpileModule(fs.readFileSync('lib/bin-server.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(binModule.exports, require, binModule);
+new Function('exports', 'require', 'module', compiled)(loaded.exports, name => name === './bin-server' ? binModule.exports : require(name), loaded);
 const fingerprint = (id, password) => createHash('sha256').update(JSON.stringify([id, password])).digest('hex');
 let password = 'secret';
 let row = { id: '1', is_active: true, is_personal: true, user_id: 'creator' };
@@ -55,6 +57,21 @@ const check = (credential = {}, headers = {}, operation = 'unlock') => loaded.ex
     body: JSON.stringify({ templateId: '1', ...credential }),
 }), operation, { db, secret: 'test-only' });
 async function run() {
+    process.env.BIN_PASSWORD = 'test-bin-secret';
+    const rememberedBin = binModule.exports.binToken();
+    const binRequest = token => new Request('http://localhost', { headers: { 'x-bin-token': token } });
+    assert.equal(binModule.exports.binAllowed(binRequest(rememberedBin)), true);
+    assert.equal(binModule.exports.binAllowed(binRequest(rememberedBin + 'tampered')), false);
+    process.env.BIN_PASSWORD = 'rotated';
+    assert.equal(binModule.exports.binAllowed(binRequest(rememberedBin)), false);
+    process.env.BIN_PASSWORD = 'test-bin-secret';
+    row.is_secret = true;
+    assert.equal((await check({ password }, {}, 'read')).status, 403);
+    const binAuth = { 'x-bin-token': binModule.exports.binToken() };
+    assert.equal((await check({ password }, binAuth, 'read')).status, 200);
+    assert.equal((await check({ password: 'wrong' }, binAuth, 'read')).status, 403);
+    row.is_secret = false;
+    contentReads = 0;
     const valid = await check({ password });
     assert.equal(valid.status, 200);
     assert.equal(valid.headers.get('cache-control'), 'no-store');
@@ -82,6 +99,8 @@ async function run() {
     row.is_active = false;
     assert.equal((await check({ backup }, {}, 'read')).status, 403);
     assert.equal((await check({ password }, {}, 'read')).status, 403);
+    assert.equal((await check({}, {}, 'read')).status, 403);
+    assert.equal((await check({ password: 'wrong' }, {}, 'read')).status, 403);
     const auth = { authorization: 'Bearer valid-session' };
     assert.equal((await check({}, auth, 'read')).status, 200, 'Creator can open their inactive template');
     assert.equal((await check({ password: 'wrong' }, auth)).status, 403, 'Creator must not validate an incorrect password');

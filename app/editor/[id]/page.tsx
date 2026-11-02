@@ -1,4 +1,6 @@
 "use client";
+import { binHeaders } from '@/lib/bin-client';
+
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
@@ -135,7 +137,7 @@ export default function EditorPage() {
             const { data: { session } } = await supabase.auth.getSession();
             const result = await fetch('/api/templates/read', {
                 method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(30_000),
-                headers: { 'Content-Type': 'application/json',
+                headers: { ...binHeaders(), 'Content-Type': 'application/json',
                     ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
                 body: JSON.stringify({ templateId: String(templateId), password: unlockPassword }),
             });
@@ -281,9 +283,11 @@ export default function EditorPage() {
                     });
                     if (cancelled) return;
                     if (result.status === 403) {
+                        const denied = await result.json();
+                        if (denied.error === 'BIN_ACCESS_REQUIRED') { router.replace('/bin'); return; }
                         forgetTemplateUnlock(String(templateId));
                         setNeedsUnlock(true);
-                        const metadata = await result.json();
+                        const metadata = denied;
                         if (!cancelled) setLockedTemplateTitle(typeof metadata.templateTitle === 'string' ? metadata.templateTitle : '');
                         return;
                     }

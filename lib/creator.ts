@@ -11,6 +11,7 @@ export type CreatorProfile = {
     slug: string | null;
     role: CreatorRole;
     is_active: boolean;
+    can_manage_secret?: boolean;
     created_at?: string;
     updated_at?: string;
 };
@@ -115,7 +116,7 @@ const readCurrentCreator = async (forDisplay = false, generation?: number): Prom
 
         const { data: creator, error: creatorError } = await supabase
             .from('creators')
-            .select('user_id, discord_id, discord_username, display_name, slug, role, is_active, created_at, updated_at')
+            .select('user_id, discord_id, discord_username, display_name, slug, role, is_active, can_manage_secret, created_at, updated_at')
             .eq('user_id', user.id)
             .maybeSingle();
         if (creatorError) return { ...unavailable, user };

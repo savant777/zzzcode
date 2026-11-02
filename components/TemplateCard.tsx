@@ -16,7 +16,7 @@ function CreatorBadge({ name }: { name: string }) {
     );
 }
 
-export default function TemplateCard({ item, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onActivate, isActivating }: any) {
+export default function TemplateCard({ item, bin = false, viewMode, canManage, creatorName, activeFilter, onTagClick, onDelete, onActivate, isActivating }: any) {
     const router = useRouter();
     const visibleTags = sortedVisibleTemplateTags(item.template_tags);
     const hogthai = isHogthaiTemplate(item.template_tags);
@@ -84,7 +84,7 @@ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
                                     e.stopPropagation();
                                     const group = getGroupSlug(t.tags.tag_groups.name);
                                     const tagSlug = t.tags.slug.toLowerCase();
-                                    router.push(dashboardTagUrl(group, tagSlug, hogthai));
+                                    router.push(bin ? (hogthai ? '/hogthai/bin?' : '/bin?') + new URLSearchParams({ group, tag: tagSlug }) : dashboardTagUrl(group, tagSlug, hogthai));
                                 }}
                                 className={`zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase ${inactive ? '' : 'hover:bg-(--background) hover:text-(--foreground)'} transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap`}
                             >
@@ -181,7 +181,7 @@ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
                             e.stopPropagation();
                             const group = getGroupSlug(t.tags.tag_groups.name);
                             const tagSlug = t.tags.slug.toLowerCase();
-                            router.push(dashboardTagUrl(group, tagSlug, hogthai));
+                            router.push(bin ? (hogthai ? '/hogthai/bin?' : '/bin?') + new URLSearchParams({ group, tag: tagSlug }) : dashboardTagUrl(group, tagSlug, hogthai));
                         }}
                         className={`zzzcode-tag-btn border border-(--foreground) bg-(--foreground) text-(--background) px-1.5 py-0.5 text-xs font-bold lowercase ${inactive ? '' : 'hover:bg-(--background) hover:text-(--foreground)'} transition-all duration-300 ease-in-out cursor-pointer whitespace-nowrap`}
                     >
@@ -209,7 +209,7 @@ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
                                             e.stopPropagation();
                                             const group = getGroupSlug(t.tags.tag_groups.name);
                                             const tagSlug = t.tags.slug.toLowerCase();
-                                            router.push(dashboardTagUrl(group, tagSlug, hogthai));
+                                            router.push(bin ? (hogthai ? '/hogthai/bin?' : '/bin?') + new URLSearchParams({ group, tag: tagSlug }) : dashboardTagUrl(group, tagSlug, hogthai));
                                         }}
                                         className="cursor-pointer text-(--primary) text-[10px] font-bold text-left"
                                     >

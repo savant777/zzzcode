@@ -1,3 +1,4 @@
+import { binHeaders } from './bin-client';
 import type { CopyDraft } from './editor-local-copy';
 
 export type BackupPayload = { activeDraftId: string; drafts: CopyDraft[] };
@@ -59,7 +60,7 @@ export function parseBackupLink(fragment: string, templateId: string): Pick<Back
 }
 
 async function request(url: string, options: RequestInit): Promise<BackupResult> {
-    const response = await fetch(url, { ...options, cache: 'no-store', signal: AbortSignal.timeout(30_000) });
+    const response = await fetch(url, { ...options, headers: { ...binHeaders(), ...options.headers }, cache: 'no-store', signal: AbortSignal.timeout(30_000) });
     let result;
     try { result = await response.json(); } catch { throw new BackupRequestError(response.status, 'BACKUP_UNAVAILABLE'); }
     if (!response.ok) throw new BackupRequestError(response.status, result.error || result.status || 'BACKUP_UNAVAILABLE', result.revision,

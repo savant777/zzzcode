@@ -82,6 +82,7 @@ export default function EditTemplatePage() {
         description: '',
         preview_url: '',
         is_personal: false,
+        is_secret: false,
         supports_multiple_drafts: false,
         password: '',
         html_blueprint: '',
@@ -164,6 +165,7 @@ export default function EditTemplatePage() {
                         description: template.description,
                         preview_url: template.preview_url,
                         is_personal: template.is_personal,
+                        is_secret: template.is_secret === true,
                         supports_multiple_drafts: template.supports_multiple_drafts || false,
                         password: storedPassword,
                         html_blueprint: template.html_blueprint,
@@ -566,6 +568,7 @@ export default function EditTemplatePage() {
                             <div className="flex flex-col gap-1">
                                 <label className="text-sm uppercase opacity-70">Personal_Info</label>
                                 <div className="flex gap-2">
+                                    {(creatorSession?.isOwner || creatorSession?.creator?.can_manage_secret) && <label className="flex items-center gap-2 mb-3 text-xs text-(--primary)"><input type="checkbox" checked={formData.is_secret} onChange={e => setFormData({...formData, is_secret: e.target.checked})} />Secret template (.bin)</label>}
                                     <label className="flex h-full aspect-square items-center gap-2 cursor-pointer group relative">
                                         <input 
                                             type="checkbox"

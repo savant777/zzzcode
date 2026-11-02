@@ -6,7 +6,9 @@ const compiled = ts.transpileModule(fs.readFileSync('lib/editor-backup-api.ts', 
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const loaded = { exports: {} };
-new Function('exports', 'require', 'module', compiled)(loaded.exports, require, loaded);
+const binModule = { exports: {} };
+new Function('exports', 'require', 'module', ts.transpileModule(fs.readFileSync('lib/bin-server.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(binModule.exports, require, binModule);
+new Function('exports', 'require', 'module', compiled)(loaded.exports, name => name === './bin-server' ? binModule.exports : require(name), loaded);
 const { handleBackupRequest } = loaded.exports;
 const rows = new Map();
 let rpcCalls = 0;
@@ -121,7 +123,7 @@ async function run() {
     try {
         const freshHandler = () => {
             const module = { exports: {} };
-            new Function('exports', 'require', 'module', compiled)(module.exports, require, module);
+            new Function('exports', 'require', 'module', compiled)(module.exports, name => name === './bin-server' ? binModule.exports : require(name), module);
             return module.exports.handleBackupRequest;
         };
         const firstInstance = await freshHandler()(request('GET', null, {
