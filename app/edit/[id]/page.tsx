@@ -565,10 +565,25 @@ export default function EditTemplatePage() {
                                 </div>
                             </div>
 
+                            {(creatorSession?.isOwner || creatorSession?.creator?.can_manage_secret) && (
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-sm uppercase opacity-70">Secret_Template</label>
+                                    <label className="flex gap-2 items-center cursor-pointer group relative">
+                                        <input type="checkbox" className="sr-only peer" checked={formData.is_secret} onChange={e => setFormData({...formData, is_secret: e.target.checked})} />
+                                        <div className="w-[42px] h-[42px] shrink-0 bg-black/20 border border-(--primary)/50 peer-focus-visible:border-(--primary) transition-all duration-300 flex items-center justify-center p-2">
+                                            {formData.is_secret && <div className="w-4/5 h-4/5 bg-(--primary) animate-in zoom-in-50 duration-200" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0 font-Google-Sans px-1 py-[6.75px]">
+                                            <p className="text-xs font-black uppercase text-(--primary)">Secret template (.bin)</p>
+                                            <p className="text-[10px] leading-tight text-(--foreground)/40">Show this template in .bin instead of the public dashboard.</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            )}
+
                             <div className="flex flex-col gap-1">
                                 <label className="text-sm uppercase opacity-70">Personal_Info</label>
                                 <div className="flex gap-2">
-                                    {(creatorSession?.isOwner || creatorSession?.creator?.can_manage_secret) && <label className="flex items-center gap-2 mb-3 text-xs text-(--primary)"><input type="checkbox" checked={formData.is_secret} onChange={e => setFormData({...formData, is_secret: e.target.checked})} />Secret template (.bin)</label>}
                                     <label className="flex h-full aspect-square items-center gap-2 cursor-pointer group relative">
                                         <input 
                                             type="checkbox"
