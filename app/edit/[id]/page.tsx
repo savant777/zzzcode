@@ -125,10 +125,10 @@ export default function EditTemplatePage() {
             setCreatorSession(session);
 
             const { data: allTags } = await supabase.from('tags')
-                .select('id, name, slug, user_id, tag_groups(name)').eq('is_active', true);
+                .select('id, name, slug, user_id, display_on, tag_groups(name)').eq('is_active', true);
 
             if (allTags) {
-                setAvailableTags(sortTagsByGroup(allTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators' && (session.isOwner || tag.user_id === null || tag.user_id === session.user?.id))));
+                setAvailableTags(sortTagsByGroup(allTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators' && (session.isOwner || session.creator?.can_manage_secret || tag.display_on?.includes('roleplayth') || tag.display_on?.includes('hogthai')) && (session.isOwner || tag.user_id === null || tag.user_id === session.user?.id))));
             }
 
             if (templateId) {
@@ -330,12 +330,14 @@ export default function EditTemplatePage() {
 
             // Refresh active IDs in case a tag was disabled while this form was open.
             const activeTagsQuery = supabase
-                .from('tags').select('id, user_id, tag_groups(name)').eq('is_active', true);
+                .from('tags').select('id, user_id, display_on, tag_groups(name)').eq('is_active', true);
 
             const { data: activeTags, error: activeTagsError } = await activeTagsQuery;
             if (activeTagsError) throw activeTagsError;
             const activeIds = new Set((activeTags || []).map(tag => String(tag.id)));
-            const selectableIds = availableTags.map(tag => String(tag.id)).filter(id => activeIds.has(id));
+            const selectableIds = availableTags.map(tag => String(tag.id)).filter(id => activeIds.has(id)
+                && (creatorSession.isOwner || creatorSession.creator?.can_manage_secret
+                    || activeTags?.some(tag => String(tag.id) === id && (tag.display_on?.includes('roleplayth') || tag.display_on?.includes('hogthai')))));
             const changes = templateTagChanges(
                 (currentLinks || []).map(link => String(link.tags_id)),
                 selectedTags.map(String),

@@ -85,7 +85,7 @@ export default function AddTemplatePage() {
 
             const { data } = await supabase
                 .from('tags')
-                .select('id, group_id, name, slug, user_id, tag_groups(name)')
+                .select('id, group_id, name, slug, user_id, display_on, tag_groups(name)')
                 .eq('is_active', true);
 
             let nextTags = data || [];
@@ -111,7 +111,7 @@ export default function AddTemplatePage() {
                             slug: session.creator.slug || null,
                             is_active: true,
                         }])
-                        .select('id, group_id, name, slug, user_id, tag_groups(name)')
+                        .select('id, group_id, name, slug, user_id, display_on, tag_groups(name)')
                         .single();
 
                     if (creatorTagError) {
@@ -129,7 +129,7 @@ export default function AddTemplatePage() {
             const allowedCreditIds = (allowedCredits || []).map(String);
             setCreditOptions(nextTags.filter((tag: any) => allowedCreditIds.includes(String(tag.id)) && String(tag.id) !== String(creatorTag?.id))
                 .map((tag: any) => ({ id: String(tag.id), name: tag.name })));
-            setAvailableTags(sortTagsByGroup(nextTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators' && (tag.user_id === null || tag.user_id === session.user?.id))));
+            setAvailableTags(sortTagsByGroup(nextTags.filter((tag: any) => getGroupSlug(tag.tag_groups?.name) !== 'creators' && (session.isOwner || session.creator?.can_manage_secret || tag.display_on?.includes('roleplayth') || tag.display_on?.includes('hogthai')) && (tag.user_id === null || tag.user_id === session.user?.id))));
 
             const savedDraft = localStorage.getItem(STORAGE_KEY);
             if (savedDraft) {
