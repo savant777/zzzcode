@@ -278,7 +278,7 @@ export default function EditorPage() {
                     const { data: { session } } = await supabase.auth.getSession();
                     const result = await fetch('/api/templates/read', {
                         method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(30_000),
-                        headers: { 'Content-Type': 'application/json',
+                        headers: { ...binHeaders(), 'Content-Type': 'application/json',
                             ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
                         body: JSON.stringify({ templateId: String(templateId), ...templateAccessRef.current }),
                     });
