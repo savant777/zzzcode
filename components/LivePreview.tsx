@@ -148,6 +148,11 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
         updatePreviewHtml();
     }, [html]);
 
+    // Match RoleplayTH's limited-quirks mode: HTML5 standards mode changes
+    // inline icon line boxes and can expand aspect-ratio badges beyond squares.
+    const doctype = profile === 'roleplayth'
+        ? '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">'
+        : '<!DOCTYPE html>';
     const styles = profile === 'hogthai' ? `<style>
         html { margin:0; padding:0; width:var(--preview-layout-width,1440px); overflow-x:visible; }
         body { margin:0; padding:0; width:100%; overflow-x:visible; }
@@ -267,6 +272,18 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
         </style>
     `;
 
+    const previewDocument = `${doctype}<html><head><meta name="viewport" content="width=device-width, initial-scale=1">${styles}</head><body>${profile === 'hogthai' ? '<div class="preview-post"><div class="preview-post-cell"><div class="postcolor" data-preview-content></div></div></div>' : '<div class="post_body scaleimages" data-preview-content></div>'}</body></html>`;
+
+    // srcdoc documents always use standards mode, regardless of their DOCTYPE.
+    // A same-origin Blob document preserves the forum's limited-quirks mode
+    // while retaining DOM access for live updates. Content edits don't reload it.
+    useEffect(() => {
+        if (profile !== 'roleplayth' || !iframeRef.current) return;
+        const url = URL.createObjectURL(new Blob([previewDocument], { type: 'text/html' }));
+        iframeRef.current.src = url;
+        return () => URL.revokeObjectURL(url);
+    }, [profile, previewDocument]);
+
     const cropOffset = profile === 'hogthai' && contentCenter !== null
         ? contentCenter - visibleWidth / 2
         : Math.max(0, (viewportWidth - visibleWidth) / 2) + (profile === 'hogthai' ? 8 : 0);
@@ -292,7 +309,7 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
                 <iframe
                     title="Live preview"
                     ref={iframeRef}
-                    srcDoc={`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${styles}</head><body>${profile === 'hogthai' ? '<div class="preview-post"><div class="preview-post-cell"><div class="postcolor" data-preview-content></div></div></div>' : '<div class="post_body scaleimages" data-preview-content></div>'}</body></html>`}
+                    srcDoc={profile === 'hogthai' ? previewDocument : undefined}
                     style={{
                         position: 'absolute',
                         top: 0,

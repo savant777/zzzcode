@@ -19,6 +19,10 @@ for (const args of [[1440, 900, 700, 650], [1440, 900, 700, 300], [390, 844, 340
 
 // Exercise the component's sizing effect and HTML updates without a browser.
 // Any attempt to measure content fails; viewport sizing must use only the panel.
+let previewBlob;
+const revokedUrls = [];
+URL.createObjectURL = blob => { previewBlob = blob; return 'blob:preview-test'; };
+URL.revokeObjectURL = url => revokedUrls.push(url);
 const state = [], refs = [], effects = [], observed = [], events = {};
 let stateIndex = 0, refIndex = 0;
 const React = {
@@ -64,23 +68,25 @@ for (const html of [
     assert.ok(tree.props.className.includes('overflow-hidden'));
     const iframe = tree.props.children.props.children;
     assert.equal(iframe.props.style.height, `${expected}px`);
-    assert.ok(iframe.props.srcDoc.includes('overflow-y: auto'));
+    assert.equal(iframe.props.srcDoc, undefined);
+    assert.equal(frame.src, 'blob:preview-test');
 }
-const initialSrcDoc = render('Before resize').props.children.props.children.props.srcDoc;
+render('Before resize');
+const initialSrc = frame.src;
 window.innerWidth = 412;
 panel.offsetWidth = 346;
 events.resize();
 const mobileTree = render('After resize');
 effects[1]();
 const mobileIframe = mobileTree.props.children.props.children;
-assert.equal(mobileIframe.props.srcDoc, initialSrcDoc, 'Resize must not reload iframe document');
+assert.equal(frame.src, initialSrc, 'Resize must not reload iframe document');
 assert.equal(properties['--preview-post-width'], '605px');
 assert.equal(mobileIframe.props.style.position, 'absolute');
 assert.equal(mobileIframe.props.style.left, '50%');
 assert.equal(mobileIframe.props.style.minWidth, '980px');
 assert.equal(mobileIframe.props.style.transform, `scale(${state[0]}) translateX(-50%)`);
 assert.equal(mobileIframe.props.style.transformOrigin, 'top left');
-assert.ok(mobileIframe.props.srcDoc.includes('name="viewport"'));
+assert.equal(mobileIframe.props.srcDoc, undefined);
 window.innerHeight = 400;
 events.resize();
 assert.equal(state[1], 400);
@@ -103,3 +109,14 @@ assert.equal(visualEvents.resize, undefined);
 assert.equal(events.pageshow, undefined);
 assert.equal(events.resize, undefined);
 console.log('Preview viewport bounds, content-independent height, HTML updates and resize checks passed.');
+assert.deepEqual(revokedUrls, ['blob:preview-test']);
+previewBlob.text().then(document => {
+    assert.ok(document.startsWith('<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"'));
+    assert.ok(document.includes('name="viewport"'));
+    assert.ok(document.includes('overflow-y: auto'));
+    stateIndex = refIndex = 0;
+    const hogthai = LivePreview({ html: '', profile: 'hogthai' }).props.children.props.children;
+    assert.equal(hogthai.props.src, undefined);
+    assert.ok(hogthai.props.srcDoc.startsWith('<!DOCTYPE html>'));
+    console.log('RoleplayTH Blob document and Hogthai srcDoc isolation passed.');
+}).catch(error => { console.error(error); process.exitCode = 1; });
