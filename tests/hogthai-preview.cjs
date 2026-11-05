@@ -35,7 +35,7 @@ for (const [width,panel] of [[1920,902],[1024,454],[768,702],[425,359]]) {
     assert.ok(Math.abs(wide.scale-panel/1120)<0.0001);
     assert.ok(wide.visibleWidth>=1120-0.001,'Wide template must fit without cropping');
 }
-assert.equal(previewViewport(1440,900,700,400).postBodyWidth,961);
+assert.equal(previewViewport(1440,900,700,400).postBodyWidth,947.5);
 console.log('Hogthai nested tags, line breaks, fonts, source export and viewport sizing passed.');
 
 const { templatePreviewProfile } = load('lib/template-tags.ts', { './routes': load('lib/routes.ts') });

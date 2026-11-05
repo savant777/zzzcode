@@ -10,6 +10,18 @@ function load(path, dependencies = {}) {
     return module.exports;
 }
 const sizing = load('lib/preview-viewport.ts');
+for (const [width, expectedViewport, expectedPost] of [
+    [390, 980, 590], [980, 980, 590], [1350, 1350, 960],
+    [1440, 1440, 947.5], [1920, 1920, 1305], [2560, 2560, 1305],
+]) {
+    const widePanel = sizing.previewViewport(width, 900, 900, 600);
+    const narrowPanel = sizing.previewViewport(width, 900, 350, 600);
+    assert.equal(widePanel.viewportWidth, expectedViewport);
+    assert.equal(widePanel.postBodyWidth, expectedPost);
+    assert.equal(narrowPanel.viewportWidth, widePanel.viewportWidth, 'Panel width must not change vw or media queries');
+    assert.equal(narrowPanel.postBodyWidth, widePanel.postBodyWidth, 'Panel width must not reflow percentage templates');
+    assert.ok(narrowPanel.scale <= widePanel.scale);
+}
 for (const args of [[1440, 900, 700, 650], [1440, 900, 700, 300], [390, 844, 340, 220], [844, 390, 700, 120]]) {
     const size = sizing.previewViewport(...args);
     assert.ok(size.iframeHeight > 0 && size.iframeHeight <= args[1]);
@@ -80,7 +92,7 @@ const mobileTree = render('After resize');
 effects[1]();
 const mobileIframe = mobileTree.props.children.props.children;
 assert.equal(frame.src, initialSrc, 'Resize must not reload iframe document');
-assert.equal(properties['--preview-post-width'], '605px');
+assert.equal(properties['--preview-post-width'], '590px');
 assert.equal(mobileIframe.props.style.position, 'absolute');
 assert.equal(mobileIframe.props.style.left, '50%');
 assert.equal(mobileIframe.props.style.minWidth, '980px');
@@ -97,7 +109,7 @@ window.innerHeight = 375;
 events.pageshow();
 assert.equal(state[1], 375, 'Returning to the page refreshes viewport bounds');
 frameEvents.load();
-assert.equal(properties['--preview-post-width'], '605px', 'Late iframe load receives the current mobile width');
+assert.equal(properties['--preview-post-width'], '590px', 'Late iframe load receives the current mobile width');
 cleanup.forEach(fn => fn?.());
 stateIndex = refIndex = 0;
 const hogthaiIframe = LivePreview({ html: '', profile: 'hogthai' }).props.children.props.children;
