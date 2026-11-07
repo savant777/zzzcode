@@ -128,6 +128,15 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
 
         let contentObserver: ResizeObserver | undefined;
         const handleIframeLoad = () => {
+            const doc = iframe.contentDocument;
+            if (profile === 'roleplayth' && doc?.URL === 'about:blank') return;
+            if (profile === 'roleplayth' && doc && !doc.querySelector('[data-preview-content]')) {
+                // Keep a real HTTP document URL so nested players receive a Referer.
+                // document.write also preserves the forum's limited-quirks DOCTYPE.
+                doc.open();
+                doc.write(previewDocument);
+                doc.close();
+            }
             updatePreviewHtml();
             if (profile === 'hogthai') {
                 contentObserver?.disconnect();
@@ -274,16 +283,6 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
 
     const previewDocument = `${doctype}<html><head><meta name="viewport" content="width=device-width, initial-scale=1">${styles}</head><body>${profile === 'hogthai' ? '<div class="preview-post"><div class="preview-post-cell"><div class="postcolor" data-preview-content></div></div></div>' : '<div class="post_body scaleimages" data-preview-content></div>'}</body></html>`;
 
-    // srcdoc documents always use standards mode, regardless of their DOCTYPE.
-    // A same-origin Blob document preserves the forum's limited-quirks mode
-    // while retaining DOM access for live updates. Content edits don't reload it.
-    useEffect(() => {
-        if (profile !== 'roleplayth' || !iframeRef.current) return;
-        const url = URL.createObjectURL(new Blob([previewDocument], { type: 'text/html' }));
-        iframeRef.current.src = url;
-        return () => URL.revokeObjectURL(url);
-    }, [profile, previewDocument]);
-
     const cropOffset = profile === 'hogthai' && contentCenter !== null
         ? contentCenter - visibleWidth / 2
         : Math.max(0, (viewportWidth - visibleWidth) / 2) + (profile === 'hogthai' ? 8 : 0);
@@ -309,6 +308,8 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
                 <iframe
                     title="Live preview"
                     ref={iframeRef}
+                    src={profile === 'roleplayth' ? '/preview/roleplayth' : undefined}
+                    referrerPolicy="strict-origin-when-cross-origin"
                     srcDoc={profile === 'hogthai' ? previewDocument : undefined}
                     style={{
                         position: 'absolute',

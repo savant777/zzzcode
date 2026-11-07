@@ -31,10 +31,6 @@ for (const args of [[1440, 900, 700, 650], [1440, 900, 700, 300], [390, 844, 340
 
 // Exercise the component's sizing effect and HTML updates without a browser.
 // Any attempt to measure content fails; viewport sizing must use only the panel.
-let previewBlob;
-const revokedUrls = [];
-URL.createObjectURL = blob => { previewBlob = blob; return 'blob:preview-test'; };
-URL.revokeObjectURL = url => revokedUrls.push(url);
 const state = [], refs = [], effects = [], observed = [], events = {};
 let stateIndex = 0, refIndex = 0;
 const React = {
@@ -81,7 +77,7 @@ for (const html of [
     const iframe = tree.props.children.props.children;
     assert.equal(iframe.props.style.height, `${expected}px`);
     assert.equal(iframe.props.srcDoc, undefined);
-    assert.equal(frame.src, 'blob:preview-test');
+    assert.equal(iframe.props.src, '/preview/roleplayth');
 }
 render('Before resize');
 const initialSrc = frame.src;
@@ -121,14 +117,29 @@ assert.equal(visualEvents.resize, undefined);
 assert.equal(events.pageshow, undefined);
 assert.equal(events.resize, undefined);
 console.log('Preview viewport bounds, content-independent height, HTML updates and resize checks passed.');
-assert.deepEqual(revokedUrls, ['blob:preview-test']);
-previewBlob.text().then(document => {
-    assert.ok(document.startsWith('<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"'));
-    assert.ok(document.includes('name="viewport"'));
-    assert.ok(document.includes('overflow-y: auto'));
-    stateIndex = refIndex = 0;
-    const hogthai = LivePreview({ html: '', profile: 'hogthai' }).props.children.props.children;
-    assert.equal(hogthai.props.src, undefined);
-    assert.ok(hogthai.props.srcDoc.startsWith('<!DOCTYPE html>'));
-    console.log('RoleplayTH Blob document and Hogthai srcDoc isolation passed.');
-}).catch(error => { console.error(error); process.exitCode = 1; });
+// A fresh HTTP document is populated once and keeps its URL across edits.
+let writtenDocument = '';
+let hasPost = false;
+doc.querySelector = () => hasPost ? post : null;
+doc.open = () => {};
+doc.write = html => { writtenDocument = html; hasPost = true; };
+doc.close = () => {};
+stateIndex = refIndex = 0;
+effects.length = 0;
+LivePreview({ html: '<p>Video</p>' });
+effects[3]();
+effects[2]();
+assert.ok(writtenDocument.startsWith('<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"'));
+assert.ok(writtenDocument.includes('name="viewport"'));
+assert.ok(writtenDocument.includes('overflow-y: auto'));
+assert.equal(post.innerHTML, '<p>Video</p>');
+doc.write = () => { throw new Error('Loaded preview must not be rewritten'); };
+frameEvents.load();
+stateIndex = refIndex = 0;
+const hogthai = LivePreview({ html: '', profile: 'hogthai' }).props.children.props.children;
+assert.equal(hogthai.props.src, undefined);
+assert.ok(hogthai.props.srcDoc.startsWith('<!DOCTYPE html>'));
+const response = load('app/preview/roleplayth/route.ts').GET();
+assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
+assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
+console.log('RoleplayTH HTTP document initialization and Hogthai srcDoc isolation passed.');
