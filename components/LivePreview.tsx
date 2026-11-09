@@ -122,6 +122,17 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
         });
 
         postBody.innerHTML = bodyHtml;
+        postBody.querySelectorAll<HTMLAnchorElement>('a[href]').forEach(link => {
+            const href = link.getAttribute('href')?.trim();
+            // Keep in-preview anchors and template controls working as before.
+            if (!href || href.startsWith('#')) return;
+            try {
+                const url = new URL(href, doc.baseURI);
+                if (!['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol)) return;
+            } catch { return; }
+            link.target = '_blank';
+            link.relList.add('noopener', 'noreferrer');
+        });
         if (profile === 'hogthai') updateSizingRef.current();
     };
 

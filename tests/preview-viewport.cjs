@@ -46,7 +46,7 @@ global.window = { visualViewport: { addEventListener(name, fn) { visualEvents[na
 global.ResizeObserver = class { constructor(callback) { this.callback = callback; } observe(target) { observed.push(target); } disconnect() {} };
 const LivePreview = load('components/LivePreview.tsx', { react: React, '@/lib/preview-viewport': sizing, '@/lib/preview-zoom': load('lib/preview-zoom.ts') }).default;
 const panel = { offsetWidth: 700, clientHeight: 600 };
-const post = { innerHTML: '' };
+const post = { innerHTML: '', querySelectorAll: () => [] };
 Object.defineProperty(post, 'scrollHeight', { get() { throw new Error('Content must not resize the viewport'); } });
 const properties = {};
 const doc = { documentElement: { style: { setProperty(name, value) { properties[name] = value; } } }, querySelector: () => post, head: { querySelectorAll: () => [] } };
