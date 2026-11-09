@@ -5,6 +5,7 @@ const entries = new Map<string, { expires: number; promise: Promise<unknown> }>(
 let generation = 0;
 let observing = false;
 let observedUser: string | null | undefined;
+let authReady: Promise<void>;
 export const DASHBOARD_CACHE_CHANGED = 'zzzcode-dashboard-cache-changed';
 
 export function invalidateDashboardCache() {
@@ -18,10 +19,23 @@ export function dashboardRequest<T extends { error: unknown }>(key: string, load
     if (typeof window === 'undefined') return Promise.resolve(load());
     if (!observing) {
         observing = true;
+        let finishInitialization!: () => void;
+        let initializing = true;
+        authReady = new Promise<void>(resolve => { finishInitialization = resolve; });
         supabase.auth.onAuthStateChange((event, session) => {
             const user = session?.user.id ?? null;
             if (event === 'INITIAL_SESSION') {
-                if (observedUser === undefined) observedUser = user;
+                if (initializing) {
+                    observedUser = user;
+                    initializing = false;
+                    finishInitialization();
+                }
+                return;
+            }
+            // Session recovery can emit SIGNED_IN before INITIAL_SESSION.
+            // No data has loaded yet, so establish identity without invalidating.
+            if (initializing) {
+                observedUser = user;
                 return;
             }
             // SDK emits SIGNED_IN again on tab focus and refreshes tokens in the
@@ -38,7 +52,8 @@ export function dashboardRequest<T extends { error: unknown }>(key: string, load
     if (cached && cached.expires > Date.now()) return cached.promise as Promise<T>;
     const currentGeneration = generation;
     const entry = { expires: Infinity, promise: null as unknown as Promise<T> };
-    entry.promise = Promise.resolve().then(load).then(result => {
+    // Subscribe first and wait outside the auth callback, avoiding auth-lock deadlocks.
+    entry.promise = authReady.then(load).then(result => {
         // A logout or write during a request must not restore old cached data.
         if (generation !== currentGeneration) return dashboardRequest(key, load);
         if (result.error) entries.delete(key);

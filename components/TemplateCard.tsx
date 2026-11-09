@@ -44,10 +44,12 @@ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
         router.push(useTemplateHref);
     };
 
-    const handleEditClick = (e: React.MouseEvent) => {
+    const editTemplateHref = `/edit/${item.id}?${routeQuery}`;
+    const handleEditClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
         e.stopPropagation();
-
-        router.push(`/edit/${item.id}?${routeQuery}`);
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
+        e.preventDefault();
+        router.push(editTemplateHref);
     };
 
     if (viewMode === 'line') {
@@ -120,7 +122,8 @@ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
 
                     {canManage && (
                         <>
-                            <button
+                            <a
+                                href={editTemplateHref}
                                 onClick={handleEditClick} 
                                 title="Edit Template"
                                 className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black focus:bg-(--primary) focus:text-black transition-colors duration-300 ease  cursor-pointer"
@@ -129,7 +132,7 @@ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
                                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                 </svg>
-                            </button>
+                            </a>
 
                             {inactive ? activateButton : <button
                                 onClick={(e) => {
@@ -252,7 +255,8 @@ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
 
                     {canManage && (
                         <>
-                            <button
+                            <a
+                                href={editTemplateHref}
                                 onClick={handleEditClick}
                                 title="Edit Template"
                                 className="p-1.5 border border-(--primary)/30 text-(--primary) hover:bg-(--primary) hover:text-black transition-colors duration-300 ease  cursor-pointer"
@@ -261,7 +265,7 @@ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
                                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                 </svg>
-                            </button>
+                            </a>
 
                             {inactive ? activateButton : <button
                                 onClick={(e) => {

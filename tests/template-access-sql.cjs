@@ -130,6 +130,35 @@ async function run() {
 
     await pg.exec(sql('shared-creator-credit.sql'));
     await pg.exec(sql('shared-creator-credit.sql'));
+    await pg.exec(sql('bin.sql'));
+    const secretTemplate = (await pg.query(
+        "INSERT INTO public.templates(title,user_id,is_secret,is_active) VALUES ('bin only',$1,true,true) RETURNING id",
+        [creator])).rows[0].id;
+    async function checkCatalogMigration(users) {
+        const snapshots = [];
+        for (const [role, user] of users) {
+            snapshots.push(await as(role, user, async () =>
+                (await pg.query('SELECT public.template_catalog() AS data')).rows[0].data));
+        }
+        const binBefore = await as('service_role', null, async () =>
+            (await pg.query('SELECT public.bin_catalog() AS data')).rows[0].data);
+        assert.ok(binBefore.some(item => item.id === secretTemplate));
+        await pg.exec(sql('optimize-template-catalog.sql'));
+        await pg.exec(sql('optimize-template-catalog.sql'));
+        const binAfter = await as('service_role', null, async () =>
+            (await pg.query('SELECT public.bin_catalog() AS data')).rows[0].data);
+        assert.deepEqual(binAfter, binBefore, 'Bin catalog must remain unchanged');
+        for (let i = 0; i < users.length; i++) {
+            const [role, user] = users[i];
+            const actual = await as(role, user, async () =>
+                (await pg.query('SELECT public.template_catalog() AS data')).rows[0].data);
+            assert.ok(!actual.some(item => item.id === secretTemplate), 'Bin template leaked to dashboard');
+            assert.deepEqual(actual, snapshots[i], `Catalog changed for ${role}/${user}`);
+        }
+    }
+    await checkCatalogMigration([['anon', null], ['authenticated', creator],
+        ['authenticated', owner], ['authenticated', other], ['service_role', null]]);
+
     const stranger = '00000000-0000-4000-8000-000000000004';
     await pg.query('INSERT INTO auth.users VALUES ($1)', [stranger]);
     await pg.query("INSERT INTO public.creators(user_id,display_name) VALUES ($1,'stranger')", [stranger]);
@@ -201,6 +230,11 @@ async function run() {
         assert.deepEqual(item.editor_ids,[]);
         assert.deepEqual(item.template_tags.filter(t=>t.tags.tag_groups.name==='creators').map(t=>t.tags.slug),['legacy-credit']);
     });
+    await pg.exec(sql('bin.sql'));
+    await checkCatalogMigration([['anon', null], ['authenticated', creator],
+        ['authenticated', owner], ['authenticated', other], ['authenticated', stranger],
+        ['service_role', null]]);
+    console.log('PASS: optimized catalog preserves metadata, ordering and visibility; rerunnable migration.');
     console.log('PASS: directional mapped credit, option filtering, single attribution, atomic replacement, link revocation, uploader preservation, both editors, protected/inactive access, stranger denial, revoked credit and rerunnable migration.');
     console.log('PASS: PostgreSQL migration/re-run, Unicode hash compatibility, private-table permissions, catalog allowlist, RLS, creator/owner edits, credential rotation and password-free writes.');
 }

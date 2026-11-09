@@ -14,6 +14,15 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
     const load = async () => ({ data: ++calls, error: null });
     const first = read('catalog', load);
     assert.equal(first, read('catalog', load), 'Concurrent mounts share the request');
+    let refreshes = 0;
+    window.addEventListener(api.DASHBOARD_CACHE_CHANGED, () => refreshes++);
+    await Promise.resolve();
+    assert.equal(calls, 0, 'Requests wait for the initial session');
+    authEvent('SIGNED_IN', { user: { id: 'first' } });
+    await Promise.resolve();
+    assert.equal(calls, 0, 'Session recovery must not start a duplicate request');
+    assert.equal(refreshes, 0, 'Session recovery must not invalidate the dashboard');
+    authEvent('INITIAL_SESSION', { user: { id: 'first' } });
     await first;
     assert.equal((await read('catalog', load)).data, 1, 'Dashboard and Hogthai reuse completed data');
     const now = Date.now;
@@ -25,8 +34,6 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
     authEvent('INITIAL_SESSION', { user: { id: 'first' } });
     await read('catalog', load);
     assert.equal(calls, 2);
-    let refreshes = 0;
-    window.addEventListener(api.DASHBOARD_CACHE_CHANGED, () => refreshes++);
     authEvent('SIGNED_IN', { user: { id: 'first' } });
     authEvent('TOKEN_REFRESHED', { user: { id: 'first' } });
     await read('catalog', load);
