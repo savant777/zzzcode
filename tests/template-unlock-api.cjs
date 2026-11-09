@@ -127,6 +127,33 @@ async function run() {
     row.is_personal = false;
     assert.equal((await check({}, {}, 'read')).status, 200);
     assert.equal((await check({}, { origin: 'http://evil.test' })).status, 403);
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalVercel = process.env.VERCEL;
+    try {
+        process.env.NODE_ENV = 'development';
+        delete process.env.VERCEL;
+        const lan = { origin: 'http://192.168.1.117:3000', host: '192.168.1.117:3000' };
+        assert.equal((await check({}, lan, 'read')).status, 200, 'LAN dev Host matches browser origin');
+        assert.equal((await check({}, { ...lan, origin: 'http://evil.test' }, 'read')).status, 403);
+        assert.equal((await check({}, { ...lan, 'sec-fetch-site': 'cross-site' }, 'read')).status, 403);
+        row.is_personal = true;
+        const locked = await check({}, lan, 'read');
+        assert.equal((await locked.json()).requiresPassword, true);
+        row.is_active = false;
+        const inactive = await check({}, lan, 'read');
+        assert.equal(inactive.status, 403);
+        assert.notEqual((await inactive.json()).requiresPassword, true);
+        row.is_active = true;
+        row.is_personal = false;
+        process.env.NODE_ENV = 'production';
+        const rejected = await check({}, lan, 'read');
+        assert.equal(rejected.status, 403, 'Production does not trust Host override');
+        assert.notEqual((await rejected.json()).requiresPassword, true);
+    } finally {
+        if (originalNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = originalNodeEnv;
+        if (originalVercel === undefined) delete process.env.VERCEL; else process.env.VERCEL = originalVercel;
+    }
+
     limiter = { data: { allowed: false, retryAfter: 30 } };
     const limited = await check();
     assert.equal(limited.status, 429);

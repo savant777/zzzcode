@@ -19,5 +19,6 @@ export function previewViewport(width: number, height: number, panelWidth: numbe
     const scale = Math.max(0.01, Math.min(panelWidth / fittingWidth, 1));
     const visibleWidth = Math.min(Math.max(postBodyWidth, fittingWidth), panelWidth / scale);
     return { postBodyWidth, visibleWidth, viewportWidth: Math.max(layoutWidth, postBodyWidth + (profile === 'hogthai' ? 16 : 0)), scale,
-        iframeHeight: Math.max(1, Math.floor(Math.min(height, panelHeight / scale))) };
+        // The transformed iframe must fill the panel, even when scaled down.
+        iframeHeight: Math.max(1, Math.ceil(panelHeight / scale)) };
 }

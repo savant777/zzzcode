@@ -98,8 +98,10 @@ export async function handleTemplateRequest(request: Request, operation: 'unlock
         } catch (error) {
             // Only catalog-visible metadata may be returned before authorization.
             if (operation === 'read' && error instanceof ApiError && error.status === 403
-                && metadata.value.is_personal === true && (!metadata.value.is_secret || binAllowed(request))) {
-                return timedResponse({ error: error.message, templateTitle: metadata.value.title }, 403);
+                && metadata.value.is_active === true && metadata.value.is_personal === true
+                && ['TEMPLATE_ACCESS_REQUIRED', 'INVALID_SECRET_KEY'].includes(error.message)
+                && (!metadata.value.is_secret || binAllowed(request))) {
+                return timedResponse({ error: error.message, requiresPassword: true, templateTitle: metadata.value.title }, 403);
             }
             throw error;
         }
@@ -193,7 +195,17 @@ function clientAddress(request: Request) {
 }
 function guardRequest(request: Request, operation: string) {
     const origin = request.headers.get('origin');
-    if ((origin && origin !== new URL(request.url).origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
+    const url = new URL(request.url);
+    // next dev can normalize request.url to localhost even for LAN requests.
+    // Only development accepts the actual Host; production retains strict URL matching.
+    let localOrigin: string | undefined;
+    if (process.env.NODE_ENV === 'development' && !process.env.VERCEL) {
+        const host = request.headers.get('host');
+        if (host && /^[a-zA-Z0-9.\-\[\]:]+$/.test(host)) {
+            try { localOrigin = new URL(`${url.protocol}//${host}`).origin; } catch { /* Reject malformed hosts. */ }
+        }
+    }
+    if ((origin && origin !== url.origin && origin !== localOrigin) || request.headers.get('sec-fetch-site') === 'cross-site') {
         throw new ApiError(403, 'CROSS_ORIGIN_REQUEST');
     }
     const now = Date.now();

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { previewViewport } from '@/lib/preview-viewport';
+import { bindPreviewZoom, createPreviewZoom } from '@/lib/preview-zoom';
 
 const stylesheetLinkRegex = /<link\b(?=[^>]*\brel=(["'])stylesheet\1)(?=[^>]*\bhref=(["'])(.*?)\2)[^>]*>/gi;
 
@@ -24,6 +25,8 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
     const [postBodyWidth, setPostBodyWidth] = useState(961);
     const [visibleWidth, setVisibleWidth] = useState(961);
     const [contentCenter, setContentCenter] = useState<number | null>(null);
+    const [zoom, setZoom] = useState(1);
+    const zoomAnchorRef = useRef<{ contentY: number; screenY: number; horizontal: number; width: number; zoom: number } | null>(null);
     const updateSizingRef = useRef<() => void>(() => {});
 
     useLayoutEffect(() => {
@@ -157,6 +160,64 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
         updatePreviewHtml();
     }, [html]);
 
+    useEffect(() => {
+        const panel = containerRef.current;
+        const iframe = iframeRef.current;
+        if (!panel || !iframe) return;
+        const nextZoom = createPreviewZoom();
+        const zoomBy = (ratio: number, anchorY?: number, fine = false) => {
+            const next = nextZoom(ratio, fine);
+            const doc = iframe.contentDocument;
+            const scroller = doc?.scrollingElement;
+            const frameScale = iframe.offsetWidth > 0
+                ? iframe.getBoundingClientRect().width / iframe.offsetWidth : 1;
+            const localY = Number.isFinite(anchorY) ? anchorY! : iframe.clientHeight / 2;
+            zoomAnchorRef.current = {
+                contentY: (scroller?.scrollTop ?? 0) + localY,
+                screenY: localY * frameScale,
+                horizontal: panel.scrollLeft + panel.clientWidth / 2,
+                width: panel.firstElementChild?.getBoundingClientRect().width ?? 0,
+                zoom: next,
+            };
+            setZoom(next);
+        };
+        const unbindPanel = bindPreviewZoom(panel, (ratio, _anchor, fine) => zoomBy(ratio, undefined, fine));
+        let unbindDocument: (() => void) | undefined;
+        const bindDocument = () => {
+            unbindDocument?.();
+            if (iframe.contentDocument) {
+                unbindDocument = bindPreviewZoom(iframe.contentDocument, zoomBy, deltaX => {
+                    if (panel.scrollWidth <= panel.clientWidth) return false;
+                    panel.scrollLeft += deltaX;
+                    return true;
+                }, () => iframe.offsetWidth > 0
+                    ? iframe.getBoundingClientRect().width / iframe.offsetWidth : 1);
+            }
+        };
+        iframe.addEventListener('load', bindDocument);
+        bindDocument();
+        return () => {
+            unbindPanel();
+            unbindDocument?.();
+            iframe.removeEventListener('load', bindDocument);
+        };
+    }, []);
+
+    useLayoutEffect(() => {
+        const anchor = zoomAnchorRef.current;
+        const iframe = iframeRef.current;
+        const panel = containerRef.current;
+        if (!anchor || !iframe || !panel || anchor.zoom !== zoom) return;
+        const scroller = iframe.contentDocument?.scrollingElement;
+        const nextScale = scale * zoom;
+        if (scroller) scroller.scrollTop = Math.max(0, anchor.contentY - anchor.screenY / nextScale);
+        // Keep the horizontal centre in view instead of jumping to the left edge.
+        const width = panel.firstElementChild?.getBoundingClientRect().width ?? 0;
+        if (anchor.width > 0) panel.scrollLeft = zoom === 1 ? 0
+            : Math.max(0, anchor.horizontal * width / anchor.width - panel.clientWidth / 2);
+        zoomAnchorRef.current = null;
+    }, [zoom, scale]);
+
     // Match RoleplayTH's limited-quirks mode: HTML5 standards mode changes
     // inline icon line boxes and can expand aspect-ratio badges beyond squares.
     const doctype = profile === 'roleplayth'
@@ -286,16 +347,19 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
     const cropOffset = profile === 'hogthai' && contentCenter !== null
         ? contentCenter - visibleWidth / 2
         : Math.max(0, (viewportWidth - visibleWidth) / 2) + (profile === 'hogthai' ? 8 : 0);
-    const scaledWidth = visibleWidth * scale;
+    const displayScale = scale * zoom;
+    const scaledWidth = visibleWidth * displayScale;
     // The iframe itself must include overflowing fixed-width templates. Keeping
     // its CSS layout width separate prevents expansion from changing centering.
     const renderWidth = profile === 'hogthai'
         ? Math.max(viewportWidth, cropOffset + visibleWidth)
         : viewportWidth;
-    const scaledHeight = iframeHeight * scale;
+    const displayHeight = iframeHeight / zoom;
+    const scaledHeight = displayHeight * displayScale;
 
     return (
-        <div ref={containerRef} className="w-full h-full min-h-0 flex-1 overflow-hidden">
+        <div className="relative w-full h-full min-h-0 flex-1 overflow-hidden">
+            <div ref={containerRef} className="w-full h-full min-h-0 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div 
                 style={{
                     width: `${scaledWidth}px`,
@@ -314,17 +378,24 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
                     style={{
                         position: 'absolute',
                         top: 0,
-                        left: profile === 'hogthai' ? `-${cropOffset * scale}px` : '50%',
+                        left: profile === 'hogthai' ? `-${cropOffset * displayScale}px` : '50%',
                         width: `${renderWidth}px`,
                         minWidth: profile === 'hogthai' ? undefined : '980px',
-                        height: `${iframeHeight}px`,
+                        height: `${displayHeight}px`,
                         border: 'none',
                         display: 'block',
-                        transform: profile === 'hogthai' ? `scale(${scale})` : `scale(${scale}) translateX(-50%)`,
+                        transform: profile === 'hogthai' ? `scale(${displayScale})` : `scale(${displayScale}) translateX(-50%)`,
                         transformOrigin: 'top left',
                     }}
                 />
             </div>
+            </div>
+            {zoom === 1 && <span
+                className="pointer-events-none absolute right-2 top-2 z-10 bg-(--primary)/20 px-2 py-1 text-[11px] tabular-nums text-(--primary) animate-[preview-normal-hint_1.4s_ease-out_forwards]"
+                aria-label="ซูมพรีวิว 100 เปอร์เซ็นต์ ขนาดปกติ"
+            >
+                100%
+            </span>}
         </div>
     );
 }

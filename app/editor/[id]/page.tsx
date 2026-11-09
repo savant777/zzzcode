@@ -286,6 +286,11 @@ export default function EditorPage() {
                     if (result.status === 403) {
                         const denied = await result.json();
                         if (denied.error === 'BIN_ACCESS_REQUIRED') { router.replace('/bin'); return; }
+                        if (denied.requiresPassword !== true) {
+                            throw new Error(denied.error === 'CROSS_ORIGIN_REQUEST'
+                                ? 'Request origin was rejected. Please reload the page and try again.'
+                                : 'This template is unavailable or you do not have access.');
+                        }
                         forgetTemplateUnlock(String(templateId));
                         setNeedsUnlock(true);
                         const metadata = denied;
