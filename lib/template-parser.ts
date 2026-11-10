@@ -345,6 +345,11 @@ export const parseBBCode = (text: string, convertNewlines: boolean = true): stri
     };
 
     let html = text
+        .replace(/\[font=([^\]\r\n]+)\]/gi, (_, family: string) => {
+            const escaped = family.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `<span style="font-family: ${escaped};" class="mycode_font">`;
+        })
+        .replace(/\[\/font\]/gi, '</span>')
         .replace(/\[paper\]([\s\S]*?)\[\/paper\]/gi, '<div class="paper">$1</div>')
         .replace(/\[bpaper\]([\s\S]*?)\[\/bpaper\]/gi, '<div class="bpaper">$1</div>')
         .replace(/\[size=(xx-small|x-small|small|medium|large|x-large|xx-large)\]([\s\S]*?)\[\/size\]/gi, '<span style="font-size: $1;" class="mycode_size">$2</span>')

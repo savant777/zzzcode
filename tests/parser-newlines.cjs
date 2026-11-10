@@ -17,6 +17,11 @@ function check(input, expected) {
     assert.equal(parseBBCode(input), expected, `direct: ${input}`);
     count++;
 }
+check('[font=monospace]--bvy-txt: #262522;[/font]', '<span style="font-family: monospace;" class="mycode_font">--bvy-txt: #262522;</span>');
+check('[font=Oswald, monospace][/font]', '<span style="font-family: Oswald, monospace;" class="mycode_font"></span>');
+check('[FONT="Noto Sans Thai", sans-serif]Thai[/FONT]', '<span style="font-family: &quot;Noto Sans Thai&quot;, sans-serif;" class="mycode_font">Thai</span>');
+check('[font=Oswald]outer [font=monospace]inner[/font][/font]', '<span style="font-family: Oswald;" class="mycode_font">outer <span style="font-family: monospace;" class="mycode_font">inner</span></span>');
+assert.ok(!parseBBCode('[code][font=Oswald]literal[/font][/code]').includes('mycode_font'));
 for (const tag of ['div', 'p', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th']) {
     for (const n of [1, 2]) {
         const nl = '\n'.repeat(n);
