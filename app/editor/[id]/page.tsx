@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { FieldConfig, generateFinalHTML, normalizeFieldConfig } from '@/lib/template-parser';
+import { FieldConfig, generateFinalHTML, normalizeFieldConfig, ensureBlockDefinitions } from '@/lib/template-parser';
 
 import Modal from '@/components/Modal';
 import EditorForm from '@/components/EditorForm';
@@ -62,7 +62,7 @@ const createBlockEntry = (
 ) => {
     const entry: Record<string, any> = { __zzzcode_collapsed: source?.__zzzcode_collapsed === true, [BBCODE_HEIGHTS]: getBBCodeHeights(source), [BLOCK_ENTRY_ID]: typeof source?.[BLOCK_ENTRY_ID] === 'string' ? source[BLOCK_ENTRY_ID] : crypto.randomUUID() };
 
-    blockFields.forEach(field => {
+    blockFields.filter(field => !field.is_block_definition).forEach(field => {
         const overrides = field.block_default_values;
         const initial = initialIndex !== undefined && overrides && Object.prototype.hasOwnProperty.call(overrides, initialIndex)
             ? overrides[initialIndex] : getDefaultValue(field);
@@ -353,7 +353,7 @@ export default function EditorPage() {
                     };
                     
                     setFormData(initialData);
-                    const initialFields = (template.fields_config || []).map(normalizeFieldConfig).sort((a: any, b: any) => {
+                    const initialFields = ensureBlockDefinitions(template.html_blueprint, (template.fields_config || []).map(normalizeFieldConfig)).sort((a: any, b: any) => {
                         if (a.group_order !== b.group_order) {
                             return (a.group_order ?? 0) - (b.group_order ?? 0);
                         }

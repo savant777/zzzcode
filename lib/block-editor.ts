@@ -46,7 +46,7 @@ export function collapseBlockItems(values: Record<string, any>, ids: string[], c
 }
 
 export function blockSummary(item: BlockItem): string {
-    return item.fields.filter(f => f.type === 'text' || f.type === 'bbcode').map(f => item.entry[f.variable_name])
+    return item.fields.filter(f => !f.is_block_definition && (f.type === 'text' || f.type === 'bbcode')).map(f => item.entry[f.variable_name])
         .filter(value => typeof value === 'string' && value.trim()).join(' · ').replace(/<[^>]*>|\[[^\]]*\]/g, '').replace(/\s+/g, ' ').slice(0, 100);
 }
 

@@ -13,6 +13,7 @@ export default function BlockDefaultValues({ fields, onChange }: {
     const [selected, setSelected] = useState(0);
     const count = defaultBlockCount(fields);
     const index = Math.min(selected, Math.max(0, count - 1));
+    if (!fields.some(field => !field.is_block_definition)) return null;
     return <details className="mb-3 border border-(--primary)/20 p-2">
         <summary className="cursor-pointer text-xs text-(--primary)">Block Default Values</summary>
         <p className="my-2 text-xs text-(--foreground)/50">ตั้งค่า Default Value เฉพาะฟิลด์ที่ต้องการให้ต่างจาก Default Value กลาง มีผลกับดราฟต์ใหม่เท่านั้น</p>
@@ -27,7 +28,7 @@ export default function BlockDefaultValues({ fields, onChange }: {
                 <span>/ {count}</span>
             </label>
             <div className="mt-3 flex flex-col gap-3">
-                {fields.map(field => {
+                {fields.filter(field => !field.is_block_definition).map(field => {
                     const custom = Object.prototype.hasOwnProperty.call(field.block_default_values || {}, index);
                     return <div key={`${field.id}-${index}`} className="min-w-0 space-y-2 border border-(--primary)/25 bg-(--background) p-2">
                         <p className="font-Google-Sans break-words text-sm font-bold">{field.label || field.variable_name}</p>

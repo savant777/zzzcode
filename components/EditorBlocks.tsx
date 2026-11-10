@@ -102,7 +102,7 @@ export default function EditorBlocks(props: EditorBlocksProps) {
                 const collapsed = !!item.entry[BLOCK_COLLAPSED];
                 const groups = new Map<string, FieldConfig[]>();
                 [...item.fields].sort((a, b) => (a.group_order ?? 0) - (b.group_order ?? 0) || (a.field_order ?? 0) - (b.field_order ?? 0)).forEach(field => {
-                    if (getCheckboxLinkSource(field, fields)) return;
+                    if (field.is_block_definition || getCheckboxLinkSource(field, fields)) return;
                     if (!groups.has(field.group_name)) groups.set(field.group_name, []);
                     groups.get(field.group_name)!.push(field);
                 });

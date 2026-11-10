@@ -46,3 +46,8 @@ assert.equal(new Set(getFormSections(sameNames).map(s => s.id)).size, 2);
 const scoped = syncFormFields('[BLOCK:first]{{same[GROUP:inside]}}[/BLOCK:first]{{other[GROUP:before]}}{{same[GROUP:after]}}', [], true);
 assert.deepEqual(names(scoped), ['block:first', 'group:before', 'group:after']);
 console.log('PASS: SevenSin/chat layouts, legacy compatibility, field/section replacement, persistence, scope isolation and unchanged generated HTML');
+
+const emptyParent = '[BLOCK:body][BLOCK:section]{{title}}[/BLOCK:section][/BLOCK:body]';
+const structuralFields = syncFormFields(emptyParent, [], true);
+assert.deepEqual(names(structuralFields), ['block:body']);
+assert.deepEqual(names(syncFormFields(emptyParent, JSON.parse(JSON.stringify(structuralFields)))), ['block:body']);

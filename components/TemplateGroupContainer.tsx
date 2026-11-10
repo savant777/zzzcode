@@ -1,11 +1,13 @@
 "use client";
 import { useId } from 'react';
+import type { FieldConfig } from '@/lib/template-parser';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import TemplateFieldItem from './TemplateFieldItem';
 
 export default function TemplateGroupContainer({ id, groupName, gIdx, groupFields, onFieldDragEnd, sensors, onEdit, blockName, parentBlockName }: any) {
+    groupFields = groupFields.filter((field: FieldConfig) => !field.is_block_definition);
     const contextId = useId();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
@@ -15,6 +17,8 @@ export default function TemplateGroupContainer({ id, groupName, gIdx, groupField
         zIndex: isDragging ? 40 : 'auto',
         opacity: isDragging ? 0.5 : 1,
     };
+
+    if (!groupFields.length) return null;
 
     return (
         <div ref={setNodeRef} style={style} className="flex flex-col gap-2 mb-4">

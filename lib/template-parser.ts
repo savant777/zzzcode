@@ -1,5 +1,7 @@
 import { isBBCodeColor } from './colors';
 export interface FieldConfig {
+    // Structural record for a BLOCK with no direct fields. Never an input/value.
+    is_block_definition?: boolean;
     id: string;
     variable_name: string;
     label: string;
@@ -569,7 +571,8 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
                 block_sortable: oldField?.block_sortable ?? oldBlockField?.block_sortable,
                 block_group_member_order: blockGroups.find(g => g.members.some(m => m.name === blockName))?.members.findIndex(m => m.name === blockName),
                 block_group_name: blockName && !parentBlockName ? blockGroups.find(g => g.members.some(m => m.name === blockName))?.name : undefined,
-                block_order: oldField?.block_order ?? blockMap[blockId],
+                block_order: oldField?.block_order ?? oldBlockField?.block_order ?? blockMap[blockId],
+                form_section_order: oldField?.form_section_order ?? oldBlockField?.form_section_order,
                 group_name: currentGroupName,
                 group_order: oldField?.group_order ?? groupMap[groupKey],
                 field_order: oldField?.field_order ?? 0,
@@ -579,8 +582,43 @@ export const syncFieldsFromHTML = (html: string, existingFields: FieldConfig[] =
         }
     }
 
-    return fields;
+    return ensureBlockDefinitions(html, fields, existingFields);
 };
+
+// Keep the existing JSON storage and field identities. Only fieldless scopes need
+// an explicit structural record; populated scopes retain their legacy records.
+export function ensureBlockDefinitions(html: string, fields: FieldConfig[], previous = fields): FieldConfig[] {
+    const result = fields.filter(f => !f.is_block_definition);
+    const groups = parseBlockGroups(html);
+    const stack: string[] = [];
+    let order = 0;
+    for (const token of html.matchAll(/\[(\/?)BLOCK:([^\]]+)\]/g)) {
+        if (token[1]) { stack.pop(); continue; }
+        const name = token[2];
+        const parent = stack.at(-1);
+        const depth = stack.length;
+        stack.push(name);
+        order++;
+        if (depth > 1 || result.some(f => f.block_name === name && f.parent_block_name === parent)) continue;
+        const old = previous.find(f => f.block_name === name && f.parent_block_name === parent);
+        const group = !parent ? groups.find(g => g.members.some(m => m.name === name)) : undefined;
+        result.push({
+            id: old?.is_block_definition ? old.id : crypto.randomUUID(),
+            is_block_definition: true, variable_name: '', label: name, type: 'text',
+            default_value: '', group_name: '', group_order: 0, field_order: 0,
+            block_name: name, parent_block_name: parent, block_depth: depth,
+            block_order: old?.block_order ?? order,
+            form_section_order: old?.form_section_order,
+            block_description: old?.block_description,
+            block_default_count: old?.block_default_count,
+            block_min_count: old?.block_min_count, block_max_count: old?.block_max_count,
+            block_sortable: old?.block_sortable,
+            block_group_name: group?.name,
+            block_group_member_order: group?.members.findIndex(m => m.name === name),
+        });
+    }
+    return result;
+}
 
 export type PreviewProfile = 'roleplayth' | 'hogthai';
 
@@ -740,7 +778,7 @@ export const generateFinalHTML = (blueprint: string, values: any, fields: FieldC
         });
 
         // 2. replace {{variable}} for the current block scope only.
-        const scopedFields = fields.filter(field => field.block_name === currentBlockName && field.parent_block_name === parentBlockName);
+        const scopedFields = fields.filter(field => !field.is_block_definition && field.block_name === currentBlockName && field.parent_block_name === parentBlockName);
         scopedFields.forEach(field => {
             const varName = field.variable_name;
             const safeVarName = escapeRegExp(varName);
