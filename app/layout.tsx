@@ -8,7 +8,7 @@ import { Monomaniac_One, Google_Sans, Google_Sans_Code } from 'next/font/google'
 const monomaniac = Monomaniac_One({
     weight: '400',
     subsets: ['latin'],
-    variable: '--font-Monomaniac-One',
+    variable: '--font-Monomaniac-One-Base',
 });
 
 const googlesans = Google_Sans({
@@ -20,7 +20,7 @@ const googlesans = Google_Sans({
 const googlecode = Google_Sans_Code({
     weight: '400',
     subsets: ['latin'],
-    variable: '--font-Google-Code',
+    variable: '--font-Google-Code-Base',
 });
 
 export const metadata: Metadata = {

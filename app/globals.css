@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* Separate Thai-only families pin each context to the intended font weight,
+   including descendants that request font-bold. */
+@font-face {
+    font-family: 'Anuphan Thai Bold';
+    src: url('/fonts/anuphan-thai-bold.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    unicode-range: U+0E00-0E7F, U+200C-200D, U+25CC;
+}
+
+@font-face {
+    font-family: 'Anuphan Thai Regular';
+    src: url('/fonts/anuphan-thai-regular.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    unicode-range: U+0E00-0E7F, U+200C-200D, U+25CC;
+}
+
 :root {
     --background: #131313;
     --foreground: #ffffff;
@@ -16,8 +36,8 @@
     }
 
     --font-Google-Sans: var(--font-Google-Sans);
-    --font-Google-Code: var(--font-Google-Code);
-    --font-Monomaniac-One: var(--font-Monomaniac-One);
+    --font-Google-Code: 'Anuphan Thai Regular', var(--font-Google-Code-Base), monospace;
+    --font-Monomaniac-One: 'Anuphan Thai Bold', var(--font-Monomaniac-One-Base), sans-serif;
 }
 
 body {
@@ -27,8 +47,14 @@ body {
     min-height: 100vh;
 }
 
-h1, h2, h3 {
-    font-family: 'Monomaniac One', sans-serif;
+h1, h2, h3, .font-Monomaniac-One {
+    font-family: var(--font-Monomaniac-One);
+    font-weight: 400;
+    font-synthesis: none;
+}
+
+.font-Google-Code {
+    font-synthesis: none;
 }
 
 @media (min-width: 768px) {
