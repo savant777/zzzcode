@@ -272,6 +272,7 @@ export default function LivePreview({ html, profile = 'roleplayth' }: { html: st
                 width: var(--preview-post-width, 605px);
                 padding: 12px 0; 
                 line-height: 1.8; 
+                overflow: hidden;
                 font-size: 17px; 
                 word-break: break-word;
                 margin: 0 auto;

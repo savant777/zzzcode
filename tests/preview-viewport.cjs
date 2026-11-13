@@ -133,6 +133,7 @@ effects[2]();
 assert.ok(writtenDocument.startsWith('<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"'));
 assert.ok(writtenDocument.includes('name="viewport"'));
 assert.ok(writtenDocument.includes('overflow-y: auto'));
+assert.match(writtenDocument, /\.post_body\s*\{[^}]*overflow:\s*hidden\s*;/, 'Match the forum post boundary so transformed decorations are clipped');
 assert.equal(post.innerHTML, '<p>Video</p>');
 doc.write = () => { throw new Error('Loaded preview must not be rewritten'); };
 frameEvents.load();
