@@ -434,9 +434,36 @@ function SliderConfig({ field, onChange }: { field: FieldConfig; onChange: (fiel
                                     placeholder="e.g. Width / Padding"
                                 />
                             </div>
-                            <NumberInput label="Min" value={slider.min} onChange={(value) => updateSlider(index, { min: value })} />
-                            <NumberInput label="Max" value={slider.max} onChange={(value) => updateSlider(index, { max: value })} />
-                            <NumberInput label="Default" value={slider.default_value} onChange={(value) => updateSlider(index, { default_value: value })} highlight />
+                            <div className="col-span-2 grid grid-cols-3 gap-2 [&>*]:min-w-0 [&_input]:min-w-0 [&_input]:w-full">
+                                <NumberInput label="Min" value={slider.min} onChange={(value) => updateSlider(index, { min: value })} />
+                                <NumberInput label="Max" value={slider.max} onChange={(value) => updateSlider(index, { max: value })} />
+                                <NumberInput label="Default" value={slider.default_value} onChange={(value) => updateSlider(index, { default_value: value })} highlight />
+                            </div>
+                            <label className="flex flex-col gap-1">
+                                <span className="text-[8px] opacity-40 uppercase">Step</span>
+                                <input
+                                    key={slider.step ?? 1}
+                                    type="number"
+                                    step="any"
+                                    defaultValue={slider.step ?? 1}
+                                    onBlur={(e) => {
+                                        const value = Number(e.target.value);
+                                        if (Number.isFinite(value) && value > 0) {
+                                            updateSlider(index, { step: value });
+                                        } else {
+                                            e.target.value = String(slider.step ?? 1);
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            e.currentTarget.blur();
+                                        }
+                                    }}
+                                    className={compactInputClass}
+                                    title="จำนวนที่เพิ่มหรือลดต่อครั้ง ต้องมากกว่า 0 เช่น 1, 5 หรือ 0.1"
+                                />
+                            </label>
                             <div className="flex flex-col gap-1">
                                 <label className="text-[8px] opacity-40 uppercase">Unit</label>
                                 <input
